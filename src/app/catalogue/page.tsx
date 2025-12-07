@@ -37,6 +37,9 @@ const YEAR_OPTIONS = Array.from(
   (_, i) => YEAR_START_MIN + i
 );
 
+// ---------- Types complétion ----------
+type CompletionStatus = "none" | "low" | "medium" | "high" | "full";
+
 // --------- Types ---------
 type SetRow = {
   id: string;
@@ -48,6 +51,10 @@ type SetRow = {
   theme: string | null;
   image_url: string | null;
   nb_pieces: number | null;
+
+  // champs calculés pour la complétion
+  completion_percent?: number | null;
+  completion_status?: CompletionStatus;
 };
 
 type CatalogueSearchParams = {
@@ -64,6 +71,8 @@ type CataloguePageProps = {
   searchParams?: Promise<CatalogueSearchParams>;
 };
 
+type SortColumn = "display_ref" | "name" | "version" | "year_start" | "year_end" | "theme";
+
 // --------- Page ---------
 export default async function CataloguePage({
   searchParams,
@@ -78,24 +87,35 @@ export default async function CataloguePage({
     .trim();
   const themeFilter = (resolvedSearchParams.theme ?? "").toString().trim();
 
-  // Tri – colonne + direction
-  let sort = (resolvedSearchParams.sort ?? "display_ref").toString();
+  // --------- Gestion du tri ---------
+  const sortParamRaw = (resolvedSearchParams.sort ?? "display_ref").toString();
   let dir = (resolvedSearchParams.dir ?? "asc").toString().toLowerCase();
+  if (dir !== "asc" && dir !== "desc") dir = "asc";
 
-  const ALLOWED_SORT_COLUMNS = [
+  const ALLOWED_SORT_COLUMNS: SortColumn[] = [
     "display_ref",
     "name",
     "version",
     "year_start",
     "year_end",
     "theme",
-  ] as const;
+  ];
 
-  if (!(ALLOWED_SORT_COLUMNS as readonly string[]).includes(sort)) {
-    sort = "display_ref";
-  }
-  if (dir !== "asc" && dir !== "desc") {
-    dir = "asc";
+  let dbSortColumn: SortColumn = "display_ref"; // colonne utilisée par Supabase
+  let activeSortKey = sortParamRaw; // clé visible dans l'UI (& dans l'URL)
+  let sortIsCompletion = false;
+
+  if (sortParamRaw === "completion") {
+    sortIsCompletion = true;
+    activeSortKey = "completion";
+    dbSortColumn = "display_ref"; // fallback pour la requête SQL
+  } else if (
+    (ALLOWED_SORT_COLUMNS as readonly string[]).includes(sortParamRaw as SortColumn)
+  ) {
+    dbSortColumn = sortParamRaw as SortColumn;
+  } else {
+    activeSortKey = "display_ref";
+    dbSortColumn = "display_ref";
   }
 
   const currentPage = pageParam ? Math.max(1, Number(pageParam) || 1) : 1;
@@ -120,6 +140,7 @@ export default async function CataloguePage({
   const from = (currentPage - 1) * pageSize;
   const to = from + pageSize - 1;
 
+  // --------- Requête sets_catalog ---------
   let query = supabase
     .from("sets_catalog")
     .select(
@@ -152,12 +173,57 @@ export default async function CataloguePage({
   }
 
   const { data, error, count } = await query
-    .order(sort, { ascending: dir === "asc" })
+    .order(dbSortColumn, { ascending: dir === "asc" })
     .range(from, to);
 
   const sets = (data ?? []) as SetRow[];
   const totalCount = count ?? sets.length;
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+
+  // --------- BOM : savoir quels sets ont une BOM ---------
+  const setIds = sets.map((s) => s.id);
+  const hasBomBySet = new Map<string, boolean>();
+
+  if (setIds.length > 0) {
+    const { data: bomRows } = await supabase
+      .from("sets_bom")
+      .select("set_id")
+      .in("set_id", setIds);
+
+    bomRows?.forEach((row: { set_id: string }) => {
+      hasBomBySet.set(row.set_id, true);
+    });
+  }
+
+  // Pour l’instant on n’a pas encore le vrai stock côté liste :
+  // - set avec BOM => 0% rouge (peu complet)
+  // - set sans BOM => "–" gris (non évalué)
+  const setsWithCompletion: SetRow[] = sets.map((set) => {
+    const hasBom = hasBomBySet.get(set.id) ?? false;
+
+    let completion_percent: number | null = null;
+    let completion_status: CompletionStatus = "none";
+
+    if (hasBom) {
+      completion_percent = 0;
+      completion_status = "low"; // 0–49% => rouge
+    } else {
+      completion_percent = null; // pas de BOM => non évalué
+      completion_status = "none";
+    }
+
+    return { ...set, completion_percent, completion_status };
+  });
+
+  // Si tri par complétion, on trie côté front
+  const setsForDisplay: SetRow[] = sortIsCompletion
+    ? [...setsWithCompletion].sort((a, b) => {
+        const aVal = a.completion_percent ?? -1;
+        const bVal = b.completion_percent ?? -1;
+        if (aVal === bVal) return 0;
+        return dir === "asc" ? aVal - bVal : bVal - aVal;
+      })
+    : setsWithCompletion;
 
   // Pages à afficher dans la pagination (compacte, avec "…")
   let pageNumbers: (number | "dots")[] = [];
@@ -192,7 +258,7 @@ export default async function CataloguePage({
   if (searchQuery) baseParams.set("q", searchQuery);
   if (productionFilter) baseParams.set("prod", productionFilter);
   if (themeFilter) baseParams.set("theme", themeFilter);
-  baseParams.set("sort", sort);
+  baseParams.set("sort", activeSortKey);
   baseParams.set("dir", dir);
 
   for (const v of VERSION_FILTERS) {
@@ -214,16 +280,16 @@ export default async function CataloguePage({
     return qs ? `/catalogue?${qs}` : "/catalogue";
   };
 
-  const makeSortHref = (column: string) => {
+  const makeSortHref = (columnKey: string) => {
     const params = new URLSearchParams(baseParams.toString());
     params.set("page", "1");
 
-    if (sort === column) {
+    if (activeSortKey === columnKey) {
       const nextDir = dir === "asc" ? "desc" : "asc";
-      params.set("sort", column);
+      params.set("sort", columnKey);
       params.set("dir", nextDir);
     } else {
-      params.set("sort", column);
+      params.set("sort", columnKey);
       params.set("dir", "asc");
     }
 
@@ -231,14 +297,14 @@ export default async function CataloguePage({
     return qs ? `/catalogue?${qs}` : "/catalogue";
   };
 
-  const renderSortableHeader = (label: string, column: string) => {
-    const isActive = sort === column;
+  const renderSortableHeader = (label: string, columnKey: string) => {
+    const isActive = activeSortKey === columnKey;
     const isAsc = dir === "asc";
 
     return (
-      <th key={column} className="px-4 py-3 text-left font-medium">
+      <th key={columnKey} className="px-4 py-3 text-left font-medium">
         <Link
-          href={makeSortHref(column)}
+          href={makeSortHref(columnKey)}
           className={cn(
             "inline-flex items-center gap-1 hover:text-primary",
             isActive && "text-primary"
@@ -250,6 +316,64 @@ export default async function CataloguePage({
           </span>
         </Link>
       </th>
+    );
+  };
+
+  // Pastille de complétion (fond coloré + texte centré)
+  const renderCompletionPill = (set: SetRow) => {
+    const raw = typeof set.completion_percent === "number"
+      ? Math.round(set.completion_percent)
+      : null;
+
+    const percent =
+      raw !== null ? Math.min(100, Math.max(0, raw)) : null;
+
+    const status: CompletionStatus = set.completion_status ?? "none";
+
+    let bgClass = "";
+    let textClass = "";
+    let borderClass = "";
+
+    if (percent === null || status === "none") {
+      // Non évalué
+      bgClass = "bg-zinc-100";
+      textClass = "text-zinc-500";
+      borderClass = "border-zinc-200";
+    } else if (percent === 100 || status === "full") {
+      // 100% : vert fort
+      bgClass = "bg-emerald-100";
+      textClass = "text-emerald-800";
+      borderClass = "border-emerald-200";
+    } else if (percent >= 80 || status === "high") {
+      // >= 80% : vert léger
+      bgClass = "bg-emerald-50";
+      textClass = "text-emerald-700";
+      borderClass = "border-emerald-200/80";
+    } else if (percent >= 50 || status === "medium") {
+      // 50–79% : orange
+      bgClass = "bg-orange-50";
+      textClass = "text-orange-700";
+      borderClass = "border-orange-200";
+    } else {
+      // 0–49% : rouge
+      bgClass = "bg-red-50";
+      textClass = "text-red-700";
+      borderClass = "border-red-200";
+    }
+
+    const label = percent === null ? "–" : `${percent}%`;
+
+    return (
+      <span
+        className={cn(
+          "inline-flex items-center justify-center rounded-full px-3 h-7 text-xs font-semibold min-w-[3.5rem] border",
+          bgClass,
+          textClass,
+          borderClass
+        )}
+      >
+        {label}
+      </span>
     );
   };
 
@@ -268,7 +392,7 @@ export default async function CataloguePage({
     );
   }
 
-  // --------- RENDER PRINCIPAL (un seul return) ---------
+  // --------- RENDER PRINCIPAL ---------
   return (
     <main className="p-4 lg:p-8">
       <div className="mx-auto w-full max-w-6xl space-y-4">
@@ -298,7 +422,7 @@ export default async function CataloguePage({
                 className="h-9 w-full"
               />
               <input type="hidden" name="page" value="1" />
-              <input type="hidden" name="sort" value={sort} />
+              <input type="hidden" name="sort" value={activeSortKey} />
               <input type="hidden" name="dir" value={dir} />
 
               {productionFilter && (
@@ -363,14 +487,15 @@ export default async function CataloguePage({
                       {renderSortableHeader("Début prod.", "year_start")}
                       {renderSortableHeader("Fin prod.", "year_end")}
                       {renderSortableHeader("Thème", "theme")}
+                      {renderSortableHeader("Complétion", "completion")}
                       <th className="px-4 py-3 text-right font-medium">
                         Actions
                       </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {sets && sets.length > 0 ? (
-                      sets.map((set) => (
+                    {setsForDisplay && setsForDisplay.length > 0 ? (
+                      setsForDisplay.map((set) => (
                         <ClickableRow
                           key={set.id}
                           href={`/catalogue/${encodeURIComponent(set.id)}`}
@@ -421,6 +546,11 @@ export default async function CataloguePage({
                             {set.theme ?? "-"}
                           </td>
 
+                          {/* Complétion */}
+                          <td className="px-4 py-3 group-hover:bg-[#e0f2fe] transition-colors">
+                            {renderCompletionPill(set)}
+                          </td>
+
                           {/* Actions */}
                           <td className="px-4 py-3 text-right group-hover:bg-[#e0f2fe] transition-colors">
                             <div className="flex items-center justify-end gap-2">
@@ -446,7 +576,7 @@ export default async function CataloguePage({
                     ) : (
                       <tr className="border-t border-border">
                         <td
-                          colSpan={8}
+                          colSpan={9}
                           className="px-4 py-6 text-center text-sm text-muted-foreground"
                         >
                           Aucun set trouvé.
@@ -534,7 +664,7 @@ export default async function CataloguePage({
             <form method="GET" className="app-card text-xs sticky top-24">
               {/* on garde tri + recherche quand on applique les filtres */}
               <input type="hidden" name="page" value="1" />
-              <input type="hidden" name="sort" value={sort} />
+              <input type="hidden" name="sort" value={activeSortKey} />
               <input type="hidden" name="dir" value={dir} />
               {searchQuery && (
                 <input type="hidden" name="q" value={searchQuery} />

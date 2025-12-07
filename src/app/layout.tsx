@@ -1,9 +1,5 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
-import { cn } from "@/lib/utils";
-
-const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "PlayNovus Manager",
@@ -17,15 +13,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="fr">
-      <body
-        className={cn(
-          "app-shell antialiased",
-          inter.className
-        )}
-      >
+      {/* Outfit est déclarée dans globals.css comme font-sans */}
+      <body className="app-shell font-sans antialiased">
         {children}
       </body>
     </html>
   );
 }
-
