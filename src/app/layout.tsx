@@ -17,9 +17,15 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="fr">
-      <body className={cn("min-h-screen bg-background font-sans antialiased", inter.className)}>
+      <body
+        className={cn(
+          "app-shell antialiased",
+          inter.className
+        )}
+      >
         {children}
       </body>
     </html>
   );
 }
+

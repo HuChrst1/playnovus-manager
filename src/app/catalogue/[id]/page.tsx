@@ -34,6 +34,13 @@ export default async function SetDetailPage({ params }: { params: Promise<{ id: 
     return { ...part, inStock: qtyInStock };
   }) || [];
   const completionPercent = totalPartsNeeded > 0 ? Math.round((totalPartsOwned / totalPartsNeeded) * 100) : 0;
+  
+  // Normalisation pour que la fiche soit cohérente avec /catalogue
+  const versionLabel =
+    set.version && set.version !== "Version Unique" ? set.version : "Unique";
+
+  const yearStartLabel = set.year_start ?? "N/A";
+  const yearEndLabel = set.year_end ?? "N/A";
 
   return (
     <div className="min-h-screen bg-zinc-50 p-6 min-w-[1024px]">
@@ -64,15 +71,40 @@ export default async function SetDetailPage({ params }: { params: Promise<{ id: 
               <SetImage url={set.image_url} name={set.name} />
             </div>
             <Card className="border-zinc-300 shadow-sm rounded-xl">
-                <CardHeader className="py-3 px-5 bg-zinc-100 border-b border-zinc-200">
-                    <CardTitle className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Fiche Technique</CardTitle>
-                </CardHeader>
-                <div className="text-sm divide-y divide-zinc-100 bg-white">
-                    <div className="flex justify-between items-center p-4"><span className="text-zinc-500 font-medium">Référence</span><Badge variant="outline">{set.display_ref}</Badge></div>
-                    <div className="flex justify-between items-center p-4"><span className="text-zinc-500 font-medium">Version</span><span className="font-bold">{set.version}</span></div>
-                    <div className="flex justify-between items-center p-4"><span className="text-zinc-500 font-medium">Dates</span><span>{set.year_start || "?"} - {set.year_end || "..."}</span></div>
-                    <div className="flex justify-between items-center p-4"><span className="text-zinc-500 font-medium">Thème</span><span className="text-right truncate pl-4">{set.theme || "-"}</span></div>
+              <CardHeader className="py-3 px-5 bg-zinc-100 border-zinc-200">
+                <CardTitle className="text-xs font-bold text-zinc-500 uppercase tracking-widest">
+                  Fiche Technique
+                </CardTitle>
+              </CardHeader>
+              <div className="text-sm divide-y divide-zinc-100 bg-white">
+                {/* Référence – inchangé */}
+                <div className="flex justify-between items-center p-4">
+                  <span className="text-zinc-500 font-medium">Référence</span>
+                  <Badge variant="outline">{set.display_ref}</Badge>
                 </div>
+
+                {/* Version – utilise versionLabel */}
+                <div className="flex justify-between items-center p-4">
+                  <span className="text-zinc-500 font-medium">Version</span>
+                  <span className="font-bold">{versionLabel}</span>
+                </div>
+
+                {/* Dates – utilise yearStartLabel / yearEndLabel */}
+                <div className="flex justify-between items-center p-4">
+                  <span className="text-zinc-500 font-medium">Dates</span>
+                  <span>
+                    {yearStartLabel} - {yearEndLabel}
+                  </span>
+                </div>
+
+                {/* Thème – inchangé */}
+                <div className="flex justify-between items-center p-4">
+                  <span className="text-zinc-500 font-medium">Thème</span>
+                  <span className="text-right truncate pl-4">
+                    {set.theme || "-"}
+                  </span>
+                </div>
+              </div>
             </Card>
           </div>
 

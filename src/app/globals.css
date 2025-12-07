@@ -120,3 +120,15 @@
     @apply bg-background text-foreground;
   }
 }
+@layer base {
+  /* Fond général façon dashboard */
+  .app-shell {
+    @apply min-h-screen bg-gradient-to-br from-[oklch(1_0_0)] via-[oklch(0.985_0_0)] to-[oklch(0.96_0_0)];
+  }
+
+  /* Style standard pour les cartes / panneaux */
+  .app-card {
+    @apply bg-card text-card-foreground rounded-2xl shadow-sm border border-border;
+  }
+}
+
