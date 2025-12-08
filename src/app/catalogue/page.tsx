@@ -478,7 +478,7 @@ export default async function CataloguePage({
             <div className="app-card overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="min-w-full text-sm">
-                  <thead className="bg-muted/60 text-xs uppercase text-muted-foreground">
+                  <thead className="app-table-head">
                     <tr>
                       <th className="px-4 py-3 text-left font-medium">Photo</th>
                       {renderSortableHeader("SetID", "display_ref")}

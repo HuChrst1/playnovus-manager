@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import type { MouseEvent, ReactNode } from "react";
+import type { MouseEvent, KeyboardEvent, ReactNode } from "react";
 
 type ClickableRowProps = {
   href: string;
@@ -27,10 +27,30 @@ export function ClickableRow({ href, children }: ClickableRowProps) {
     router.push(href);
   };
 
+  const handleKeyDown = (event: KeyboardEvent<HTMLTableRowElement>) => {
+    // Navigation clavier : Enter ou Barre espace
+    if (event.key !== "Enter" && event.key !== " ") return;
+
+    event.preventDefault();
+    const target = event.target as HTMLElement;
+
+    if (
+      target.closest("a") ||
+      target.closest("button") ||
+      target.closest("[data-row-action='true']")
+    ) {
+      return;
+    }
+
+    router.push(href);
+  };
+
   return (
     <tr
+      className="app-table-row cursor-pointer"
       onClick={handleClick}
-      className="group border-t border-border cursor-pointer"
+      onKeyDown={handleKeyDown}
+      tabIndex={0}
     >
       {children}
     </tr>
