@@ -1,133 +1,162 @@
+// src/app/catalogue/AddSetDialog.tsx
 "use client";
 
-import * as React from "react";
 import {
   Dialog,
-  DialogTrigger,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogTrigger,
   DialogFooter,
   DialogClose,
 } from "@/components/ui/dialog";
-
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 
-// 👇 On reçoit la Server Action en prop
 type AddSetDialogProps = {
-  createSetAction: (formData: FormData) => void;
+  // Le server action que tu passes depuis page.tsx : createSet
+  createSetAction: (formData: FormData) => void | Promise<void>;
 };
 
 export function AddSetDialog({ createSetAction }: AddSetDialogProps) {
   return (
     <Dialog>
+      {/* Bouton bleu foncé "Ajouter un set" dans le header du catalogue */}
       <DialogTrigger asChild>
-        <Button size="sm" variant="default" type="button">
+        <Button
+          type="button"
+          variant="default"
+          size="lg"
+          className="h-10 rounded-full px-5 text-sm font-medium shadow-[0_10px_30px_rgba(15,23,42,0.35)]"
+        >
           Ajouter un set
         </Button>
       </DialogTrigger>
 
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Nouveau set</DialogTitle>
-          <DialogDescription>
-            Ajoute un set au catalogue PlayNovus. Tu pourras ensuite compléter sa fiche détaillée.
+      {/* Fenêtre modale : même esprit que "Ajouter une pièce" */}
+      <DialogContent className="max-w-4xl rounded-[32px] border border-black/5 bg-white px-8 py-7 sm:px-10 sm:py-8 shadow-[0_24px_70px_rgba(15,23,42,0.25)]">
+        <DialogHeader className="mb-4 space-y-1 text-left">
+          <DialogTitle className="text-lg font-semibold tracking-tight">
+            Nouveau set
+          </DialogTitle>
+          <DialogDescription className="text-sm text-muted-foreground">
+            Ajoute un set au catalogue PlayNovus. Tu pourras ensuite compléter
+            sa fiche détaillée.
           </DialogDescription>
         </DialogHeader>
 
-        {/* 👇 Ici on branche la Server Action */}
-        <form action={createSetAction} className="space-y-4">
+        {/* Formulaire principal */}
+        <form action={createSetAction} className="space-y-6">
           {/* Ligne 1 : SetID + Nom */}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <div className="sm:col-span-1 space-y-1.5">
-              <Label htmlFor="display_ref">SetID</Label>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-1.5">
+              <label className="block text-xs font-medium text-muted-foreground">
+                SetID
+              </label>
               <Input
-                id="display_ref"
                 name="display_ref"
                 placeholder="ex : 3666"
                 required
+                className="h-10"
               />
             </div>
 
-            <div className="sm:col-span-2 space-y-1.5">
-              <Label htmlFor="name">Nom du set</Label>
+            <div className="space-y-1.5">
+              <label className="block text-xs font-medium text-muted-foreground">
+                Nom du set
+              </label>
               <Input
-                id="name"
                 name="name"
                 placeholder="Nom du set"
                 required
+                className="h-10"
               />
             </div>
           </div>
 
           {/* Ligne 2 : Version + Thème */}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-1.5">
-              <Label htmlFor="version">Version</Label>
+              <label className="block text-xs font-medium text-muted-foreground">
+                Version
+              </label>
               <Input
-                id="version"
                 name="version"
-                placeholder="Version unique, V1, V2..."
+                placeholder="Version unique, V1, V2…"
+                className="h-10"
               />
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="theme">Thème</Label>
+              <label className="block text-xs font-medium text-muted-foreground">
+                Thème
+              </label>
               <Input
-                id="theme"
                 name="theme"
                 placeholder="ex : Chevaliers"
+                className="h-10"
               />
             </div>
           </div>
 
-          {/* Ligne 3 : Début / fin de production */}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {/* Ligne 3 : Début / Fin de production */}
+          <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-1.5">
-              <Label htmlFor="year_start">Début de production</Label>
+              <label className="block text-xs font-medium text-muted-foreground">
+                Début de production
+              </label>
               <Input
-                id="year_start"
                 name="year_start"
                 type="number"
-                min={1974}
-                max={2100}
                 placeholder="ex : 1998"
+                className="h-10"
               />
             </div>
 
             <div className="space-y-1.5">
-                <Label htmlFor="year_end">Fin de production</Label>
-                <Input
-                    id="year_end"
-                    name="year_end"
-                    type="text"
-                    placeholder="ex : 2010 ou N/A si en cours"
-                />
-           </div>
+              <label className="block text-xs font-medium text-muted-foreground">
+                Fin de production
+              </label>
+              <Input
+                name="year_end"
+                type="number"
+                placeholder="ex : 2010 ou N/A si en cours"
+                className="h-10"
+              />
+            </div>
           </div>
 
-          {/* Ligne 4 : URL image */}
+          {/* Ligne 4 : URL photo */}
           <div className="space-y-1.5">
-            <Label htmlFor="image_url">URL de la photo</Label>
+            <label className="block text-xs font-medium text-muted-foreground">
+              URL de la photo
+            </label>
             <Input
-              id="image_url"
               name="image_url"
-              placeholder="https://..."
+              type="url"
+              placeholder="https://…"
+              className="h-10"
             />
           </div>
 
-          <DialogFooter className="mt-4 flex items-center justify-end gap-2">
+          {/* Boutons d’action en bas */}
+          <DialogFooter className="mt-2 gap-2 sm:justify-end">
             <DialogClose asChild>
-              <Button type="button" variant="outline" size="sm">
+              <Button
+                type="button"
+                variant="outline"
+                className="h-9 rounded-full px-4 text-xs font-medium"
+              >
                 Annuler
               </Button>
             </DialogClose>
 
-            {/* Submit -> Server Action -> redirection */}
-            <Button type="submit" size="sm">
+            <Button
+              type="submit"
+              variant="default"
+              className="h-9 rounded-full px-5 text-xs font-medium shadow-[0_10px_30px_rgba(15,23,42,0.4)]"
+            >
               Enregistrer
             </Button>
           </DialogFooter>

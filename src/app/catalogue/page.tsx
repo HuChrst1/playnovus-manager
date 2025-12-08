@@ -462,12 +462,13 @@ export default async function CataloguePage({
               {/* Dialog d’ajout de set */}
               <AddSetDialog createSetAction={createSet} />
 
-              {/* Bouton Filtres – même style que les autres pills blancs */}
-              <Button asChild size="sm" variant="outline">
-                <label htmlFor="filters-toggle" className="cursor-pointer">
-                  Filtres
-                </label>
-              </Button>
+              {/* Bouton Filtres : c'est un <label>, pas un <Button>, pour garder le toggle checkbox */}
+              <label
+                htmlFor="filters-toggle"
+                className="inline-flex h-9 items-center rounded-full border border-slate-200 bg-white px-4 text-xs font-medium text-slate-800 shadow-[0_5px_18px_rgba(15,23,42,0.18)] cursor-pointer hover:bg-slate-50 hover:border-slate-300 transition-colors"
+              >
+                Filtres
+              </label>
             </div>
           </div>
   
@@ -660,7 +661,7 @@ export default async function CataloguePage({
           />
 
           {/* Panneau filtres : formulaire GET séparé */}
-          <aside className="hidden w-[280px] shrink-0 peer-checked:block lg:block">
+          <aside className="hidden w-[280px] shrink-0 peer-checked:block transition-all duration-200">
             <form
               method="GET"
               className="app-card sticky top-24 text-xs px-4 py-4 lg:px-5 lg:py-5 space-y-6"
