@@ -7,7 +7,7 @@ interface SetImageProps {
 
 export function SetImage({ url, name }: SetImageProps) {
   return (
-    <div className="relative w-full aspect-[4/3] rounded-xl border border-zinc-300 bg-white shadow-sm overflow-hidden">
+    <div className="relative w-full aspect-4/3 rounded-xl border border-zinc-300 bg-white shadow-sm overflow-hidden">
       <div className="w-full h-full flex items-center justify-center p-4">
         {url ? (
           // eslint-disable-next-line @next/next/no-img-element

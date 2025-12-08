@@ -366,7 +366,7 @@ export default async function CataloguePage({
     return (
       <span
         className={cn(
-          "inline-flex items-center justify-center rounded-full px-3 h-7 text-xs font-semibold min-w-[3.5rem] border",
+          "inline-flex items-center justify-center rounded-full px-3 h-7 text-xs font-semibold min-w-14 border",
           bgClass,
           textClass,
           borderClass
