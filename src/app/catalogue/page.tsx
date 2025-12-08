@@ -392,13 +392,12 @@ export default async function CataloguePage({
     );
   }
 
-  // --------- RENDER PRINCIPAL ---------
-  return (
-    <main className="p-4 lg:p-8">
-      <div className="mx-auto w-full max-w-6xl space-y-4">
-        {/* Bandeau titre + recherche */}
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
+    // --------- RENDER PRINCIPAL ---------
+    return (
+      <main className="space-y-6">
+        <div className="w-full space-y-6">
+          {/* Titre de page collé en haut, comme "Order list" */}
+          <div className="flex flex-col gap-1">
             <h1 className="text-2xl font-semibold tracking-tight">
               Catalogue PlayNovus
             </h1>
@@ -406,13 +405,13 @@ export default async function CataloguePage({
               Liste des sets présents dans la base.
             </p>
           </div>
-
-          {/* Recherche + actions principales */}
-          <div className="flex w-full items-center justify-end gap-2">
+  
+          {/* Barre de recherche + actions alignées comme sur la maquette */}
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             {/* FORMULAIRE DE RECHERCHE (GET) */}
             <form
               method="GET"
-              className="flex w-full max-w-xs items-center gap-2"
+              className="flex w-full max-w-md items-center gap-2"
             >
               <Input
                 type="text"
@@ -424,7 +423,7 @@ export default async function CataloguePage({
               <input type="hidden" name="page" value="1" />
               <input type="hidden" name="sort" value={activeSortKey} />
               <input type="hidden" name="dir" value={dir} />
-
+  
               {productionFilter && (
                 <input type="hidden" name="prod" value={productionFilter} />
               )}
@@ -452,205 +451,206 @@ export default async function CataloguePage({
                   />
                 ) : null;
               })}
-
+  
               <Button type="submit" variant="outline" size="sm">
                 Rechercher
               </Button>
             </form>
+  
+            {/* Actions principales à droite : Ajouter un set + Filtres */}
+            <div className="flex items-center gap-2">
+              {/* Dialog d’ajout de set */}
+              <AddSetDialog createSetAction={createSet} />
 
-            {/* Dialog d’ajout de set */}
-            <AddSetDialog createSetAction={createSet} />
-
-            {/* Bouton Filtres */}
-            <label
-              htmlFor="filters-toggle"
-              className="inline-flex h-8 items-center rounded-full border border-border bg-background px-3 text-xs text-muted-foreground shadow-sm hover:bg-muted cursor-pointer"
-            >
-              Filtres
-            </label>
-          </div>
-        </div>
-
-        {/* Layout : tableau + panneau filtres */}
-        <div className="flex gap-4 items-start justify-between">
-          {/* Colonne tableau */}
-          <div className="flex-1">
-            <div className="app-card overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-sm">
-                  <thead className="app-table-head">
-                    <tr>
-                      <th className="px-4 py-3 text-left font-medium">Photo</th>
-                      {renderSortableHeader("SetID", "display_ref")}
-                      {renderSortableHeader("Nom du set", "name")}
-                      {renderSortableHeader("Version", "version")}
-                      {renderSortableHeader("Début prod.", "year_start")}
-                      {renderSortableHeader("Fin prod.", "year_end")}
-                      {renderSortableHeader("Thème", "theme")}
-                      {renderSortableHeader("Complétion", "completion")}
-                      <th className="px-4 py-3 text-right font-medium">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {setsForDisplay && setsForDisplay.length > 0 ? (
-                      setsForDisplay.map((set) => (
-                        <ClickableRow
-                          key={set.id}
-                          href={`/catalogue/${encodeURIComponent(set.id)}`}
-                        >
-                          {/* Photo */}
-                          <td className="px-4 py-3 group-hover:bg-[#e0f2fe] transition-colors">
-                            {set.image_url ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img
-                                src={set.image_url}
-                                alt={set.name}
-                                className="h-10 w-10 rounded-md object-cover bg-muted"
-                              />
-                            ) : (
-                              <div className="h-10 w-10 rounded-md bg-muted flex items-center justify-center text-[10px] text-muted-foreground">
-                                N/A
-                              </div>
-                            )}
-                          </td>
-
-                          {/* SetID */}
-                          <td className="px-4 py-3 font-mono text-xs group-hover:bg-[#e0f2fe] transition-colors">
-                            {set.display_ref}
-                          </td>
-
-                          {/* Nom */}
-                          <td className="px-4 py-3 group-hover:bg-[#e0f2fe] transition-colors">
-                            <span className="font-medium">{set.name}</span>
-                          </td>
-
-                          {/* Version */}
-                          <td className="px-4 py-3 group-hover:bg-[#e0f2fe] transition-colors">
-                            {set.version && set.version !== "Version Unique"
-                              ? set.version
-                              : "Unique"}
-                          </td>
-
-                          {/* Début / fin de production */}
-                          <td className="px-4 py-3 group-hover:bg-[#e0f2fe] transition-colors">
-                            {set.year_start ?? "N/A"}
-                          </td>
-                          <td className="px-4 py-3 group-hover:bg-[#e0f2fe] transition-colors">
-                            {set.year_end ?? "N/A"}
-                          </td>
-
-                          {/* Thème */}
-                          <td className="px-4 py-3 group-hover:bg-[#e0f2fe] transition-colors">
-                            {set.theme ?? "-"}
-                          </td>
-
-                          {/* Complétion */}
-                          <td className="px-4 py-3 group-hover:bg-[#e0f2fe] transition-colors">
-                            {renderCompletionPill(set)}
-                          </td>
-
-                          {/* Actions */}
-                          <td className="px-4 py-3 text-right group-hover:bg-[#e0f2fe] transition-colors">
-                            <div className="flex items-center justify-end gap-2">
-                              <Link
-                                data-row-action="true"
-                                href={`/catalogue/${encodeURIComponent(
-                                  set.id
-                                )}`}
-                                className="text-xs font-medium text-primary hover:underline"
-                              >
-                                Voir la fiche
-                              </Link>
-
-                              <DeleteSetButton
-                                setId={set.id}
-                                setName={set.name}
-                                deleteSetAction={deleteSet}
-                              />
-                            </div>
-                          </td>
-                        </ClickableRow>
-                      ))
-                    ) : (
-                      <tr className="border-t border-border">
-                        <td
-                          colSpan={9}
-                          className="px-4 py-6 text-center text-sm text-muted-foreground"
-                        >
-                          Aucun set trouvé.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="flex flex-col gap-3 border-t border-border bg-muted/40 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="text-xs text-muted-foreground">
-                    Affichage {from + 1}–{Math.min(to + 1, totalCount)} sur{" "}
-                    {totalCount} sets
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-1 rounded-full bg-background px-2 py-1 shadow-sm">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        asChild
-                        disabled={currentPage === 1}
-                        className="h-7 w-7 rounded-full"
-                      >
-                        <Link href={makePageHref(currentPage - 1)}>
-                          <ChevronLeft className="h-4 w-4" />
-                        </Link>
-                      </Button>
-
-                      {pageNumbers.map((item, index) =>
-                        item === "dots" ? (
-                          <span
-                            key={`dots-${index}`}
-                            className="h-7 px-2 flex items-center justify-center text-xs text-muted-foreground"
-                          >
-                            …
-                          </span>
-                        ) : (
-                          <Link
-                            key={item}
-                            href={makePageHref(item)}
-                            className={cn(
-                              "h-7 w-7 flex items-center justify-center rounded-full text-xs transition-colors",
-                              item === currentPage
-                                ? "bg-primary text-primary-foreground shadow-sm"
-                                : "text-muted-foreground hover:bg-muted/80"
-                            )}
-                          >
-                            {item}
-                          </Link>
-                        )
-                      )}
-
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        asChild
-                        disabled={currentPage === totalPages}
-                        className="h-7 w-7 rounded-full"
-                      >
-                        <Link href={makePageHref(currentPage + 1)}>
-                          <ChevronRight className="h-4 w-4" />
-                        </Link>
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              )}
+              {/* Bouton Filtres – même style que les autres pills blancs */}
+              <Button asChild size="sm" variant="outline">
+                <label htmlFor="filters-toggle" className="cursor-pointer">
+                  Filtres
+                </label>
+              </Button>
             </div>
           </div>
-
+  
+          {/* Layout : tableau large + panneau filtres */}
+          <div className="flex gap-4 items-start justify-between">
+            {/* Colonne tableau – prend toute la largeur dispo */}
+            <div className="flex-1">
+              <div className="app-card overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead className="app-table-head">
+                      <tr>
+                        <th className="px-4 py-3 text-left font-medium">Photo</th>
+                        {renderSortableHeader("SetID", "display_ref")}
+                        {renderSortableHeader("Nom du set", "name")}
+                        {renderSortableHeader("Version", "version")}
+                        {renderSortableHeader("Début prod.", "year_start")}
+                        {renderSortableHeader("Fin prod.", "year_end")}
+                        {renderSortableHeader("Thème", "theme")}
+                        {renderSortableHeader("Complétion", "completion")}
+                        <th className="px-4 py-3 text-right font-medium">
+                          Actions
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {setsForDisplay && setsForDisplay.length > 0 ? (
+                        setsForDisplay.map((set) => (
+                          <ClickableRow
+                            key={set.id}
+                            href={`/catalogue/${encodeURIComponent(set.id)}`}
+                          >
+                            {/* Photo */}
+                            <td className="px-4 py-3">
+                              {set.image_url ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={set.image_url}
+                                  alt={set.name}
+                                  className="h-10 w-10 rounded-md object-cover bg-muted"
+                                />
+                              ) : (
+                                <div className="h-10 w-10 rounded-md bg-muted flex items-center justify-center text-[10px] text-muted-foreground">
+                                  N/A
+                                </div>
+                              )}
+                            </td>
+  
+                            {/* SetID */}
+                            <td className="px-4 py-3 font-mono text-xs">
+                              {set.display_ref}
+                            </td>
+  
+                            {/* Nom */}
+                            <td className="px-4 py-3">
+                              <span className="font-medium">{set.name}</span>
+                            </td>
+  
+                            {/* Version */}
+                            <td className="px-4 py-3">
+                              {set.version && set.version !== "Version Unique"
+                                ? set.version
+                                : "Unique"}
+                            </td>
+  
+                            {/* Début / fin de production */}
+                            <td className="px-4 py-3">
+                              {set.year_start ?? "N/A"}
+                            </td>
+                            <td className="px-4 py-3">
+                              {set.year_end ?? "N/A"}
+                            </td>
+  
+                            {/* Thème */}
+                            <td className="px-4 py-3">
+                              {set.theme ?? "-"}
+                            </td>
+  
+                            {/* Complétion */}
+                            <td className="px-4 py-3">
+                              {renderCompletionPill(set)}
+                            </td>
+  
+                            {/* Actions */}
+                            <td className="px-4 py-3 text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <Link
+                                  data-row-action="true"
+                                  href={`/catalogue/${encodeURIComponent(
+                                    set.id
+                                  )}`}
+                                  className="text-xs font-medium text-primary hover:underline"
+                                >
+                                  Voir la fiche
+                                </Link>
+  
+                                <DeleteSetButton
+                                  setId={set.id}
+                                  setName={set.name}
+                                  deleteSetAction={deleteSet}
+                                />
+                              </div>
+                            </td>
+                          </ClickableRow>
+                        ))
+                      ) : (
+                        <tr className="border-t border-border">
+                          <td
+                            colSpan={9}
+                            className="px-4 py-6 text-center text-sm text-muted-foreground"
+                          >
+                            Aucun set trouvé.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+  
+                {/* Pagination */}
+                {totalPages > 1 && (
+                  <div className="flex flex-col gap-3 border-t border-border bg-muted/40 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="text-xs text-muted-foreground">
+                      Affichage {from + 1}–{Math.min(to + 1, totalCount)} sur{" "}
+                      {totalCount} sets
+                    </div>
+  
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-1 rounded-full bg-background px-2 py-1 shadow-sm">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          asChild
+                          disabled={currentPage === 1}
+                          className="h-7 w-7 rounded-full"
+                        >
+                          <Link href={makePageHref(currentPage - 1)}>
+                            <ChevronLeft className="h-4 w-4" />
+                          </Link>
+                        </Button>
+  
+                        {pageNumbers.map((item, index) =>
+                          item === "dots" ? (
+                            <span
+                              key={`dots-${index}`}
+                              className="h-7 px-2 flex items-center justify-center text-xs text-muted-foreground"
+                            >
+                              …
+                            </span>
+                          ) : (
+                            <Link
+                              key={item}
+                              href={makePageHref(item)}
+                              className={cn(
+                                "h-7 w-7 flex items-center justify-center rounded-full text-xs transition-colors",
+                                item === currentPage
+                                  ? "bg-primary text-primary-foreground shadow-sm"
+                                  : "text-muted-foreground hover:bg-muted/80"
+                              )}
+                            >
+                              {item}
+                            </Link>
+                          )
+                        )}
+  
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          asChild
+                          disabled={currentPage === totalPages}
+                          className="h-7 w-7 rounded-full"
+                        >
+                          <Link href={makePageHref(currentPage + 1)}>
+                            <ChevronRight className="h-4 w-4" />
+                          </Link>
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+  
           {/* Toggle caché qui contrôle l’aside (frère direct) */}
           <input
             id="filters-toggle"
@@ -660,63 +660,69 @@ export default async function CataloguePage({
           />
 
           {/* Panneau filtres : formulaire GET séparé */}
-          <aside className="hidden w-[260px] shrink-0 peer-checked:block">
-            <form method="GET" className="app-card text-xs sticky top-24">
+          <aside className="hidden w-[280px] shrink-0 peer-checked:block lg:block">
+            <form
+              method="GET"
+              className="app-card sticky top-24 text-xs px-4 py-4 lg:px-5 lg:py-5 space-y-6"
+            >
               {/* on garde tri + recherche quand on applique les filtres */}
               <input type="hidden" name="page" value="1" />
               <input type="hidden" name="sort" value={activeSortKey} />
               <input type="hidden" name="dir" value={dir} />
-              {searchQuery && (
-                <input type="hidden" name="q" value={searchQuery} />
-              )}
+              {searchQuery && <input type="hidden" name="q" value={searchQuery} />}
 
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
+              {/* HEADER : titre + boutons */}
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-[11px] font-semibold tracking-[0.18em] uppercase text-muted-foreground">
                   Filtres
                 </p>
+
                 <div className="flex items-center gap-2">
+                  {/* Réinitialiser = bouton noir comme "Ajouter un set" */}
                   <Button
                     type="button"
                     size="sm"
-                    variant="ghost"
-                    className="h-6 px-2 text-[11px]"
+                    variant="default"
+                    className="h-7 rounded-full px-3 text-[11px]"
                     asChild
                   >
                     <Link href="/catalogue">Réinitialiser</Link>
                   </Button>
 
+                  {/* Appliquer = bouton blanc soft */}
                   <Button
                     type="submit"
                     size="sm"
                     variant="outline"
-                    className="h-6 px-2 text-[11px]"
+                    className="h-7 rounded-full px-3 text-[11px]"
                   >
                     Appliquer
                   </Button>
                 </div>
               </div>
 
-              <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1 pb-2">
+              <div className="space-y-6 max-h-[60vh] overflow-y-auto pr-1 pb-1">
+                
                 {/* Versions */}
-                <div className="space-y-2">
+                <div className="space-y-3">
                   <p className="text-[11px] font-medium text-muted-foreground">
                     Versions
                   </p>
-                  <div className="grid grid-cols-[repeat(4,max-content)] gap-x-2 gap-y-2">
+                  <div className="grid grid-cols-3 gap-x-3 gap-y-2">
                     {VERSION_FILTERS.map((v) => {
                       const isChecked = resolvedSearchParams[v.key] === "1";
 
                       return (
                         <label
                           key={`${v.key}-${isChecked ? "1" : "0"}`}
-                          className="inline-flex items-center justify-center gap-1 rounded-full border border-border bg-background px-2 py-0.5 text-[10px] whitespace-nowrap"
+                          className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-1.5 text-[11px] whitespace-nowrap shadow-[0_8px_18px_rgba(15,23,42,0.06)] cursor-pointer transition-colors hover:bg-[#f5f7fb]"
                         >
                           <input
                             type="checkbox"
                             name={v.key}
                             value="1"
                             defaultChecked={isChecked}
-                            className="h-3 w-3"
+                            className="h-3.5 w-3.5 accent-primary"
                           />
                           <span>{v.label}</span>
                         </label>
@@ -726,27 +732,26 @@ export default async function CataloguePage({
                 </div>
 
                 {/* Début de production */}
-                <div className="space-y-2">
+                <div className="space-y-3">
                   <p className="text-[11px] font-medium text-muted-foreground">
                     Début de production
                   </p>
-                  <div className="grid grid-cols-[repeat(4,max-content)] gap-x-2 gap-y-2 max-h-48 overflow-y-auto">
+                  <div className="grid grid-cols-3 gap-x-3 gap-y-2 max-h-56 overflow-y-auto pr-1 pb-1">
                     {YEAR_OPTIONS.map((year) => {
                       const paramKey = `year_${year}`;
-                      const isChecked =
-                        resolvedSearchParams[paramKey] === "1";
+                      const isChecked = resolvedSearchParams[paramKey] === "1";
 
                       return (
                         <label
                           key={`${paramKey}-${isChecked ? "1" : "0"}`}
-                          className="inline-flex items-center justify-center gap-1 rounded-full border border-border bg-background px-2 py-0.5 text-[10px] whitespace-nowrap"
+                          className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-1.5 text-[11px] whitespace-nowrap shadow-[0_8px_18px_rgba(15,23,42,0.06)] cursor-pointer transition-colors hover:bg-[#f5f7fb]"
                         >
                           <input
                             type="checkbox"
                             name={paramKey}
                             value="1"
                             defaultChecked={isChecked}
-                            className="h-3 w-3"
+                            className="h-3.5 w-3.5 accent-primary"
                           />
                           <span>{year}</span>
                         </label>
@@ -755,15 +760,16 @@ export default async function CataloguePage({
                   </div>
                 </div>
 
-                {/* Période de production */}
-                <div className="space-y-2">
+                {/* PÉRIODE DE PRODUCTION */}
+                <div className="space-y-3">
                   <p className="text-[11px] font-medium text-muted-foreground">
                     Période de production
                   </p>
                   <select
                     name="prod"
                     defaultValue={productionFilter || ""}
-                    className="h-8 w-full rounded-full border border-border bg-background px-3 text-[11px] text-muted-foreground"
+                    className="h-9 w-full rounded-full border border-border bg-white/90 px-3
+                              text-[11px] text-muted-foreground shadow-[0_8px_20px_rgba(15,23,42,0.08)]"
                   >
                     <option value="">Toutes périodes</option>
                     <option value="active">En production</option>
@@ -771,8 +777,8 @@ export default async function CataloguePage({
                   </select>
                 </div>
 
-                {/* Thème */}
-                <div className="space-y-2">
+                {/* THÈME */}
+                <div className="space-y-3">
                   <p className="text-[11px] font-medium text-muted-foreground">
                     Thème
                   </p>
@@ -782,14 +788,15 @@ export default async function CataloguePage({
                     name="theme"
                     placeholder="Rechercher par thème..."
                     defaultValue={themeFilter}
-                    className="h-8 w-full rounded-full border border-border bg-background px-3 text-[11px]"
+                    className="h-9 w-full rounded-full border border-border bg-white/90 px-3
+                              text-[11px] shadow-[0_8px_20px_rgba(15,23,42,0.08)]"
                   />
                 </div>
               </div>
             </form>
           </aside>
+          </div>
         </div>
-      </div>
-    </main>
-  );
-}
+      </main>
+    );
+  }
