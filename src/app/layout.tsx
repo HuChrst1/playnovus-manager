@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
+import Link from "next/link";
+import { Home, Truck, ShoppingCart, Boxes, BookOpen } from "lucide-react";
 import "./globals.css";
+import Image from "next/image";
 
 export const metadata: Metadata = {
   title: "PlayNovus Manager",
@@ -21,56 +24,63 @@ export default function RootLayout({
             {/* Haut : logo + icônes principales */}
             <div className="flex flex-col items-center gap-4">
               {/* Logo PlayNovus minimal */}
-              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-900 text-[11px] font-semibold tracking-tight text-white shadow-[0_10px_25px_rgba(15,23,42,0.35)]">
-                PN
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white shadow-[0_10px_25px_rgba(15,23,42,0.25)]">
+                <Image
+                  src="/playnovus-logo.svg"
+                  alt="PlayNovus"
+                  width={50}
+                  height={50}
+                  className="object-contain"
+                  priority
+                />
               </div>
 
               {/* Navigation principale (icônes seulement pour l’instant) */}
               <nav className="mt-6 flex flex-col items-center gap-3">
-                {/* Dashboard (actif “fake” pour l’instant) */}
-                <button
-                  type="button"
-                  className="app-sidebar-item app-sidebar-item--active"
-                  aria-label="Dashboard"
-                >
-                  <span className="text-[15px]">🏠</span>
-                </button>
-
-                {/* Catalogue */}
+                {/* 1. Home */}
                 <button
                   type="button"
                   className="app-sidebar-item"
-                  aria-label="Catalogue"
+                  aria-label="Accueil"
                 >
-                  <span className="text-[15px]">📚</span>
+                  <Home className="h-4 w-4" />
                 </button>
 
-                {/* Approvisionnement */}
+                {/* 2. Approvisionnements */}
                 <button
                   type="button"
                   className="app-sidebar-item"
-                  aria-label="Approvisionnement"
+                  aria-label="Approvisionnements"
                 >
-                  <span className="text-[15px]">📥</span>
+                  <Truck className="h-4 w-4" />
                 </button>
 
-                {/* Ventes */}
+                {/* 3. Ventes */}
                 <button
                   type="button"
                   className="app-sidebar-item"
                   aria-label="Ventes"
                 >
-                  <span className="text-[15px]">💸</span>
+                  <ShoppingCart className="h-4 w-4" />
                 </button>
 
-                {/* Dashboard KPI (pour plus tard) */}
+                {/* 4. Stock */}
                 <button
                   type="button"
                   className="app-sidebar-item"
-                  aria-label="Dashboard KPIs"
+                  aria-label="Stock"
                 >
-                  <span className="text-[15px]">📊</span>
+                  <Boxes className="h-4 w-4" />
                 </button>
+
+                {/* 5. Catalogue → route /catalogue (actif) */}
+                <Link
+                  href="/catalogue"
+                  className="app-sidebar-item app-sidebar-item--active"
+                  aria-label="Catalogue"
+                >
+                  <BookOpen className="h-4 w-4" />
+                </Link>
               </nav>
             </div>
 

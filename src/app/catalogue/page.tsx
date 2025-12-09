@@ -418,8 +418,9 @@ export default async function CataloguePage({
                 name="q"
                 placeholder="Rechercher par nom ou SetID..."
                 defaultValue={searchQuery}
-                className="h-9 w-full"
+                className="w-full rounded-full shadow-[0_12px_30px_rgba(15,23,42,0.12)]"
               />
+
               <input type="hidden" name="page" value="1" />
               <input type="hidden" name="sort" value={activeSortKey} />
               <input type="hidden" name="dir" value={dir} />

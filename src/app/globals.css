@@ -155,10 +155,20 @@
     @apply bg-background text-foreground font-sans;
   }
 
-  /* Fond général type UI (clair, léger bleu/gris – pas de gros gradient bleu) */
-  .app-shell {
-    @apply min-h-screen bg-[#edf0f7];
-  }
+  /* Fond général type UI (clair + halos bleus doux) */
+.app-shell {
+  @apply min-h-screen;
+
+  /* couleur de base identique à avant */
+  background-color: #edf0f7;
+
+  /* halos inspirés des maquettes (subtils) */
+  background-image:
+    radial-gradient(circle at top left, rgba(129, 140, 248, 0.18), transparent 55%),
+    radial-gradient(circle at bottom right, rgba(56, 189, 248, 0.12), transparent 55%);
+
+  background-attachment: fixed;
+}
 
   /* Carte principale (grand panneau blanc arrondi au centre) */
   .app-card {
@@ -244,7 +254,7 @@
     padding: 0.75rem 1rem;
     vertical-align: middle;
   }
-  
+
   /* Badges status type “delivered / on way / await” (pour plus tard) */
   .app-status-pill {
     @apply inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold;
