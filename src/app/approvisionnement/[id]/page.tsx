@@ -105,7 +105,11 @@ export default async function LotDetailPage({
     .order("created_at", { ascending: true });
 
   if (inventoryError) {
-    console.error("Erreur chargement inventory pour lot:", lot.id, inventoryError);
+    console.error(
+      "Erreur chargement inventory pour lot:",
+      lot.id,
+      inventoryError
+    );
   }
 
   const lines = (inventoryData ?? []) as InventoryLine[];
@@ -136,7 +140,7 @@ export default async function LotDetailPage({
             {displayCode}{" "}
             {lot.label ? `– ${lot.label}` : "– Détail du lot"}
           </h1>
-          <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
             Détail du lot d&apos;approvisionnement.
           </p>
         </div>
@@ -153,20 +157,20 @@ export default async function LotDetailPage({
               Retour lots
             </Link>
           </Button>
-
-          {/* Bouton “Modifier le lot” cohérent avec /catalogue/[id] */}
-          <EditLotDialog lot={lotForEdit} />
         </div>
       </div>
 
       {/* LAYOUT PRINCIPAL : résumé + pièces du lot */}
       <div className="grid gap-6 lg:grid-cols-[minmax(320px,360px)_1fr]">
         {/* COLONNE GAUCHE : résumé du lot */}
-        <Card className="border border-slate-200 shadow-sm rounded-3xl overflow-hidden">
-          <CardHeader className="py-3 px-5 border-b border-slate-100 bg-slate-50/80">
+        <Card className="border-0 shadow-[0_18px_50px_rgba(15,23,42,0.16)] rounded-[28px] overflow-hidden bg-white/95">
+          <CardHeader className="flex items-center justify-between py-3 px-5 border-b border-slate-100 bg-white/90">
             <CardTitle className="text-xs font-semibold text-slate-500 uppercase tracking-[0.22em]">
               Résumé du lot
             </CardTitle>
+
+            {/* Petit bouton crayon dans l’en-tête de la card */}
+            <EditLotDialog lot={lotForEdit} variant="card" />
           </CardHeader>
 
           <CardContent className="p-0 bg-white text-sm divide-y divide-slate-100">
@@ -226,7 +230,7 @@ export default async function LotDetailPage({
         </Card>
 
         {/* COLONNE DROITE : pièces du lot */}
-        <Card className="border border-slate-200 shadow-md rounded-3xl flex flex-col overflow-hidden">
+        <Card className="border-0 shadow-[0_18px_50px_rgba(15,23,42,0.16)] rounded-[28px] flex flex-col overflow-hidden bg-white/95">
           {/* Header de la card, aligné avec l'inventaire des sets */}
           <div className="px-6 py-5 border-b border-slate-100 bg-white">
             <div className="flex items-end justify-between gap-6">
@@ -254,9 +258,6 @@ export default async function LotDetailPage({
                     Quantité
                   </th>
                   <th className="px-4 py-3 text-left font-medium">
-                    Emplacement
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium">
                     Créé le
                   </th>
                 </tr>
@@ -265,7 +266,7 @@ export default async function LotDetailPage({
                 {lines.length === 0 ? (
                   <tr className="border-t border-border">
                     <td
-                      colSpan={4}
+                      colSpan={3}
                       className="px-4 py-6 text-center text-sm text-muted-foreground"
                     >
                       Aucune pièce enregistrée pour ce lot pour le
@@ -283,9 +284,6 @@ export default async function LotDetailPage({
                       </td>
                       <td className="px-4 py-3 tabular-nums">
                         {line.quantity}
-                      </td>
-                      <td className="px-4 py-3 max-w-xs truncate">
-                        {line.location || "—"}
                       </td>
                       <td className="px-4 py-3">
                         {formatDateTime(line.created_at)}

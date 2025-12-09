@@ -33,9 +33,14 @@ export type LotForEdit = {
 
 interface EditLotDialogProps {
   lot: LotForEdit;
+  /**
+   * - "table" : petit bouton discret pour la colonne Actions du tableau
+   * - "card"  : petit bouton rond blanc avec ombre, pour l’en-tête de la card
+   */
+  variant?: "table" | "card";
 }
 
-export function EditLotDialog({ lot }: EditLotDialogProps) {
+export function EditLotDialog({ lot, variant = "table" }: EditLotDialogProps) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -87,25 +92,30 @@ export function EditLotDialog({ lot }: EditLotDialogProps) {
         return;
       }
 
-      // succès -> on ferme la modale puis on rafraîchit la page
+      // succès -> on ferme la modale
       setOpen(false);
-      window.location.reload();
     });
   };
 
+  const triggerButton = (
+    <Button
+      type="button"
+      variant={variant === "card" ? "outline" : "ghost"}
+      size="icon"
+      className={
+        variant === "card"
+          ? "h-9 w-9 rounded-full border border-slate-200 bg-white shadow-[0_10px_25px_rgba(15,23,42,0.18)] text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition"
+          : "h-8 w-8 rounded-full text-slate-500 hover:text-slate-900 hover:bg-slate-100"
+      }
+    >
+      <Pencil className="h-4 w-4" />
+    </Button>
+  );
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      {/* Petit bouton “Modifier” dans la table (icône crayon) */}
-      <DialogTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 rounded-full text-slate-500 hover:text-slate-900 hover:bg-slate-100"
-        >
-          <Pencil className="h-4 w-4" />
-        </Button>
-      </DialogTrigger>
+      {/* Bouton crayon (style dépend du variant) */}
+      <DialogTrigger asChild>{triggerButton}</DialogTrigger>
 
       <DialogContent className="max-w-3xl rounded-[32px] bg-white p-8 sm:p-10 shadow-[0_28px_80px_rgba(15,23,42,0.45)]">
         <DialogHeader className="mb-6">

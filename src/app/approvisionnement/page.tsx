@@ -134,7 +134,7 @@ export default async function ApprovisionnementPage() {
                   return (
                     <tr
                       key={lot.id}
-                      className="border-t border-border hover:bg-sky-50/70 transition-colors"
+                      className="app-table-row"
                     >
                       <td className="px-4 py-3 font-mono text-xs">
                         <Link
