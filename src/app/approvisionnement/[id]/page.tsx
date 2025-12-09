@@ -4,6 +4,9 @@ import { ArrowLeft } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { EditLotDialog, LotForEdit } from "../EditLotDialog";
+import { QuickAddPieceForm } from "./QuickAddPieceForm";
+import { EditInventoryLineDialog } from "./EditInventoryLineDialog";
+import { DeleteInventoryLineButton } from "./DeleteInventoryLineButton";
 
 export const dynamic = "force-dynamic";
 
@@ -234,34 +237,42 @@ export default async function LotDetailPage({
           {/* Header de la card, aligné avec l'inventaire des sets */}
           <div className="px-6 py-5 border-b border-slate-100 bg-white">
             <div className="flex items-end justify-between gap-6">
-              <div>
+                <div>
                 <h2 className="text-sm font-semibold tracking-[0.16em] uppercase text-slate-500">
-                  Pièces du lot ({lines.length})
+                    Pièces du lot ({lines.length})
                 </h2>
                 <p className="mt-1 text-xs text-slate-500">
-                  Saisie rapide (référence + quantité) viendra ici dans
-                  une prochaine étape.
+                    Saisie rapide : indique une référence de pièce Playmobil et une
+                    quantité, puis ajoute-la à ce lot.
                 </p>
-              </div>
+                </div>
+
+                <QuickAddPieceForm
+                lotId={lot.id}
+                isDraft={lot.status === "draft"}
+                />
+                </div>
             </div>
-          </div>
 
           {/* Tableau des pièces */}
           <div className="flex-1 bg-white overflow-y-auto max-h-[720px]">
             <table className="min-w-full text-sm">
-              <thead className="app-table-head">
+            <thead className="app-table-head">
                 <tr>
-                  <th className="px-4 py-3 text-left font-medium">
+                    <th className="px-4 py-3 text-left font-medium">
                     Réf. pièce
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium">
+                    </th>
+                    <th className="px-4 py-3 text-left font-medium">
                     Quantité
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium">
+                    </th>
+                    <th className="px-4 py-3 text-left font-medium">
                     Créé le
-                  </th>
+                    </th>
+                    <th className="px-4 py-3 text-right font-medium">
+                    Actions
+                    </th>
                 </tr>
-              </thead>
+            </thead>
               <tbody>
                 {lines.length === 0 ? (
                   <tr className="border-t border-border">
@@ -276,18 +287,29 @@ export default async function LotDetailPage({
                 ) : (
                   lines.map((line) => (
                     <tr
-                      key={line.id}
-                      className="border-t border-border hover:bg-sky-50/70 transition-colors"
-                    >
-                      <td className="px-4 py-3 font-mono text-xs">
-                        {line.piece_ref || "—"}
-                      </td>
-                      <td className="px-4 py-3 tabular-nums">
-                        {line.quantity}
-                      </td>
-                      <td className="px-4 py-3">
-                        {formatDateTime(line.created_at)}
-                      </td>
+                        key={line.id}
+                        className="border-t border-border hover:bg-sky-50/70 transition-colors"
+                        >
+                        <td className="px-4 py-3 font-mono text-xs">
+                            {line.piece_ref || "—"}
+                        </td>
+                        <td className="px-4 py-3 tabular-nums">
+                            {line.quantity}
+                        </td>
+                        <td className="px-4 py-3">
+                            {formatDateTime(line.created_at)}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                            <div className="inline-flex items-center gap-1.5">
+                            <EditInventoryLineDialog
+                                lotId={lot.id}
+                                lineId={line.id}
+                                initialPieceRef={line.piece_ref}
+                                initialQuantity={line.quantity}
+                            />
+                            <DeleteInventoryLineButton lotId={lot.id} lineId={line.id} />
+                            </div>
+                        </td>
                     </tr>
                   ))
                 )}

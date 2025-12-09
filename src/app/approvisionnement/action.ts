@@ -268,3 +268,233 @@ export async function deleteLot(lotId: number) {
 
   return { success: true };
 }
+
+// ... tout le reste de action.ts au-dessus ...
+
+export async function addPieceToLot(
+  lotId: number,
+  input: {
+    pieceRef: string;
+    quantity: number;
+  }
+) {
+  if (!lotId || Number.isNaN(lotId)) {
+    return { success: false, error: "Lot invalide." };
+  }
+
+  const pieceRef = input.pieceRef.trim();
+  const quantity = input.quantity;
+
+  if (!pieceRef) {
+    return { success: false, error: "La référence de pièce est obligatoire." };
+  }
+
+  if (
+    !Number.isFinite(quantity) ||
+    !Number.isInteger(quantity) ||
+    quantity <= 0
+  ) {
+    return {
+      success: false,
+      error: "La quantité doit être un entier strictement positif.",
+    };
+  }
+
+  // Optionnel : verrouiller l’ajout si le lot est confirmé
+  const { data: lotRow, error: lotError } = await supabase
+    .from("lots")
+    .select("status")
+    .eq("id", lotId)
+    .single();
+
+  if (lotError || !lotRow) {
+    console.error("addPieceToLot lot error:", lotError);
+    return {
+      success: false,
+      error: "Impossible de vérifier le statut du lot.",
+    };
+  }
+
+  if (lotRow.status !== "draft") {
+    return {
+      success: false,
+      error:
+        "Ce lot est confirmé. Tu ne peux plus ajouter de pièces (repasse-le en brouillon si besoin).",
+    };
+  }
+
+  const { error: insertError } = await supabase.from("inventory").insert({
+    lot_id: lotId,
+    piece_ref: pieceRef,
+    quantity,
+    location: null,
+  });
+
+  if (insertError) {
+    console.error("addPieceToLot insert error:", insertError);
+    return {
+      success: false,
+      error:
+        "Impossible d'ajouter la pièce au lot. Détail technique : " +
+        insertError.message,
+    };
+  }
+
+  // Raffraîchit la page du lot
+  revalidatePath(`/approvisionnement/${lotId}`);
+
+  return { success: true as const };
+}
+
+export async function deleteInventoryLine(lotId: number, lineId: number) {
+  if (!lotId || !lineId || Number.isNaN(lotId) || Number.isNaN(lineId)) {
+    return { success: false, error: "Paramètres invalides." };
+  }
+
+  // Vérifie que la ligne appartient bien à ce lot
+  const { data: line, error: lineError } = await supabase
+    .from("inventory")
+    .select("id, lot_id")
+    .eq("id", lineId)
+    .single();
+
+  if (lineError || !line || line.lot_id !== lotId) {
+    console.error("deleteInventoryLine - line mismatch:", lineError);
+    return {
+      success: false,
+      error: "Ligne introuvable ou ne correspondant pas à ce lot.",
+    };
+  }
+
+  // Vérifie que le lot est toujours en brouillon
+  const { data: lotRow, error: lotError } = await supabase
+    .from("lots")
+    .select("status")
+    .eq("id", lotId)
+    .single();
+
+  if (lotError || !lotRow) {
+    return {
+      success: false,
+      error: "Impossible de vérifier le statut du lot.",
+    };
+  }
+
+  if (lotRow.status !== "draft") {
+    return {
+      success: false,
+      error: "Ce lot est confirmé : tu ne peux plus modifier les lignes.",
+    };
+  }
+
+  const { error: deleteError } = await supabase
+    .from("inventory")
+    .delete()
+    .eq("id", lineId);
+
+  if (deleteError) {
+    console.error("deleteInventoryLine error:", deleteError);
+    return {
+      success: false,
+      error:
+        "Impossible de supprimer cette ligne. Détail technique : " +
+        deleteError.message,
+    };
+  }
+
+  revalidatePath(`/approvisionnement/${lotId}`);
+
+  return { success: true as const };
+}
+
+export async function updateInventoryLine(
+  lotId: number,
+  lineId: number,
+  args: {
+    pieceRef: string;
+    quantity: number;
+  }
+) {
+  if (!lotId || !lineId || Number.isNaN(lotId) || Number.isNaN(lineId)) {
+    return { success: false, error: "Paramètres invalides." };
+  }
+
+  const pieceRef = args.pieceRef.trim();
+  const quantity = args.quantity;
+
+  if (!pieceRef) {
+    return {
+      success: false,
+      error: "La référence de pièce est obligatoire.",
+    };
+  }
+
+  if (
+    !Number.isFinite(quantity) ||
+    !Number.isInteger(quantity) ||
+    quantity <= 0
+  ) {
+    return {
+      success: false,
+      error: "La quantité doit être un entier strictement positif.",
+    };
+  }
+
+  // Vérifie que la ligne appartient bien à ce lot
+  const { data: line, error: lineError } = await supabase
+    .from("inventory")
+    .select("id, lot_id")
+    .eq("id", lineId)
+    .single();
+
+  if (lineError || !line || line.lot_id !== lotId) {
+    console.error("updateInventoryLine - line mismatch:", lineError);
+    return {
+      success: false,
+      error: "Ligne introuvable ou ne correspondant pas à ce lot.",
+    };
+  }
+
+  // Vérifie que le lot est toujours en brouillon
+  const { data: lotRow, error: lotError } = await supabase
+    .from("lots")
+    .select("status")
+    .eq("id", lotId)
+    .single();
+
+  if (lotError || !lotRow) {
+    return {
+      success: false,
+      error: "Impossible de vérifier le statut du lot.",
+    };
+  }
+
+  if (lotRow.status !== "draft") {
+    return {
+      success: false,
+      error: "Ce lot est confirmé : tu ne peux plus modifier les lignes.",
+    };
+  }
+
+  const { error: updateError } = await supabase
+    .from("inventory")
+    .update({
+      piece_ref: pieceRef,
+      quantity,
+    })
+    .eq("id", lineId);
+
+  if (updateError) {
+    console.error("updateInventoryLine error:", updateError);
+    return {
+      success: false,
+      error:
+        "Impossible de mettre à jour cette ligne. Détail technique : " +
+        updateError.message,
+    };
+  }
+
+  revalidatePath(`/approvisionnement/${lotId}`);
+
+  return { success: true as const };
+}
