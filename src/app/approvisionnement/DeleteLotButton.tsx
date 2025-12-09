@@ -3,18 +3,35 @@
 import { useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Loader2, Trash2 } from "lucide-react";
-import { deleteLot } from "./action";
+import { supabase } from "@/lib/supabase";
 
 type DeleteLotButtonProps = {
   lotId: number;
   /** Libellé affiché dans la boîte de dialogue de confirmation */
   lotLabel?: string;
+  /** true si c'est le Lot 0 (stock initial) */
+  isInitial?: boolean;
+  /** true si le lot est confirmé */
+  isConfirmed?: boolean;
 };
 
-export function DeleteLotButton({ lotId, lotLabel }: DeleteLotButtonProps) {
+export function DeleteLotButton({
+  lotId,
+  lotLabel,
+  isInitial,
+  isConfirmed,
+}: DeleteLotButtonProps) {
   const [isPending, startTransition] = useTransition();
 
   const handleDelete = () => {
+    // Protection : on ne supprime pas le Lot 0 une fois confirmé
+    if (isInitial && isConfirmed) {
+      window.alert(
+        "Ce lot est le Lot 0 (stock initial) confirmé. Tu ne peux pas le supprimer."
+      );
+      return;
+    }
+
     const label = lotLabel || `lot #${lotId}`;
     const ok = window.confirm(
       `Supprimer définitivement ${label} ?\n\n` +
@@ -24,18 +41,21 @@ export function DeleteLotButton({ lotId, lotLabel }: DeleteLotButtonProps) {
     if (!ok) return;
 
     startTransition(async () => {
-      const result = await deleteLot(lotId);
+      const { error } = await supabase
+        .from("lots")
+        .delete()
+        .eq("id", lotId);
 
-      if (!result.success) {
-        console.error("Erreur suppression lot:", result.error);
+      if (error) {
+        console.error("Erreur suppression lot:", error);
         window.alert(
           "Impossible de supprimer ce lot pour le moment.\n\n" +
-            (result.error || "")
+            (error.message || "")
         );
         return;
       }
 
-      // Succès : on rafraîchit la page pour mettre à jour la liste
+      // On recharge simplement la page pour rafraîchir la liste
       window.location.reload();
     });
   };
