@@ -5,7 +5,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ImagePlus, Loader2, Save } from "lucide-react";
+import { ImagePlus } from "lucide-react";
 import {
   DialogHeader,
   DialogTitle,
@@ -28,7 +28,6 @@ export function EditPhotoButton({ setId, currentUrl }: EditPhotoButtonProps) {
   const handleSave = () => {
     startTransition(async () => {
       await updateSetImage(setId, newUrl);
-      // ferme la modale quand la sauvegarde est terminée
       setOpen(false);
     });
   };
@@ -49,8 +48,8 @@ export function EditPhotoButton({ setId, currentUrl }: EditPhotoButtonProps) {
 
       {/* Portal + Overlay + Content */}
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-40 bg-black/60 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
-        <DialogPrimitive.Content className="fixed left-1/2 top-1/2 z-50 grid w-full max-w-md -translate-x-1/2 -translate-y-1/2 gap-4 border bg-white p-6 shadow-lg sm:rounded-lg">
+        <DialogPrimitive.Overlay className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[2px] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0" />
+        <DialogPrimitive.Content className="fixed left-1/2 top-1/2 z-50 grid w-full max-w-md -translate-x-1/2 -translate-y-1/2 gap-6 rounded-[28px] border border-zinc-200 bg-white px-7 py-6 shadow-[0_24px_60px_rgba(15,23,42,0.45)] focus-visible:outline-none">
           <DialogHeader>
             <DialogTitle>Modifier la photo</DialogTitle>
             <DialogDescription>
@@ -70,7 +69,7 @@ export function EditPhotoButton({ setId, currentUrl }: EditPhotoButtonProps) {
             </div>
 
             {newUrl && (
-              <div className="aspect-video w-full rounded-md border border-zinc-200 bg-zinc-50 flex items-center justify-center overflow-hidden p-2">
+              <div className="aspect-video w-full rounded-xl border border-zinc-200 bg-zinc-50 flex items-center justify-center overflow-hidden p-2">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={newUrl}
@@ -81,25 +80,24 @@ export function EditPhotoButton({ setId, currentUrl }: EditPhotoButtonProps) {
             )}
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="mt-4 flex justify-end gap-3">
             <DialogClose asChild>
-              <Button type="button" variant="outline">
+              <Button
+                type="button"
+                variant="outline"
+                className="h-9 rounded-full px-5 text-sm font-medium shadow-[0_8px_20px_rgba(15,23,42,0.08)]"
+              >
                 Annuler
               </Button>
             </DialogClose>
 
-            <Button onClick={handleSave} disabled={isPending}>
-              {isPending ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Sauvegarde...
-                </>
-              ) : (
-                <>
-                  <Save className="mr-2 h-4 w-4" />
-                  Confirmer
-                </>
-              )}
+            <Button
+              type="button"
+              onClick={handleSave}
+              disabled={isPending}
+              className="h-9 rounded-full px-6 text-sm font-semibold bg-slate-900 text-white shadow-[0_18px_40px_rgba(15,23,42,0.55)] hover:bg-slate-900/90 disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {isPending ? "Sauvegarde..." : "Enregistrer"}
             </Button>
           </DialogFooter>
         </DialogPrimitive.Content>
