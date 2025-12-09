@@ -47,7 +47,7 @@ export function ClickableRow({ href, children }: ClickableRowProps) {
 
   return (
     <tr
-      className="app-table-row cursor-pointer"
+      className="app-table-row cursor-pointer hover:bg-sky-50/70 transition-colors"
       onClick={handleClick}
       onKeyDown={handleKeyDown}
       tabIndex={0}

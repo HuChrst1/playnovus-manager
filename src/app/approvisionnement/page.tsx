@@ -2,6 +2,7 @@ import { supabase } from "@/lib/supabase";
 import { NewLotDialog } from "./NewLotDialog";
 import { DeleteLotButton } from "./DeleteLotButton";
 import { EditLotDialog, LotForEdit } from "./EditLotDialog";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
@@ -133,10 +134,15 @@ export default async function ApprovisionnementPage() {
                   return (
                     <tr
                       key={lot.id}
-                      className="border-t border-border hover:bg-muted/40 transition-colors"
+                      className="border-t border-border hover:bg-sky-50/70 transition-colors"
                     >
                       <td className="px-4 py-3 font-mono text-xs">
-                        {displayCode}
+                        <Link
+                          href={`/approvisionnement/${lot.id}`}
+                          className="underline-offset-2 hover:underline text-slate-900"
+                        >
+                          {displayCode}
+                        </Link>
                       </td>
                       <td className="px-4 py-3">
                         {formatDate(lot.purchase_date)}
