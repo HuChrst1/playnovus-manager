@@ -1,5 +1,7 @@
 import { supabase } from "@/lib/supabase";
-import { Button } from "@/components/ui/button";
+import { NewLotDialog } from "./NewLotDialog";
+import { DeleteLotButton } from "./DeleteLotButton";
+import { EditLotDialog, LotForEdit } from "./EditLotDialog";
 
 export const dynamic = "force-dynamic";
 
@@ -9,9 +11,10 @@ type LotRow = {
   label: string | null;
   purchase_date: string; // renvoyé en string ISO par Supabase
   supplier: string | null;
-  total_pieces: number;
+  total_pieces: number | null;
   total_cost: string; // numeric => string côté JS
   status: string;
+  notes: string | null;
 };
 
 const euro = new Intl.NumberFormat("fr-FR", {
@@ -32,7 +35,7 @@ export default async function ApprovisionnementPage() {
   const { data, error } = await supabase
     .from("lots")
     .select(
-      "id, lot_code, label, purchase_date, supplier, total_pieces, total_cost, status"
+      "id, lot_code, label, purchase_date, supplier, total_pieces, total_cost, status, notes"
     )
     .order("purchase_date", { ascending: false });
 
@@ -66,14 +69,7 @@ export default async function ApprovisionnementPage() {
           </p>
         </div>
 
-        {/* Bouton sera branché à un dialog dans un prochain snippet */}
-        <Button
-          type="button"
-          size="sm"
-          className="rounded-full px-4 shadow-[0_10px_25px_rgba(15,23,42,0.35)]"
-        >
-          Nouveau lot
-        </Button>
+        <NewLotDialog />
       </div>
 
       {/* TABLE DES LOTS */}
@@ -85,7 +81,9 @@ export default async function ApprovisionnementPage() {
                 <th className="px-4 py-3 text-left font-medium">LotID</th>
                 <th className="px-4 py-3 text-left font-medium">Date</th>
                 <th className="px-4 py-3 text-left font-medium">Libellé</th>
-                <th className="px-4 py-3 text-left font-medium">Fournisseur</th>
+                <th className="px-4 py-3 text-left font-medium">
+                  Fournisseur
+                </th>
                 <th className="px-4 py-3 text-right font-medium">
                   Nb pièces
                 </th>
@@ -113,10 +111,24 @@ export default async function ApprovisionnementPage() {
               ) : (
                 lots.map((lot) => {
                   const totalCostNumber = Number(lot.total_cost ?? 0);
+                  const totalPieces = lot.total_pieces ?? 0;
                   const costPerPiece =
-                    lot.total_pieces > 0
-                      ? totalCostNumber / lot.total_pieces
-                      : 0;
+                    totalPieces > 0 ? totalCostNumber / totalPieces : 0;
+
+                  const displayCode =
+                    lot.lot_code || `LOT_${lot.id}`;
+
+                  const lotForEdit: LotForEdit = {
+                    id: lot.id,
+                    lot_code: lot.lot_code,
+                    label: lot.label,
+                    purchase_date: lot.purchase_date,
+                    supplier: lot.supplier,
+                    total_pieces: lot.total_pieces,
+                    total_cost: lot.total_cost,
+                    status: lot.status,
+                    notes: lot.notes,
+                  };
 
                   return (
                     <tr
@@ -124,7 +136,7 @@ export default async function ApprovisionnementPage() {
                       className="border-t border-border hover:bg-muted/40 transition-colors"
                     >
                       <td className="px-4 py-3 font-mono text-xs">
-                        {lot.lot_code || `LOT_${lot.id}`}
+                        {displayCode}
                       </td>
                       <td className="px-4 py-3">
                         {formatDate(lot.purchase_date)}
@@ -136,13 +148,13 @@ export default async function ApprovisionnementPage() {
                         {lot.supplier || "—"}
                       </td>
                       <td className="px-4 py-3 text-right tabular-nums">
-                        {lot.total_pieces}
+                        {totalPieces}
                       </td>
                       <td className="px-4 py-3 text-right tabular-nums">
                         {euro.format(totalCostNumber)}
                       </td>
                       <td className="px-4 py-3 text-right tabular-nums">
-                        {lot.total_pieces > 0
+                        {totalPieces > 0
                           ? euro.format(costPerPiece)
                           : "—"}
                       </td>
@@ -160,12 +172,13 @@ export default async function ApprovisionnementPage() {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <button
-                          type="button"
-                          className="text-xs font-medium text-primary hover:underline"
-                        >
-                          Voir détail
-                        </button>
+                        <div className="inline-flex items-center gap-1.5">
+                          <EditLotDialog lot={lotForEdit} />
+                          <DeleteLotButton
+                            lotId={lot.id}
+                            lotLabel={displayCode}
+                          />
+                        </div>
                       </td>
                     </tr>
                   );
