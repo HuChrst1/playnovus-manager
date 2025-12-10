@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { getStockForPieces } from "@/lib/stock";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -33,36 +34,66 @@ export default async function SetDetailPage({
     );
   }
 
-  const { data: bom } = await supabase
+    // 2. BOM du set
+    const { data: bomData } = await supabase
     .from("sets_bom")
     .select("*")
     .eq("set_id", setId)
     .order("piece_ref", { ascending: true });
 
-  const pieceRefs = bom?.map((p) => p.piece_ref) || [];
+  type BomRow = {
+    id: number;
+    set_id: string;
+    piece_ref: string;
+    quantity: number;
+    piece_name: string | null;
+  };
 
-  const { data: inventory } = await supabase
-    .from("inventory")
-    .select("piece_ref, quantity")
-    .in("piece_ref", pieceRefs);
+  const bom = (bomData ?? []) as BomRow[];
 
-  // 2. Calculs
+  const pieceRefs =
+    bom.map((p) => p.piece_ref as string).filter(Boolean) || [];
+
+  // On récupère le stock depuis la vue stock_per_piece via le helper
+  const stockByPiece = await getStockForPieces(pieceRefs);
+
+  // 3. Calculs complétion
   let totalPartsNeeded = 0;
   let totalPartsOwned = 0;
+  let maxCompleteSets: number | null = null;
 
+  // On garde la même structure que précédemment :
+  // chaque "part" a un champ inStock utilisé par SetPartsList.
   const partsWithStock =
-    bom?.map((part) => {
-      const stockLines = inventory?.filter(
-        (i) => i.piece_ref === part.piece_ref
-      );
-      const qtyInStock =
-        stockLines?.reduce((acc, curr) => acc + curr.quantity, 0) || 0;
+  bom.map((part) => {
+    const stockInfo = stockByPiece[part.piece_ref] ?? {
+      totalQuantity: 0,
+      avgUnitCost: null,
+      totalValue: 0,
+    };
 
-      totalPartsNeeded += part.quantity;
-      totalPartsOwned += Math.min(qtyInStock, part.quantity);
+    const qtyInStock = stockInfo.totalQuantity;
 
-      return { ...part, inStock: qtyInStock };
-    }) || [];
+    totalPartsNeeded += part.quantity;
+    totalPartsOwned += Math.min(qtyInStock, part.quantity);
+
+    // 🔢 Calcul du nombre de sets complets possibles pour cette pièce
+    if (part.quantity > 0) {
+      const setsForThisPart = Math.floor(qtyInStock / part.quantity);
+
+      if (maxCompleteSets === null) {
+        maxCompleteSets = setsForThisPart;
+      } else {
+        maxCompleteSets = Math.min(maxCompleteSets, setsForThisPart);
+      }
+    }
+
+    return { ...part, inStock: qtyInStock };
+  }) || [];
+
+  if (maxCompleteSets === null) {
+    maxCompleteSets = 0;
+  }
 
   const completionPercent =
     totalPartsNeeded > 0
@@ -184,9 +215,19 @@ export default async function SetDetailPage({
                   <span className="mb-1 text-xs font-medium text-slate-500">
                     Complétion
                   </span>
-                  <span className="text-4xl font-semibold leading-none text-[#5b4bff]">
-                    {completionPercent}%
-                  </span>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-4xl font-semibold leading-none text-[#5b4bff]">
+                      {completionPercent}%
+                    </span>
+
+                    {typeof maxCompleteSets === "number" &&
+                      maxCompleteSets > 0 && (
+                        <span className="inline-flex items-center rounded-full bg-slate-900/5 px-2 py-0.5 text-[11px] font-medium text-slate-700">
+                          x{maxCompleteSets}
+                        </span>
+                      )}
+                  </div>
                 </div>
               </div>
             </div>

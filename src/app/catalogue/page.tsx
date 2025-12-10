@@ -52,8 +52,13 @@ type SetRow = {
   image_url: string | null;
   nb_pieces: number | null;
 
-  // champs calculés pour la complétion
-  completion_percent?: number | null;
+  // champs venant de la vue SQL set_with_completion
+  total_parts_needed: number | null;
+  total_parts_owned: number | null;
+  completion_percent: number | null;
+  max_complete_sets: number | null;
+
+  // champ dérivé pour l’UI (couleur de pastille)
   completion_status?: CompletionStatus;
 };
 
@@ -71,7 +76,14 @@ type CataloguePageProps = {
   searchParams?: Promise<CatalogueSearchParams>;
 };
 
-type SortColumn = "display_ref" | "name" | "version" | "year_start" | "year_end" | "theme";
+type SortColumn =
+  | "display_ref"
+  | "name"
+  | "version"
+  | "year_start"
+  | "year_end"
+  | "theme"
+  | "completion_percent";
 
 // --------- Page ---------
 export default async function CataloguePage({
@@ -99,18 +111,20 @@ export default async function CataloguePage({
     "year_start",
     "year_end",
     "theme",
+    "completion_percent",
   ];
 
   let dbSortColumn: SortColumn = "display_ref"; // colonne utilisée par Supabase
   let activeSortKey = sortParamRaw; // clé visible dans l'UI (& dans l'URL)
-  let sortIsCompletion = false;
 
   if (sortParamRaw === "completion") {
-    sortIsCompletion = true;
+    // on mappe la clé "completion" de l'UI sur la colonne SQL "completion_percent"
+    dbSortColumn = "completion_percent";
     activeSortKey = "completion";
-    dbSortColumn = "display_ref"; // fallback pour la requête SQL
   } else if (
-    (ALLOWED_SORT_COLUMNS as readonly string[]).includes(sortParamRaw as SortColumn)
+    (ALLOWED_SORT_COLUMNS as readonly string[]).includes(
+      sortParamRaw as SortColumn
+    )
   ) {
     dbSortColumn = sortParamRaw as SortColumn;
   } else {
@@ -140,90 +154,90 @@ export default async function CataloguePage({
   const from = (currentPage - 1) * pageSize;
   const to = from + pageSize - 1;
 
-  // --------- Requête sets_catalog ---------
+  // --------- Requête set_with_completion (vue SQL) ---------
   let query = supabase
-    .from("sets_catalog")
+    .from("set_with_completion")
     .select(
-      "id, display_ref, name, version, year_start, year_end, theme, image_url",
+      "id, display_ref, name, version, year_start, year_end, theme, image_url, total_parts_needed, total_parts_owned, completion_percent, max_complete_sets",
       { count: "exact" }
     );
 
   if (searchQuery) {
-    query = query.or(
-      `display_ref.ilike.%${searchQuery}%,name.ilike.%${searchQuery}%`
-    );
+  query = query.or(
+    `display_ref.ilike.%${searchQuery}%,name.ilike.%${searchQuery}%`
+  );
   }
 
   if (selectedVersions.length > 0) {
-    query = query.in("version", selectedVersions);
+  query = query.in("version", selectedVersions);
   }
 
   if (selectedYears.length > 0) {
-    query = query.in("year_start", selectedYears);
+  query = query.in("year_start", selectedYears);
   }
 
   if (productionFilter === "active") {
-    query = query.is("year_end", null);
+  query = query.is("year_end", null);
   } else if (productionFilter === "ended") {
-    query = query.not("year_end", "is", null);
+  query = query.not("year_end", "is", null);
   }
 
   if (themeFilter) {
-    query = query.ilike("theme", `%${themeFilter}%`);
+  query = query.ilike("theme", `%${themeFilter}%`);
   }
 
-  const { data, error, count } = await query
-    .order(dbSortColumn, { ascending: dir === "asc" })
-    .range(from, to);
+  let data: any[] | null = null;
+  let error: any = null;
+  let count: number | null = null;
+
+  // Tri + pagination 100% côté SQL (y compris sur la complétion)
+  const resp = await query
+  .order(dbSortColumn, {
+    ascending: dir === "asc",
+    // Ascendant : les NULL (sets sans BOM) d'abord
+    // Descendant : les NULL en bas, on voit les sets complétés en haut
+    nullsFirst: dir === "asc",
+  })
+  .range(from, to);
+
+  data = resp.data ?? [];
+  error = resp.error;
+  count = resp.count ?? data.length;
 
   const sets = (data ?? []) as SetRow[];
   const totalCount = count ?? sets.length;
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
-  // --------- BOM : savoir quels sets ont une BOM ---------
-  const setIds = sets.map((s) => s.id);
-  const hasBomBySet = new Map<string, boolean>();
+  // --------- Complétion : mapping simple statut/couleur ---------
+  const setsWithCompletion: SetRow[] = sets.map((set) => {
+  const percent =
+    typeof set.completion_percent === "number"
+      ? set.completion_percent
+      : null;
 
-  if (setIds.length > 0) {
-    const { data: bomRows } = await supabase
-      .from("sets_bom")
-      .select("set_id")
-      .in("set_id", setIds);
+  let status: CompletionStatus = "none";
 
-    bomRows?.forEach((row: { set_id: string }) => {
-      hasBomBySet.set(row.set_id, true);
-    });
+  if (percent === null) {
+    status = "none";
+  } else if (percent >= 100) {
+    status = "full";
+  } else if (percent >= 80) {
+    status = "high";
+  } else if (percent >= 50) {
+    status = "medium";
+  } else {
+    status = "low";
   }
 
-  // Pour l’instant on n’a pas encore le vrai stock côté liste :
-  // - set avec BOM => 0% rouge (peu complet)
-  // - set sans BOM => "–" gris (non évalué)
-  const setsWithCompletion: SetRow[] = sets.map((set) => {
-    const hasBom = hasBomBySet.get(set.id) ?? false;
-
-    let completion_percent: number | null = null;
-    let completion_status: CompletionStatus = "none";
-
-    if (hasBom) {
-      completion_percent = 0;
-      completion_status = "low"; // 0–49% => rouge
-    } else {
-      completion_percent = null; // pas de BOM => non évalué
-      completion_status = "none";
-    }
-
-    return { ...set, completion_percent, completion_status };
+  return {
+    ...set,
+    completion_percent: percent,
+    completion_status: status,
+  };
   });
 
-  // Si tri par complétion, on trie côté front
-  const setsForDisplay: SetRow[] = sortIsCompletion
-    ? [...setsWithCompletion].sort((a, b) => {
-        const aVal = a.completion_percent ?? -1;
-        const bVal = b.completion_percent ?? -1;
-        if (aVal === bVal) return 0;
-        return dir === "asc" ? aVal - bVal : bVal - aVal;
-      })
-    : setsWithCompletion;
+// Plus de tri en mémoire : tout est déjà ordonné par SQL
+const setsForDisplay: SetRow[] = setsWithCompletion;
 
   // Pages à afficher dans la pagination (compacte, avec "…")
   let pageNumbers: (number | "dots")[] = [];
@@ -373,6 +387,27 @@ export default async function CataloguePage({
         )}
       >
         {label}
+      </span>
+    );
+  };
+
+  // Petit badge "×N" pour le nombre d'exemplaires complets possibles
+  const renderMaxCompleteBadge = (set: SetRow) => {
+    const raw = set.max_complete_sets;
+    const n =
+      typeof raw === "number" && Number.isFinite(raw) ? Math.floor(raw) : 0;
+
+    // On n'affiche rien si aucun exemplaire complet possible
+    if (n <= 0) return null;
+
+    return (
+      <span
+        className={cn(
+          "inline-flex items-center justify-center rounded-full px-2 h-6 text-[11px] font-medium",
+          "border border-slate-200 bg-slate-50 text-slate-700"
+        )}
+      >
+        ×{n}
       </span>
     );
   };
@@ -550,7 +585,10 @@ export default async function CataloguePage({
   
                             {/* Complétion */}
                             <td className="px-4 py-3">
-                              {renderCompletionPill(set)}
+                              <div className="flex items-center gap-2">
+                                {renderCompletionPill(set)}
+                                {renderMaxCompleteBadge(set)}
+                              </div>
                             </td>
   
                             {/* Actions */}

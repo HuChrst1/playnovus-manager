@@ -3,7 +3,7 @@
 import { useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Loader2, Trash2 } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { deleteLot } from "./action";
 
 type DeleteLotButtonProps = {
   lotId: number;
@@ -41,16 +41,13 @@ export function DeleteLotButton({
     if (!ok) return;
 
     startTransition(async () => {
-      const { error } = await supabase
-        .from("lots")
-        .delete()
-        .eq("id", lotId);
+      const result = await deleteLot(lotId);
 
-      if (error) {
-        console.error("Erreur suppression lot:", error);
+      if (!result.success) {
+        console.error("Erreur suppression lot:", result.error);
         window.alert(
           "Impossible de supprimer ce lot pour le moment.\n\n" +
-            (error.message || "")
+            (result.error || "")
         );
         return;
       }

@@ -75,14 +75,15 @@ export async function createLot(formData: FormData) {
   const lotCode = (formData.get("lot_code") as string | null) ?? "";
   const totalCostRaw =
     (formData.get("total_cost") as string | null) ?? "";
-  const totalPiecesRaw =
-    (formData.get("total_pieces") as string | null) ?? "";
   const statusRaw = (formData.get("status") as string | null) ?? "draft";
   const notes = (formData.get("notes") as string | null) ?? "";
 
   // --- Validation minimale métier ---
   if (!purchaseDate) {
-    return { success: false as const, error: "La date du lot est obligatoire." };
+    return {
+      success: false as const,
+      error: "La date du lot est obligatoire.",
+    };
   }
 
   if (!totalCostRaw) {
@@ -95,7 +96,6 @@ export async function createLot(formData: FormData) {
   const totalCost = Number(
     totalCostRaw.toString().replace(",", ".") // permet "120,50"
   );
-  const totalPieces = totalPiecesRaw ? Number(totalPiecesRaw) : 0;
 
   if (!Number.isFinite(totalCost) || totalCost < 0) {
     return {
@@ -104,12 +104,8 @@ export async function createLot(formData: FormData) {
     };
   }
 
-  if (!Number.isInteger(totalPieces) || totalPieces < 0) {
-    return {
-      success: false as const,
-      error: "Le nombre de pièces doit être un entier positif.",
-    };
-  }
+  // Nb pièces : toujours 0 à la création, recalculé ensuite via inventory
+  const totalPieces = 0;
 
   const status: "draft" | "confirmed" =
     statusRaw === "confirmed" ? "confirmed" : "draft";
@@ -139,10 +135,8 @@ export async function createLotFromDialog(input: CreateLotInput) {
     throw new Error("Le coût total du lot doit être supérieur à 0.");
   }
 
-  const totalPieces =
-    typeof input.totalPieces === "number" && input.totalPieces >= 0
-      ? Math.floor(input.totalPieces)
-      : 0;
+  // Nb pièces : toujours 0 à la création, recalculé ensuite via inventory
+  const totalPieces = 0;
 
   const status: "draft" | "confirmed" =
     input.status === "confirmed" ? "confirmed" : "draft";
@@ -167,7 +161,7 @@ export async function updateLotFromDialog(
     supplier?: string;
     lotCode?: string;
     totalCost: number;
-    totalPieces?: number;
+    totalPieces?: number; // gardé dans le type pour compat UI, mais ignoré
     status: "draft" | "confirmed";
     notes?: string;
   }
@@ -193,17 +187,6 @@ export async function updateLotFromDialog(
     };
   }
 
-  let totalPieces: number | undefined = undefined;
-  if (typeof args.totalPieces === "number") {
-    if (!Number.isInteger(args.totalPieces) || args.totalPieces < 0) {
-      return {
-        success: false,
-        error: "Le nombre de pièces doit être un entier positif.",
-      };
-    }
-    totalPieces = args.totalPieces;
-  }
-
   const status: "draft" | "confirmed" =
     args.status === "confirmed" ? "confirmed" : "draft";
 
@@ -217,10 +200,8 @@ export async function updateLotFromDialog(
     notes: args.notes ?? null,
   };
 
-  // On ne touche à total_pieces que si une valeur a été fournie
-  if (typeof totalPieces === "number") {
-    updatePayload.total_pieces = totalPieces;
-  }
+  // ⚠️ On ne touche plus jamais à total_pieces ici :
+  // il est recalculé automatiquement via les lignes d'inventaire.
 
   const { error } = await supabase
     .from("lots")
@@ -300,10 +281,10 @@ export async function addPieceToLot(
     };
   }
 
-  // Optionnel : verrouiller l’ajout si le lot est confirmé
+  // 1) On récupère le lot avec son statut + coût total
   const { data: lotRow, error: lotError } = await supabase
     .from("lots")
-    .select("status")
+    .select("status, total_cost")
     .eq("id", lotId)
     .single();
 
@@ -323,24 +304,132 @@ export async function addPieceToLot(
     };
   }
 
-  const { error: insertError } = await supabase.from("inventory").insert({
-    lot_id: lotId,
-    piece_ref: pieceRef,
-    quantity,
-    location: null,
-  });
+  const totalCostNumber = Number(lotRow.total_cost ?? 0);
+  if (!Number.isFinite(totalCostNumber) || totalCostNumber < 0) {
+    return {
+      success: false,
+      error:
+        "Le coût total du lot est invalide. Vérifie la valeur dans la fiche du lot.",
+    };
+  }
 
-  if (insertError) {
-    console.error("addPieceToLot insert error:", insertError);
+  // 2) 🔁 Fusionner les lignes sur (lot_id, piece_ref)
+  const { data: existingLine, error: existingError } = await supabase
+    .from("inventory")
+    .select("id, quantity")
+    .eq("lot_id", lotId)
+    .eq("piece_ref", pieceRef)
+    .maybeSingle();
+
+  if (existingError) {
+    console.error(
+      "addPieceToLot - erreur lors de la recherche de ligne existante:",
+      existingError
+    );
+    return {
+      success: false,
+      error: "Impossible de vérifier les lignes existantes pour ce lot.",
+    };
+  }
+
+  let dbError = null;
+
+  if (existingLine) {
+    // 👉 Une ligne existe déjà : on additionne les quantités
+    const newQuantity = (existingLine.quantity ?? 0) + quantity;
+
+    const { error } = await supabase
+      .from("inventory")
+      .update({ quantity: newQuantity })
+      .eq("id", existingLine.id);
+
+    dbError = error;
+  } else {
+    // 👉 Pas de ligne existante : on crée une nouvelle ligne
+    const { error } = await supabase.from("inventory").insert({
+      lot_id: lotId,
+      piece_ref: pieceRef,
+      quantity,
+      location: null,
+      // unit_cost sera mis à jour juste après pour toutes les lignes du lot
+    });
+
+    dbError = error;
+  }
+
+  if (dbError) {
+    console.error("addPieceToLot insert/update error:", dbError);
     return {
       success: false,
       error:
         "Impossible d'ajouter la pièce au lot. Détail technique : " +
-        insertError.message,
+        dbError.message,
     };
   }
 
-  // Raffraîchit la page du lot
+  // 3) On recalcule la quantité totale du lot à partir de toutes les lignes d'inventaire
+  const { data: allLines, error: linesError } = await supabase
+    .from("inventory")
+    .select("id, quantity")
+    .eq("lot_id", lotId);
+
+  if (linesError) {
+    console.error(
+      "addPieceToLot - erreur lors du recalcul des quantités du lot:",
+      linesError
+    );
+    // On ne bloque pas l'ajout de la pièce, on retourne quand même success
+    revalidatePath(`/approvisionnement/${lotId}`);
+    return {
+      success: true,
+      warning:
+        "Pièce ajoutée, mais impossible de recalculer le coût unitaire / le nombre de pièces du lot.",
+    };
+  }
+
+  const totalQuantityForLot =
+    allLines?.reduce((sum, line) => sum + (line.quantity ?? 0), 0) ?? 0;
+
+  // 3.a) Met à jour le nombre total de pièces dans la table lots
+  const { error: lotUpdateError } = await supabase
+    .from("lots")
+    .update({ total_pieces: totalQuantityForLot })
+    .eq("id", lotId);
+
+  if (lotUpdateError) {
+    console.error(
+      "addPieceToLot - erreur lors de la mise à jour de total_pieces:",
+      lotUpdateError
+    );
+    // On continue quand même pour tenter de mettre à jour unit_cost
+  }
+
+  // 3.b) Si on a un coût total > 0 et des pièces, on met à jour unit_cost pour toutes les lignes du lot
+  if (totalQuantityForLot > 0 && totalCostNumber > 0) {
+    const unitCostForLot = totalCostNumber / totalQuantityForLot;
+
+    if (Number.isFinite(unitCostForLot) && unitCostForLot >= 0) {
+      const { error: updateError } = await supabase
+        .from("inventory")
+        .update({ unit_cost: unitCostForLot })
+        .eq("lot_id", lotId);
+
+      if (updateError) {
+        console.error(
+          "addPieceToLot - erreur lors de la mise à jour de unit_cost:",
+          updateError
+        );
+        revalidatePath(`/approvisionnement/${lotId}`);
+        return {
+          success: true,
+          warning:
+            "Pièce ajoutée, mais impossible de mettre à jour le coût unitaire des pièces du lot.",
+        };
+      }
+    }
+  }
+
+  // 4) On rafraîchit la page du lot
   revalidatePath(`/approvisionnement/${lotId}`);
 
   return { success: true as const };
@@ -455,10 +544,10 @@ export async function updateInventoryLine(
     };
   }
 
-  // Vérifie que le lot est toujours en brouillon
+  // Vérifie que le lot est toujours en brouillon + récupère total_cost
   const { data: lotRow, error: lotError } = await supabase
     .from("lots")
-    .select("status")
+    .select("status, total_cost")
     .eq("id", lotId)
     .single();
 
@@ -476,6 +565,16 @@ export async function updateInventoryLine(
     };
   }
 
+  const totalCostNumber = Number(lotRow.total_cost ?? 0);
+  if (!Number.isFinite(totalCostNumber) || totalCostNumber < 0) {
+    return {
+      success: false,
+      error:
+        "Le coût total du lot est invalide. Vérifie la valeur dans la fiche du lot.",
+    };
+  }
+
+  // 1) Mise à jour de la ligne d'inventaire
   const { error: updateError } = await supabase
     .from("inventory")
     .update({
@@ -494,6 +593,68 @@ export async function updateInventoryLine(
     };
   }
 
+  // 2) Recalcul de la quantité totale du lot
+  const { data: allLines, error: linesError } = await supabase
+    .from("inventory")
+    .select("id, quantity")
+    .eq("lot_id", lotId);
+
+  if (linesError) {
+    console.error(
+      "updateInventoryLine - erreur lors du recalcul des quantités du lot:",
+      linesError
+    );
+    revalidatePath(`/approvisionnement/${lotId}`);
+    return {
+      success: true,
+      warning:
+        "Ligne mise à jour, mais impossible de recalculer le nombre de pièces / coût unitaire du lot.",
+    };
+  }
+
+  const totalQuantityForLot =
+    allLines?.reduce((sum, line) => sum + (line.quantity ?? 0), 0) ?? 0;
+
+  // 2.a) Mise à jour du nombre total de pièces dans la table lots
+  const { error: lotUpdateError } = await supabase
+    .from("lots")
+    .update({ total_pieces: totalQuantityForLot })
+    .eq("id", lotId);
+
+  if (lotUpdateError) {
+    console.error(
+      "updateInventoryLine - erreur lors de la mise à jour de total_pieces:",
+      lotUpdateError
+    );
+    // On continue quand même pour tenter de mettre à jour unit_cost
+  }
+
+  // 2.b) Recalcul du coût unitaire pour toutes les lignes du lot
+  if (totalQuantityForLot > 0 && totalCostNumber > 0) {
+    const unitCostForLot = totalCostNumber / totalQuantityForLot;
+
+    if (Number.isFinite(unitCostForLot) && unitCostForLot >= 0) {
+      const { error: unitUpdateError } = await supabase
+        .from("inventory")
+        .update({ unit_cost: unitCostForLot })
+        .eq("lot_id", lotId);
+
+      if (unitUpdateError) {
+        console.error(
+          "updateInventoryLine - erreur lors de la mise à jour de unit_cost:",
+          unitUpdateError
+        );
+        revalidatePath(`/approvisionnement/${lotId}`);
+        return {
+          success: true,
+          warning:
+            "Ligne mise à jour, mais impossible de mettre à jour le coût unitaire des pièces du lot.",
+        };
+      }
+    }
+  }
+
+  // 3) Rafraîchit la page du lot
   revalidatePath(`/approvisionnement/${lotId}`);
 
   return { success: true as const };

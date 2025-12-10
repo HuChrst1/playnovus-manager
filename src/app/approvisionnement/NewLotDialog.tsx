@@ -34,14 +34,11 @@ export function NewLotDialog() {
     const supplier = (fd.get("supplier") as string) ?? "";
     const lotCode = (fd.get("lot_code") as string) ?? "";
     const totalCostRaw = (fd.get("total_cost") as string) ?? "";
-    const totalPiecesRaw = (fd.get("total_pieces") as string) ?? "";
-    const notes = (fd.get("notes") as string) ?? "";
-    const statusRaw = (fd.get("status") as string) ?? "draft";
+const notes = (fd.get("notes") as string) ?? "";
+const statusRaw = (fd.get("status") as string) ?? "draft";
 
-    const totalCost = Number(totalCostRaw.toString().replace(",", "."));
-    const totalPieces = totalPiecesRaw
-      ? Number(totalPiecesRaw)
-      : undefined;
+const totalCost = Number(totalCostRaw.toString().replace(",", "."));
+
     const status: LotStatus =
       statusRaw === "confirmed" ? "confirmed" : "draft";
 
@@ -55,7 +52,6 @@ export function NewLotDialog() {
           supplier: supplier || undefined,
           lotCode: lotCode || undefined,
           totalCost,
-          totalPieces,
           status,
           notes: notes || undefined,
         });
@@ -157,17 +153,6 @@ export function NewLotDialog() {
                 placeholder="ex : 120"
                 inputMode="decimal"
                 required
-                className="rounded-full"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="total_pieces">Nb de pièces (optionnel)</Label>
-              <Input
-                id="total_pieces"
-                name="total_pieces"
-                placeholder="ex : 480"
-                inputMode="numeric"
                 className="rounded-full"
               />
             </div>

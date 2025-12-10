@@ -3,6 +3,8 @@ import { NewLotDialog } from "./NewLotDialog";
 import { DeleteLotButton } from "./DeleteLotButton";
 import { EditLotDialog, LotForEdit } from "./EditLotDialog";
 import Link from "next/link";
+import { cn } from "@/lib/utils";
+import { ApproStatCardWithDialog } from "@/components/dashboard/StatCardWithDialog";
 
 export const dynamic = "force-dynamic";
 
@@ -18,28 +20,86 @@ type LotRow = {
   notes: string | null;
 };
 
-const euro = new Intl.NumberFormat("fr-FR", {
-  style: "currency",
-  currency: "EUR",
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
+type SortColumn =
+  | "id"
+  | "purchase_date"
+  | "label"
+  | "supplier"
+  | "total_pieces"
+  | "total_cost"
+  | "status";
 
-function formatDate(value: string) {
-  if (!value) return "-";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return value;
-  return d.toLocaleDateString("fr-FR");
-}
+  type ApproSearchParams = {
+    sort?: string;
+    dir?: string; // "asc" | "desc"
+    stats_window_lots?: string;
+    stats_window_pieces?: string;
+    stats_window_cost?: string;
+    stats_window_avgcpp?: string;
+  };
 
-export default async function ApprovisionnementPage() {
+type ApprovisionnementPageProps = {
+  searchParams?: Promise<ApproSearchParams>;
+};
+
+export default async function ApprovisionnementPage({
+  searchParams,
+}: ApprovisionnementPageProps) {
+  const resolvedSearchParams = searchParams ? await searchParams : {};
+
+    // Fenêtre de temps utilisée pour CHAQUE card (en jours)
+    const windowLotsDays = parseWindowParam(
+      resolvedSearchParams.stats_window_lots,
+      30
+    );
+    const windowPiecesDays = parseWindowParam(
+      resolvedSearchParams.stats_window_pieces,
+      30
+    );
+    const windowCostDays = parseWindowParam(
+      resolvedSearchParams.stats_window_cost,
+      30
+    );
+    const windowAvgCppDays = parseWindowParam(
+      resolvedSearchParams.stats_window_avgcpp,
+      30
+    );
+
+  const sortParamRaw = (resolvedSearchParams.sort ?? "purchase_date").toString();
+  let dir = (resolvedSearchParams.dir ?? "desc").toString().toLowerCase();
+  if (dir !== "asc" && dir !== "desc") dir = "desc";
+
+  const ALLOWED_SORT_COLUMNS: SortColumn[] = [
+    "id",
+    "purchase_date",
+    "label",
+    "supplier",
+    "total_pieces",
+    "total_cost",
+    "status",
+  ];
+
+  let dbSortColumn: SortColumn = "purchase_date";
+  let activeSortKey = sortParamRaw;
+
+  if (
+    (ALLOWED_SORT_COLUMNS as readonly string[]).includes(
+      sortParamRaw as SortColumn
+    )
+  ) {
+    dbSortColumn = sortParamRaw as SortColumn;
+  } else {
+    activeSortKey = "purchase_date";
+    dbSortColumn = "purchase_date";
+  }
+
   // 1) On charge les lots existants
   const { data, error } = await supabase
     .from("lots")
     .select(
       "id, lot_code, label, purchase_date, supplier, total_pieces, total_cost, status, notes"
     )
-    .order("purchase_date", { ascending: false });
+    .order(dbSortColumn, { ascending: dir === "asc" });
 
   if (error) {
     return (
@@ -88,6 +148,74 @@ export default async function ApprovisionnementPage() {
     }
   }
 
+    
+      // On calcule les tendances pour chaque card avec sa propre fenêtre
+  const statsLots = computeApproStats(lots, { windowDays: windowLotsDays });
+  const statsPieces = computeApproStats(lots, { windowDays: windowPiecesDays });
+  const statsCost = computeApproStats(lots, { windowDays: windowCostDays });
+  const statsAvgCpp = computeApproStats(lots, { windowDays: windowAvgCppDays });
+
+  // Les totaux globaux ne dépendent pas de la fenêtre,
+  // on peut les lire depuis n'importe quelle structure.
+  const baseTotals = statsLots;
+
+  const baseParams = new URLSearchParams();
+  baseParams.set("sort", activeSortKey);
+  baseParams.set("dir", dir);
+  baseParams.set("stats_window_lots", String(windowLotsDays));
+  baseParams.set("stats_window_pieces", String(windowPiecesDays));
+  baseParams.set("stats_window_cost", String(windowCostDays));
+  baseParams.set("stats_window_avgcpp", String(windowAvgCppDays));
+
+  const makeSortHref = (columnKey: string) => {
+    const params = new URLSearchParams(baseParams.toString());
+
+    if (activeSortKey === columnKey) {
+      const nextDir = dir === "asc" ? "desc" : "asc";
+      params.set("sort", columnKey);
+      params.set("dir", nextDir);
+    } else {
+      params.set("sort", columnKey);
+      params.set("dir", "asc");
+    }
+
+    const qs = params.toString();
+    return qs ? `/approvisionnement?${qs}` : "/approvisionnement";
+  };
+
+  const renderSortableHeader = (
+    label: string,
+    columnKey: string,
+    align: "left" | "right" | "center" = "left"
+  ) => {
+    const isActive = activeSortKey === columnKey;
+    const isAsc = dir === "asc";
+
+    const alignClass =
+      align === "right"
+        ? "text-right"
+        : align === "center"
+        ? "text-center"
+        : "text-left";
+
+    return (
+      <th key={columnKey} className={cn("px-4 py-3 font-medium", alignClass)}>
+        <Link
+          href={makeSortHref(columnKey)}
+          className={cn(
+            "inline-flex items-center gap-1 hover:text-primary",
+            isActive && "text-primary"
+          )}
+        >
+          <span>{label}</span>
+          <span className="text-[10px]">
+            {isActive ? (isAsc ? "▲" : "▼") : "⇅"}
+          </span>
+        </Link>
+      </th>
+    );
+  };
+
   return (
     <main className="space-y-6">
       {/* HEADER PAGE */}
@@ -104,28 +232,65 @@ export default async function ApprovisionnementPage() {
         <NewLotDialog />
       </div>
 
+            {/* CARDS STATS APPRO (1 card = 1 fenêtre d'analyse) */}
+            <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 items-start">
+        <ApproStatCardWithDialog
+          id="lots"
+          title="Lots confirmés"
+          mainValue={baseTotals.totalLotsConfirmed.toLocaleString("fr-FR")}
+          trendPercent={statsLots.lotsTrendPercent}
+          color="indigo"
+          windowDays={windowLotsDays}
+        />
+
+        <ApproStatCardWithDialog
+          id="pieces"
+          title="Nb pièces totales"
+          mainValue={baseTotals.totalPiecesConfirmed.toLocaleString("fr-FR")}
+          trendPercent={statsPieces.piecesTrendPercent}
+          color="orange"
+          windowDays={windowPiecesDays}
+        />
+
+        <ApproStatCardWithDialog
+          id="cost"
+          title="Coût total"
+          mainValue={euro.format(baseTotals.totalCostConfirmed)}
+          trendPercent={statsCost.costTrendPercent}
+          color="amber"
+          windowDays={windowCostDays}
+        />
+
+        <ApproStatCardWithDialog
+          id="avgcpp"
+          title="Coût / pièce moyen"
+          mainValue={
+            baseTotals.totalPiecesConfirmed > 0
+              ? euro.format(baseTotals.avgCostPerPiece)
+              : "—"
+          }
+          trendPercent={statsAvgCpp.avgCppTrendPercent}
+          color="emerald"
+          windowDays={windowAvgCppDays}
+        />
+      </section>
+
       {/* TABLE DES LOTS */}
       <div className="app-card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead className="app-table-head">
               <tr>
-                <th className="px-4 py-3 text-left font-medium">LotID</th>
-                <th className="px-4 py-3 text-left font-medium">Date</th>
-                <th className="px-4 py-3 text-left font-medium">Libellé</th>
-                <th className="px-4 py-3 text-left font-medium">
-                  Fournisseur
-                </th>
-                <th className="px-4 py-3 text-right font-medium">
-                  Nb pièces
-                </th>
-                <th className="px-4 py-3 text-right font-medium">
-                  Coût total
-                </th>
+                {renderSortableHeader("LotID", "id", "left")}
+                {renderSortableHeader("Date", "purchase_date", "left")}
+                {renderSortableHeader("Libellé", "label", "left")}
+                {renderSortableHeader("Fournisseur", "supplier", "left")}
+                {renderSortableHeader("Nb pièces", "total_pieces", "right")}
+                {renderSortableHeader("Coût total", "total_cost", "right")}
                 <th className="px-4 py-3 text-right font-medium">
                   Coût / pièce
                 </th>
-                <th className="px-4 py-3 text-center font-medium">Statut</th>
+                {renderSortableHeader("Statut", "status", "center")}
                 <th className="px-4 py-3 text-right font-medium">Actions</th>
               </tr>
             </thead>
@@ -243,3 +408,156 @@ export default async function ApprovisionnementPage() {
     </main>
   );
 }
+
+type ApproStats = {
+  // Totaux “toute période” (uniquement lots confirmés)
+  totalLotsConfirmed: number;
+  totalPiecesConfirmed: number;
+  totalCostConfirmed: number;
+  avgCostPerPiece: number;
+
+  // Fenêtre 30 derniers jours vs 30 jours précédents
+  lotsLast30Days: number;
+  lotsPrev30Days: number;
+  lotsTrendPercent: number | null;
+
+  piecesLast30Days: number;
+  piecesPrev30Days: number;
+  piecesTrendPercent: number | null;
+
+  costLast30Days: number;
+  costPrev30Days: number;
+  costTrendPercent: number | null;
+
+  avgCppLast30Days: number;
+  avgCppPrev30Days: number;
+  avgCppTrendPercent: number | null;
+};
+
+type ApproStatsDateConfig = {
+  /**
+   * Taille de la fenêtre mobile en jours pour calculer :
+   * - "N derniers jours"
+   * - et la période précédente de même taille.
+   * Par défaut : 30.
+   */
+  windowDays?: number;
+};
+
+function parseWindowParam(value: string | undefined, fallback: number): number {
+  const n = Number((value ?? "").toString());
+  if (!Number.isFinite(n) || n <= 0) return fallback;
+  return n;
+}
+
+function computeApproStats(
+  lots: LotRow[],
+  config?: ApproStatsDateConfig
+): ApproStats {
+  // On travaille uniquement sur les lots confirmés
+  const confirmedLots = lots.filter((lot) => lot.status === "confirmed");
+
+  const today = new Date();
+  const todayMidnight = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate()
+  );
+  const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+  // Fenêtre configurable (par défaut 30 jours)
+  const windowDays = config?.windowDays ?? 30;
+
+  const windowAgo = new Date(todayMidnight.getTime() - windowDays * MS_PER_DAY);
+  const prevWindowAgo = new Date(
+    todayMidnight.getTime() - 2 * windowDays * MS_PER_DAY
+  );
+
+  let totalLotsConfirmed = 0;
+  let totalPiecesConfirmed = 0;
+  let totalCostConfirmed = 0;
+
+  let lotsLast30Days = 0;
+  let lotsPrev30Days = 0;
+
+  let piecesLast30Days = 0;
+  let piecesPrev30Days = 0;
+
+  let costLast30Days = 0;
+  let costPrev30Days = 0;
+
+  for (const lot of confirmedLots) {
+    const pieces = lot.total_pieces ?? 0;
+    const cost = Number(lot.total_cost ?? 0);
+
+    totalLotsConfirmed += 1;
+    totalPiecesConfirmed += pieces;
+    totalCostConfirmed += cost;
+
+    const d = new Date(lot.purchase_date);
+    if (Number.isNaN(d.getTime())) continue;
+
+    if (d >= windowAgo && d < todayMidnight) {
+      // Fenêtre : N derniers jours
+      lotsLast30Days += 1;
+      piecesLast30Days += pieces;
+      costLast30Days += cost;
+    } else if (d >= prevWindowAgo && d < windowAgo) {
+      // Fenêtre : les N jours juste avant
+      lotsPrev30Days += 1;
+      piecesPrev30Days += pieces;
+      costPrev30Days += cost;
+    }
+  }
+
+  const avgCostPerPiece =
+    totalPiecesConfirmed > 0 ? totalCostConfirmed / totalPiecesConfirmed : 0;
+
+  const avgCppLast30Days =
+    piecesLast30Days > 0 ? costLast30Days / piecesLast30Days : 0;
+  const avgCppPrev30Days =
+    piecesPrev30Days > 0 ? costPrev30Days / piecesPrev30Days : 0;
+
+  const calcTrend = (current: number, previous: number): number | null => {
+    if (current === 0 && previous === 0) return null;
+    const base = previous === 0 ? 1 : previous;
+    return ((current - previous) / base) * 100;
+  };
+
+  return {
+    totalLotsConfirmed,
+    totalPiecesConfirmed,
+    totalCostConfirmed,
+    avgCostPerPiece,
+
+    lotsLast30Days,
+    lotsPrev30Days,
+    lotsTrendPercent: calcTrend(lotsLast30Days, lotsPrev30Days),
+
+    piecesLast30Days,
+    piecesPrev30Days,
+    piecesTrendPercent: calcTrend(piecesLast30Days, piecesPrev30Days),
+
+    costLast30Days,
+    costPrev30Days,
+    costTrendPercent: calcTrend(costLast30Days, costPrev30Days),
+
+    avgCppLast30Days,
+    avgCppPrev30Days,
+    avgCppTrendPercent: calcTrend(avgCppLast30Days, avgCppPrev30Days),
+  };
+}
+
+function formatDate(value: string) {
+  if (!value) return "-";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  return d.toLocaleDateString("fr-FR");
+}
+
+const euro = new Intl.NumberFormat("fr-FR", {
+  style: "currency",
+  currency: "EUR",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
