@@ -3,6 +3,7 @@
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { History } from "lucide-react";
 import { DashboardStatCard } from "@/components/dashboard/DashboardStatCard";
 
 export const dynamic = "force-dynamic";
@@ -198,27 +199,39 @@ export default async function StockPage({ searchParams }: StockPageProps) {
           </p>
         </div>
 
+        {/* Recherche + bouton historique */}
+        <div className="flex w-full max-w-xs items-center gap-2 justify-end">
         {/* Formulaire de recherche (GET) */}
-        <form method="GET" className="flex w-full max-w-xs items-center gap-2">
-          <input
+        <form method="GET" className="flex flex-1 items-center gap-2">
+            <input
             type="text"
             name="q"
             placeholder="Filtrer par réf. pièce..."
             defaultValue={searchQuery}
             className="w-full rounded-full border border-border bg-white px-3 py-2 text-sm shadow-[0_8px_20px_rgba(15,23,42,0.08)] outline-none focus:border-primary"
-          />
+            />
 
-          {/* On garde le tri actuel quand on applique la recherche */}
-          <input type="hidden" name="sort" value={activeSortKey} />
-          <input type="hidden" name="dir" value={dir} />
+            {/* On garde le tri actuel quand on applique la recherche */}
+            <input type="hidden" name="sort" value={activeSortKey} />
+            <input type="hidden" name="dir" value={dir} />
 
-          <button
+            <button
             type="submit"
             className="inline-flex h-9 items-center rounded-full bg-slate-900 px-4 text-xs font-medium text-white shadow-[0_10px_25px_rgba(15,23,42,0.35)] hover:bg-slate-800 transition-colors"
-          >
+            >
             Rechercher
-          </button>
+            </button>
         </form>
+
+        {/* Bouton historique global */}
+        <Link
+            href="/historique-stock"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-white shadow-[0_10px_25px_rgba(15,23,42,0.35)] hover:bg-slate-800 transition-colors"
+            aria-label="Voir l'historique des mouvements de stock"
+        >
+            <History className="h-4 w-4" />
+        </Link>
+        </div>
       </div>
 
         {/* CARDS DE TOTAUX STOCK */}
@@ -294,8 +307,13 @@ export default async function StockPage({ searchParams }: StockPageProps) {
                   return (
                     <tr key={row.piece_ref} className="app-table-row">
                       <td className="px-4 py-3 font-mono text-xs">
-                        {row.piece_ref}
-                      </td>
+                        <Link
+                            href={`/stock/${encodeURIComponent(row.piece_ref)}`}
+                            className="underline-offset-2 hover:underline text-slate-900"
+                        >
+                            {row.piece_ref}
+                        </Link>
+                       </td>
 
                       <td className="px-4 py-3 text-right tabular-nums">
                         {qty}

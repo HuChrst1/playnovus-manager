@@ -153,6 +153,78 @@ export async function createLotFromDialog(input: CreateLotInput) {
   });
 }
 
+// Helper interne : crée des mouvements IN pour toutes les lignes d'un lot
+async function createStockMovementsForLot(lotId: number) {
+  if (!lotId || Number.isNaN(lotId)) {
+    return { success: false, error: "Lot invalide pour les mouvements." };
+  }
+
+  // 1) On récupère toutes les lignes d'inventaire du lot
+  const { data: lines, error: linesError } = await supabase
+    .from("inventory")
+    .select("piece_ref, quantity, unit_cost")
+    .eq("lot_id", lotId);
+
+  if (linesError) {
+    console.error(
+      "createStockMovementsForLot - erreur lors de la lecture des lignes inventory:",
+      linesError
+    );
+    return {
+      success: false,
+      error: "Impossible de lire les lignes d'inventaire pour ce lot.",
+    };
+  }
+
+  const movementsPayload =
+    (lines ?? [])
+      .filter((line) => {
+        const qty = Number(line.quantity ?? 0);
+        return line.piece_ref && qty > 0;
+      })
+      .map((line) => ({
+        piece_ref: line.piece_ref as string,
+        lot_id: lotId,
+        direction: "IN" as const,
+        quantity: Number(line.quantity ?? 0),
+        unit_cost:
+          line.unit_cost !== null && line.unit_cost !== undefined
+            ? Number(line.unit_cost)
+            : null,
+        source_type: "PURCHASE",
+        source_id: String(lotId),
+        comment: null as string | null,
+      }));
+
+  // Aucun mouvement à créer → pas d'erreur
+  if (!movementsPayload.length) {
+    return { success: true };
+  }
+
+  // 2) On insère tous les mouvements d'un coup
+  const { error: insertError } = await supabase
+    .from("stock_movements")
+    .insert(movementsPayload);
+
+  if (insertError) {
+    console.error(
+      "createStockMovementsForLot - erreur lors de l'insertion des mouvements:",
+      insertError
+    );
+    return {
+      success: false,
+      error:
+        "Impossible d'enregistrer les mouvements de stock pour ce lot. " +
+        insertError.message,
+    };
+  }
+
+  // On anticipe le futur : ces mouvements serviront au /stock
+  revalidatePath("/stock");
+
+  return { success: true };
+}
+
 export async function updateLotFromDialog(
   lotId: number,
   args: {
@@ -187,8 +259,28 @@ export async function updateLotFromDialog(
     };
   }
 
-  const status: "draft" | "confirmed" =
+  const status: LotStatus =
     args.status === "confirmed" ? "confirmed" : "draft";
+
+  // 1) On récupère le statut actuel pour détecter un passage draft -> confirmed
+  const { data: existingLot, error: fetchError } = await supabase
+    .from("lots")
+    .select("status")
+    .eq("id", lotId)
+    .single();
+
+  if (fetchError || !existingLot) {
+    console.error(
+      "updateLotFromDialog - erreur lors de la lecture du lot:",
+      fetchError
+    );
+    return {
+      success: false,
+      error: "Impossible de récupérer le lot avant mise à jour.",
+    };
+  }
+
+  const previousStatus = (existingLot.status as LotStatus) ?? "draft";
 
   const updatePayload: any = {
     purchase_date: args.purchaseDate,
@@ -203,20 +295,41 @@ export async function updateLotFromDialog(
   // ⚠️ On ne touche plus jamais à total_pieces ici :
   // il est recalculé automatiquement via les lignes d'inventaire.
 
-  const { error } = await supabase
+  // 2) Mise à jour du lot
+  const { error: updateError } = await supabase
     .from("lots")
     .update(updatePayload)
     .eq("id", lotId);
 
-  if (error) {
-    console.error("updateLotFromDialog error:", error);
+  if (updateError) {
+    console.error("updateLotFromDialog error:", updateError);
     return {
       success: false,
       error:
         "Impossible de mettre à jour le lot. Détail technique : " +
-        error.message,
+        updateError.message,
     };
   }
+
+  // 3) Si on vient de passer de draft -> confirmed,
+  //    on crée les mouvements IN pour ce lot
+  if (previousStatus !== "confirmed" && status === "confirmed") {
+    const movementsResult = await createStockMovementsForLot(lotId);
+
+    if (!movementsResult.success) {
+      // On log l'erreur mais on ne bloque pas la mise à jour du lot
+      console.error(
+        "updateLotFromDialog - erreur lors de la création des mouvements de stock:",
+        movementsResult.error
+      );
+      // Optionnel : on pourrait renvoyer un warning dans le futur
+    }
+  }
+
+  // 4) On rafraîchit les pages liées
+  revalidatePath("/approvisionnement");
+  revalidatePath(`/approvisionnement/${lotId}`);
+  revalidatePath("/stock");
 
   return {
     success: true,

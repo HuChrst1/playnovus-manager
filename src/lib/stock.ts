@@ -74,3 +74,64 @@ export async function getStockForPieces(
 
   return result;
 }
+
+// --- Helpers génériques pour les mouvements de stock ---
+
+export type StockMovementDirection = "IN" | "OUT" | "ADJUST";
+
+export type StockMovementInput = {
+  pieceRef: string;
+  direction: StockMovementDirection;
+  quantity: number;
+  unitCost?: number | null;
+  lotId?: number | null;
+  sourceType: string; // ex: "PURCHASE", "SALE", "ADJUSTMENT"
+  sourceId?: string | null; // ex: lot_id, sale_id...
+  comment?: string | null;
+};
+
+/**
+ * Insère une liste de mouvements de stock dans la table stock_movements.
+ *
+ * Utilisable aussi bien pour :
+ *  - les entrées (IN) depuis les lots
+ *  - les sorties (OUT) depuis les ventes
+ *  - les ajustements (ADJUST)
+ */
+export async function createStockMovements(
+  movements: StockMovementInput[]
+): Promise<{ success: boolean; error?: string }> {
+  const cleaned = movements
+    .filter((m) => m.pieceRef && Number.isFinite(m.quantity) && m.quantity > 0)
+    .map((m) => ({
+      piece_ref: m.pieceRef,
+      lot_id: m.lotId ?? null,
+      direction: m.direction,
+      quantity: m.quantity,
+      unit_cost:
+        m.unitCost !== undefined && m.unitCost !== null
+          ? Number(m.unitCost)
+          : null,
+      source_type: m.sourceType,
+      source_id: m.sourceId ?? null,
+      comment: m.comment ?? null,
+    }));
+
+  if (cleaned.length === 0) {
+    return { success: true };
+  }
+
+  const { error } = await supabase
+    .from("stock_movements")
+    .insert(cleaned);
+
+  if (error) {
+    console.error("createStockMovements - insert error:", error);
+    return {
+      success: false,
+      error: "Impossible d'enregistrer les mouvements de stock.",
+    };
+  }
+
+  return { success: true };
+}
