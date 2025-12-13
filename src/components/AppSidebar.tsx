@@ -11,6 +11,7 @@ export function AppSidebar() {
 
   const isHome = pathname === "/";
   const isAppro = pathname.startsWith("/approvisionnement");
+  const isSales = pathname.startsWith("/ventes");
   const isCatalogue = pathname.startsWith("/catalogue");
   const isStock = pathname.startsWith("/stock");
   
@@ -53,14 +54,14 @@ export function AppSidebar() {
             <Truck className="h-4 w-4" />
           </Link>
 
-          {/* 3. Ventes (à venir) */}
-          <button
-            type="button"
-            className={itemClass}
+          {/* 3. Ventes */}
+          <Link
+            href="/ventes"
             aria-label="Ventes"
+            className={cn(itemClass, isSales && "app-sidebar-item--active")}
           >
             <ShoppingCart className="h-4 w-4" />
-          </button>
+          </Link>
 
           {/* 4. Stock */}
           <Link

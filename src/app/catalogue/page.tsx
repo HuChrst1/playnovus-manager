@@ -594,15 +594,6 @@ const setsForDisplay: SetRow[] = setsWithCompletion;
                             {/* Actions */}
                             <td className="px-4 py-3 text-right">
                               <div className="flex items-center justify-end gap-2">
-                                <Link
-                                  data-row-action="true"
-                                  href={`/catalogue/${encodeURIComponent(
-                                    set.id
-                                  )}`}
-                                  className="text-xs font-medium text-primary hover:underline"
-                                >
-                                  Voir la fiche
-                                </Link>
   
                                 <DeleteSetButton
                                   setId={set.id}

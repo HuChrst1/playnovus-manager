@@ -15,7 +15,7 @@ type LotRow = {
   purchase_date: string; // renvoyé en string ISO par Supabase
   supplier: string | null;
   total_pieces: number | null;
-  total_cost: string; // numeric => string côté JS
+  total_cost: number; // numeric => string côté JS
   status: string;
   notes: string | null;
 };

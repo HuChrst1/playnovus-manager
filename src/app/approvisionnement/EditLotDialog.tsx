@@ -26,7 +26,7 @@ export type LotForEdit = {
   purchase_date: string; // ISO string
   supplier: string | null;
   total_pieces: number | null;
-  total_cost: string; // numeric => string côté JS
+  total_cost: number; // numeric => string côté JS
   status: string;
   notes: string | null;
 };
