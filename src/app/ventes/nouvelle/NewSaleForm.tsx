@@ -6,7 +6,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { SetSelector, type SaleDraftSetLine } from "@/components/sales/SetSelector";
-import { PieceSelector, type SaleDraftPieceLine } from "@/components/sales/PieceSelector";
+import {
+  PieceSelector,
+  type SaleDraftPieceLine,
+  type PieceSelectorErrors,
+} from "@/components/sales/PieceSelector";
 import { cn } from "@/lib/utils";
 import { createSaleAction } from "@/app/actions/sales";
 import type { SaleDraft, SaleType, SalesChannel, PieceOverridesMap } from "@/lib/sales-types";
@@ -19,6 +23,7 @@ type NewSaleFormErrors = Partial<{
   // erreurs par ligne de set (clé = id local de la ligne)
   setLines: Record<string, { setId?: string; quantity?: string }>;
   pieceRef: string;
+  pieceLines: PieceSelectorErrors;
 }>;
 
 type SubmitResult = {
@@ -87,6 +92,7 @@ export function NewSaleForm() {
       ...prev,
       setLines: undefined,
       pieceRef: undefined,
+      pieceLines: undefined,
     }));
   }, [saleType]);
 
@@ -131,7 +137,10 @@ export function NewSaleForm() {
         item_kind: "PIECE" as const,
         piece_ref: (l.piece_ref ?? "").trim(),
         quantity: Math.max(1, Number(l.quantity || 1)),
-        net_amount: l.net_amount ?? null,
+        net_amount:
+          typeof l.net_amount === "number" && Number.isFinite(l.net_amount)
+            ? l.net_amount * Math.max(1, Number(l.quantity || 1))
+            : null,
         comment: l.comment ?? null,
       })),
     };
@@ -173,20 +182,60 @@ export function NewSaleForm() {
     }
 
     if (d.sale_type === "PIECE") {
-      if (!d.items || d.items.length === 0) {
+      // 1) Au moins une ligne
+      if (!d.items || d.items.length === 0 || pieceLines.length === 0) {
         next.pieceRef = "Ajoute au moins une pièce (mode pièces).";
         return next;
       }
 
-      const anyInvalid = d.items.some((it) => {
-        if (!it || it.item_kind !== "PIECE") return true;
-        if (!it.piece_ref || String(it.piece_ref).trim() === "") return true;
-        const q = Number(it.quantity ?? 0);
-        return !Number.isFinite(q) || q <= 0;
-      });
+      // 2) Erreurs par ligne + tarif par pièce obligatoire
+      const lineErrors: PieceSelectorErrors = {};
+      let linesCents = 0;
 
-      if (anyInvalid) {
-        next.pieceRef = "Certaines lignes de pièces sont invalides (réf/quantité).";
+      for (const uiLine of pieceLines) {
+        const eLine: { pieceRef?: string; quantity?: string; netAmount?: string } = {};
+
+        const ref = (uiLine.piece_ref ?? "").trim();
+        if (!ref) eLine.pieceRef = "Référence obligatoire.";
+
+        const qty = Number(uiLine.quantity ?? 0);
+        if (!Number.isFinite(qty) || qty <= 0) eLine.quantity = "Quantité invalide.";
+
+        // Soft validation stock si on a la dispo
+        if (
+          typeof uiLine.available_qty === "number" &&
+          Number.isFinite(uiLine.available_qty) &&
+          qty > uiLine.available_qty
+        ) {
+          eLine.quantity = "Quantité > stock disponible.";
+        }
+
+        // IMPORTANT: ici net_amount = TARIF PAR PIECE (unitaire) côté UI
+        const unit = uiLine.net_amount;
+        const unitIsOk = typeof unit === "number" && Number.isFinite(unit) && unit > 0;
+        if (!unitIsOk) {
+          eLine.netAmount = "Tarif par pièce obligatoire.";
+        }
+
+        if (Object.keys(eLine).length > 0) {
+          lineErrors[uiLine.id] = eLine;
+        } else {
+          // À ce stade, unitIsOk est forcément vrai (sinon eLine.netAmount aurait été rempli)
+          linesCents += Math.round((unit as number) * qty * 100);
+        }
+      }
+
+      if (Object.keys(lineErrors).length > 0) {
+        next.pieceLines = lineErrors;
+        next.pieceRef = "Merci de corriger les lignes de pièces.";
+        return next;
+      }
+
+      // 3) Somme des lignes = net vendeur (au centime)
+      const netCents = Math.round((d.net_seller_amount ?? 0) * 100);
+      if (linesCents !== netCents) {
+        const fmt = (cents: number) => `${(cents / 100).toFixed(2).replace(".", ",")} €`;
+        next.pieceRef = `La somme des lignes (${fmt(linesCents)}) doit être égale au net vendeur (${fmt(netCents)}).`;
       }
     }
 
@@ -282,12 +331,88 @@ export function NewSaleForm() {
     currency: "EUR",
   });
 
+  const pieceSummary = useMemo(() => {
+    if (saleType !== "PIECE") return null;
+
+    const net = parseDecimalFR(netAmount);
+    const netCents = Number.isFinite(net) ? Math.round(net * 100) : 0;
+
+    let totalCents = 0;
+    let missingUnitCount = 0;
+    let overStockCount = 0;
+
+    for (const line of pieceLines) {
+      const qty = Math.max(1, Number(line.quantity || 1));
+
+      const available =
+        typeof line.available_qty === "number" && Number.isFinite(line.available_qty)
+          ? line.available_qty
+          : null;
+
+      if (available !== null && qty > available) {
+        overStockCount += 1;
+      }
+
+      const unit = line.net_amount;
+      const unitOk = typeof unit === "number" && Number.isFinite(unit) && unit > 0;
+      if (!unitOk) {
+        missingUnitCount += 1;
+        continue;
+      }
+
+      totalCents += Math.round(unit * qty * 100);
+    }
+
+    const hasLines = pieceLines.length > 0;
+    const netOk = netCents > 0;
+    const totalsMatch = hasLines && netOk && totalCents === netCents;
+
+    return {
+      hasLines,
+      netOk,
+      netCents,
+      totalCents,
+      diffCents: totalCents - netCents,
+      missingUnitCount,
+      overStockCount,
+      totalsMatch,
+    };
+  }, [saleType, netAmount, pieceLines]);
+
+  const footerAutoMessage = useMemo(() => {
+    // If the form is valid, no hint needed
+    if (canSubmit) return null;
+
+    // PIECE mode: give the most actionable cause first
+    if (saleType === "PIECE") {
+      if (!pieceSummary || !pieceSummary.hasLines) {
+        return "Ajoute au moins une pièce.";
+      }
+      if (!pieceSummary.netOk) {
+        return "Renseigne un net vendeur (> 0).";
+      }
+      if (pieceSummary.overStockCount > 0) {
+        return "Corrige la quantité : elle dépasse le stock disponible.";
+      }
+      if (pieceSummary.missingUnitCount > 0) {
+        return "Renseigne le tarif par pièce sur toutes les lignes.";
+      }
+      if (pieceSummary.diffCents !== 0) {
+        return "Écart entre le total des lignes et le net vendeur.";
+      }
+      return "Merci de corriger les champs.";
+    }
+
+    // SET mode (générique)
+    return "Complète les champs obligatoires pour pouvoir enregistrer.";
+  }, [canSubmit, saleType, pieceSummary]);
+
   return (
     <div
       className={cn(
         "px-1",
-        // Hauteur contrainte pour forcer un scroll interne (et éviter une carte pleine hauteur)
-        "h-[calc(100dvh-8rem)] overflow-y-auto overscroll-contain pr-3",
+        // Hauteur MAX (pas forcée) : laisse de l'air en haut/bas, scroll interne si besoin
+        "max-h-[calc(100dvh-12rem)] overflow-y-auto overscroll-contain pr-3 py-4",
         // Scrollbar visible à droite (WebKit)
         "[&::-webkit-scrollbar]:w-2",
         "[&::-webkit-scrollbar-track]:bg-transparent",
@@ -499,10 +624,57 @@ export function NewSaleForm() {
               value={pieceLines}
               onChange={(next) => {
                 setPieceLines(next);
-                setErrors((prev) => ({ ...prev, pieceRef: undefined }));
+                setErrors((prev) => ({
+                  ...prev,
+                  pieceRef: undefined,
+                  pieceLines: undefined,
+                }));
               }}
               disabled={isSubmitting}
+              errors={errors.pieceLines}
             />
+            {pieceSummary && (
+              <div
+                className={cn(
+                  "rounded-2xl border px-4 py-3 text-xs",
+                  pieceSummary.totalsMatch && pieceSummary.missingUnitCount === 0 && pieceSummary.overStockCount === 0
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                    : "border-slate-200 bg-white/70 text-slate-700"
+                )}
+              >
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                  <span>
+                    <span className="text-muted-foreground">Total lignes :</span>{" "}
+                    {euro.format((pieceSummary.totalCents ?? 0) / 100)}
+                  </span>
+                  <span>
+                    <span className="text-muted-foreground">Net vendeur :</span>{" "}
+                    {euro.format((pieceSummary.netCents ?? 0) / 100)}
+                  </span>
+                  {pieceSummary.hasLines && pieceSummary.netOk && pieceSummary.diffCents !== 0 && (
+                    <span className="text-rose-600">
+                      Écart : {euro.format(Math.abs(pieceSummary.diffCents) / 100)}
+                    </span>
+                  )}
+                </div>
+
+                {pieceSummary.overStockCount > 0 && (
+                  <p className="mt-1 text-rose-600">
+                    Quantité &gt; stock sur {pieceSummary.overStockCount} ligne(s).
+                  </p>
+                )}
+
+                {pieceSummary.missingUnitCount > 0 && (
+                  <p className="mt-1 text-rose-600">
+                    Tarif manquant sur {pieceSummary.missingUnitCount} ligne(s).
+                  </p>
+                )}
+
+                {pieceSummary.hasLines && pieceSummary.netOk && pieceSummary.totalsMatch && (
+                  <p className="mt-1">OK : total des lignes = net vendeur.</p>
+                )}
+              </div>
+            )}
             {errors.pieceRef && (
               <p className="text-xs text-rose-600">{errors.pieceRef}</p>
             )}
@@ -542,8 +714,10 @@ export function NewSaleForm() {
 
       {/* FOOTER FORMULAIRE */}
       <section className="flex items-center justify-between gap-3 pt-2">
-        {formMessage && (
-          <p className="text-xs text-muted-foreground">{formMessage}</p>
+        {(formMessage || footerAutoMessage) && (
+          <p className="text-xs text-muted-foreground">
+            {formMessage ?? footerAutoMessage}
+          </p>
         )}
 
         <Button

@@ -13,6 +13,8 @@ import type {
   StockMovementRow,
   SaleUpdate,
 } from "@/lib/sales-types";
+import { getPiecesForSaleItem } from "@/lib/sales";
+import { allocateFifoForPiece } from "@/lib/stock";
 
 export type CreateSaleValidationError = {
   field: string;
@@ -270,12 +272,14 @@ export async function createSaleAction(
       return base;
     });
 
-    const { data: insertedItems, error: itemsError } = await supabase
+    const { data: insertedItemsRaw, error: itemsError } = await supabase
       .from("sale_items")
       .insert(itemsInsert)
       .select("*");
 
-    if (itemsError || !insertedItems) {
+    const insertedItems = (insertedItemsRaw ?? []) as SaleItemRow[];
+
+    if (itemsError || insertedItems.length === 0) {
       console.error(
         "createSaleAction - erreur lors de l'insertion dans sale_items:",
         itemsError
@@ -296,6 +300,137 @@ export async function createSaleAction(
         error:
           "Impossible de créer les lignes de vente (sale_items). La vente a été annulée.",
         debug: { itemsError },
+      };
+    }
+
+    // 3) FIFO + mouvements OUT dans stock_movements + calcul des coûts/marges
+    try {
+      const movementsToInsert: StockMovementInsert[] = [];
+      let totalCost = 0;
+
+      // Sécurise l'ordre
+      const sortedItems = [...insertedItems].sort(
+        (a, b) => (a.line_index ?? 0) - (b.line_index ?? 0)
+      );
+
+      for (const dbItem of sortedItems) {
+        const idx = Number(dbItem.line_index ?? 0);
+        const draftItem = draft.items[idx];
+        if (!draftItem) continue;
+
+        // 3.1) Liste des pièces consommées par cette ligne
+        const demands = await getPiecesForSaleItem(draftItem);
+
+        let lineCost = 0;
+
+        for (const demand of demands) {
+          const pieceRef = (demand.piece_ref ?? "").trim();
+          const qtyNeeded = Number(demand.quantity ?? 0);
+
+          if (!pieceRef || !Number.isFinite(qtyNeeded) || qtyNeeded <= 0) continue;
+
+          // 3.2) Alloue en FIFO
+          const fifoRes = await allocateFifoForPiece(pieceRef, qtyNeeded);
+
+          // `allocateFifoForPiece` renvoie un objet (FifoAllocationResult) dans ce projet.
+          // On supporte aussi un ancien format (tableau direct) par sécurité.
+          const allocations: any = Array.isArray(fifoRes)
+            ? fifoRes
+            : (fifoRes as any)?.allocations;
+
+          if (!Array.isArray(allocations)) {
+            const msg =
+              (fifoRes as any)?.error ??
+              `Stock insuffisant ou réponse FIFO invalide pour ${pieceRef}.`;
+            throw new Error(msg);
+          }
+
+          for (const a of allocations) {
+            const q = Number(a.quantity ?? 0);
+            const uc = Number(a.unit_cost ?? 0);
+            const lotId = a.lot_id;
+
+            if (!lotId || !Number.isFinite(q) || q <= 0) continue;
+
+            movementsToInsert.push({
+              piece_ref: pieceRef,
+              lot_id: lotId,
+              direction: "OUT",
+              quantity: q,
+              unit_cost: Number.isFinite(uc) ? uc : 0,
+              source_type: "SALE",
+              source_id: String(dbItem.id),
+              comment: `Vente #${sale.id}`,
+            });
+
+            lineCost += q * (Number.isFinite(uc) ? uc : 0);
+          }
+        }
+
+        totalCost += lineCost;
+
+        // 3.3) MAJ cost/marge sur la ligne
+        const lineNet = Number(dbItem.net_amount ?? 0);
+        const lineNetIsOk = Number.isFinite(lineNet) && lineNet > 0;
+
+        const { error: updErr } = await supabase
+          .from("sale_items")
+          .update({
+            cost_amount: lineCost,
+            margin_amount: lineNetIsOk ? lineNet - lineCost : null,
+          })
+          .eq("id", dbItem.id);
+
+        if (updErr) {
+          throw new Error(
+            `Impossible de mettre à jour cost/marge sur sale_items(${dbItem.id}).`
+          );
+        }
+      }
+
+      // 3.4) Insert des mouvements OUT
+      if (movementsToInsert.length > 0) {
+        const { error: movErr } = await supabase
+          .from("stock_movements")
+          .insert(movementsToInsert);
+
+        if (movErr) throw movErr;
+      }
+
+      // 3.5) Update totals sur sales
+      const netSale = Number(sale.net_seller_amount ?? 0);
+      const totalMargin = netSale - totalCost;
+      const marginRate = netSale > 0 ? totalMargin / netSale : null;
+
+      const { error: saleUpdErr } = await supabase
+        .from("sales")
+        .update({
+          total_cost_amount: totalCost,
+          total_margin_amount: totalMargin,
+          margin_rate: marginRate,
+        })
+        .eq("id", sale.id);
+
+      if (saleUpdErr) {
+        throw new Error("Impossible de mettre à jour les totaux de la vente.");
+      }
+    } catch (fifoErr: any) {
+      console.error("createSaleAction - erreur FIFO/stock_movements:", fifoErr);
+
+      // Cleanup best-effort : annuler la vente créée si FIFO échoue
+      try {
+        await supabase.from("sale_items").delete().eq("sale_id", sale.id);
+        await supabase.from("sales").delete().eq("id", sale.id);
+      } catch (cleanupError) {
+        console.error("createSaleAction - cleanup erreur:", cleanupError);
+      }
+
+      return {
+        success: false,
+        error:
+          fifoErr?.message ??
+          "Erreur lors de la consommation de stock (FIFO). Vente annulée.",
+        debug: { fifoErr },
       };
     }
 
