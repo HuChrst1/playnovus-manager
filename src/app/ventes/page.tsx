@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { supabaseServer as supabase } from "@/lib/supabase-server";
 import type { SaleRow } from "@/lib/sales-types";
 import { SalesTable } from "@/components/sales/SalesTable";
 import { SalesStatCard } from "@/components/sales/SalesStatCard";

@@ -29,7 +29,7 @@ export type SaleDraftSetLine = {
 
 export type SetSelectorErrors = Record<
   string,
-  { setId?: string; quantity?: string }
+  { setId?: string; quantity?: string; netAmount?: string }
 >;
 
 type SetSelectorProps = {
@@ -114,7 +114,7 @@ export function SetSelector({
   }, [activeLineId, queryByLineId]);
 
   const showNetLineAmount = value.length > 1;
-
+  
   const piecesDialogSetId = useMemo(() => {
     if (!piecesDialogLineId) return null;
     const line = value.find((l) => l.id === piecesDialogLineId);
@@ -513,27 +513,32 @@ export function SetSelector({
                 {showNetLineAmount && (
                   <div className="space-y-1.5">
                     <Label className="text-xs font-medium text-muted-foreground">
-                      Tarif réparti par set (optionnel)
+                        Tarif réparti par set (€ / set)
                     </Label>
+
                     <Input
-                      type="text"
-                      inputMode="decimal"
-                      placeholder="Ex: 12,00"
-                      value={
-                        typeof line.net_amount === "number" && Number.isFinite(line.net_amount)
-                          ? String(line.net_amount).replace(".", ",")
-                          : ""
-                      }
-                      onChange={(e) => {
-                        const raw = e.target.value;
-                        const n = parseDecimalFR(raw);
-                        updateLine(line.id, {
-                          net_amount: Number.isFinite(n) ? n : null,
-                        });
-                      }}
-                      className={inputClassName(false)}
-                      disabled={disabled}
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="Ex: 12,00"
+                        value={
+                            typeof line.net_amount === "number" && Number.isFinite(line.net_amount)
+                            ? String(line.net_amount).replace(".", ",")
+                            : ""
+                        }
+                        onChange={(e) => {
+                            const raw = e.target.value;
+                            const n = parseDecimalFR(raw);
+                            updateLine(line.id, {
+                            net_amount: Number.isFinite(n) ? n : null,
+                            });
+                        }}
+                        className={inputClassName(Boolean(lineErr?.netAmount))}
+                        disabled={disabled}
                     />
+
+                    {lineErr?.netAmount && (
+                        <p className="text-xs text-rose-600">{lineErr.netAmount}</p>
+                    )}
                   </div>
                 )}
               </div>

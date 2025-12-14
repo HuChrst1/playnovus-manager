@@ -1,6 +1,6 @@
 "use server";
 
-import { supabase } from "@/lib/supabase";
+import { supabaseServer as supabase } from "@/lib/supabase-server";
 import type {
   SaleDraft,
   SaleItemDraft,
@@ -83,7 +83,7 @@ function validateSaleDraft(draft: SaleDraft): CreateSaleValidationError[] {
     }
   }
 
-  // sales_channel (on accepte pour l'instant n'importe quel string non vide)
+  // sales_channel
   if (!draft.sales_channel || String(draft.sales_channel).trim() === "") {
     errors.push({
       field: "sales_channel",
@@ -98,12 +98,15 @@ function validateSaleDraft(draft: SaleDraft): CreateSaleValidationError[] {
       message: "Au moins une ligne de vente est requise.",
     });
   } else {
+    const isPackSetSale = draft.sale_type === "SET" && draft.items.length > 1;
+
     draft.items.forEach((item, index) => {
       validateSaleItemDraft(
         item,
         index,
         draft.sale_type as SaleType,
-        errors
+        errors,
+        { isPackSetSale }
       );
     });
   }
@@ -111,6 +114,33 @@ function validateSaleDraft(draft: SaleDraft): CreateSaleValidationError[] {
   return errors;
 }
 
+
+function hasNonEmptyOverrides(item: any): boolean {
+  const isNonEmptyMap = (v: unknown) => {
+    if (!v || typeof v !== "object" || Array.isArray(v)) return false;
+    const obj = v as Record<string, unknown>;
+    return Object.keys(obj).some((k) => {
+      const key = String(k ?? "").trim();
+      const n = Number(obj[k]);
+      return key.length > 0 && Number.isFinite(n) && n > 0;
+    });
+  };
+
+  // nouveau format (map)
+  if (isNonEmptyMap(item?.overrides)) return true;
+
+  // compat: ancien format peut être map OU tableau
+  if (isNonEmptyMap(item?.piece_overrides)) return true;
+  if (Array.isArray(item?.piece_overrides)) {
+    return item.piece_overrides.some((o: any) => {
+      const ref = String(o?.piece_ref ?? "").trim();
+      const q = Number(o?.quantity ?? 0);
+      return ref.length > 0 && Number.isFinite(q) && q > 0;
+    });
+  }
+
+  return false;
+}
 /**
  * Validation d'une ligne de vente (SaleItemDraft).
  */
@@ -118,7 +148,8 @@ function validateSaleItemDraft(
   item: SaleItemDraft,
   index: number,
   saleType: SaleType,
-  errors: CreateSaleValidationError[]
+  errors: CreateSaleValidationError[],
+  ctx: { isPackSetSale: boolean }
 ) {
   const prefix = `items[${index}]`;
 
@@ -164,9 +195,28 @@ function validateSaleItemDraft(
           "Pour une ligne de type SET, l'identifiant du set (set_id) est requis.",
       });
     }
+  
+    // ✅ Set partiel => overrides obligatoires
+    if (item.is_partial_set === true && !hasNonEmptyOverrides(item)) {
+      errors.push({
+        field: `${prefix}.overrides`,
+        message:
+          "Pour un set partiel, tu dois renseigner le détail des pièces (overrides).",
+      });
+    }
+  
+    // ✅ Mode pack: net_amount requis par set
+    if (ctx.isPackSetSale) {
+      const netLine = Number(item.net_amount);
+      if (!Number.isFinite(netLine) || netLine <= 0) {
+        errors.push({
+          field: `${prefix}.net_amount`,
+          message:
+            "En mode pack (plusieurs sets), le 'Tarif réparti par set' est obligatoire et doit être > 0.",
+        });
+      }
+    }
   } else {
-    // TS sait déjà que item_kind est "SET" | "PIECE" ⇒ ce bloc devient unreachable (item = never).
-    // On garde quand même une erreur runtime au cas où des données invalides arrivent.
     const unknownKind = (item as any)?.item_kind;
 
     errors.push({
@@ -178,12 +228,6 @@ function validateSaleItemDraft(
 
 /**
  * 3.4.4.2 - Server action de création de vente
- *
- * Phase "stub minimal" :
- * - Valide le draft
- * - Insère dans `sales` + `sale_items`
- * - Ne touche pas encore au stock (FIFO)
- * - Initialise au minimum les totaux de coût/marge à 0
  */
 export async function createSaleAction(
   draft: SaleDraft
@@ -212,12 +256,10 @@ export async function createSaleAction(
       currency,
       comment: draft.comment ?? null,
 
-      // Phase stub : pas de calcul FIFO -> totaux init à 0
       total_cost_amount: 0,
       total_margin_amount: 0,
       margin_rate: null,
 
-      // Champs optionnels/à venir
       buyer_paid_total: null,
       vat_rate: null,
       sale_number: null,
@@ -242,40 +284,107 @@ export async function createSaleAction(
       };
     }
 
-    // 2) Insertion dans sale_items
-    const itemsInsert: SaleItemInsert[] = draft.items.map((item, index) => {
-      const quantity = Number(item.quantity ?? 0);
+    const isSingleSetSale = draft.sale_type === "SET" && draft.items.length === 1;
 
-      const base: SaleItemInsert = {
+    // 2) Insertion dans sale_items
+
+    // Normalise les overrides (mapping piece_ref -> qty) pour être sûr de stocker un JSON propre.
+    const normalizeOverrides = (v: unknown): Record<string, number> | null => {
+      if (!v || typeof v !== "object" || Array.isArray(v)) return null;
+      const raw = v as Record<string, unknown>;
+      const cleaned: Record<string, number> = {};
+
+      for (const [k, val] of Object.entries(raw)) {
+        const key = String(k ?? "").trim();
+        const n = Number(val as any);
+        if (!key) continue;
+        if (!Number.isFinite(n) || n <= 0) continue;
+        cleaned[key] = n;
+      }
+
+      return Object.keys(cleaned).length > 0 ? cleaned : null;
+    };
+
+    const buildItemInsert = (
+      item: SaleItemDraft,
+      index: number,
+      opts: { includeOverrides: boolean }
+    ): any => {
+      const quantity = Number(item.quantity ?? 0);
+    
+      const resolvedNetAmount =
+        isSingleSetSale && item.item_kind === "SET" ? net : item.net_amount ?? null;
+    
+      const base: any = {
         sale_id: sale.id,
         line_index: index,
         item_kind: item.item_kind,
         quantity,
         is_partial_set: item.is_partial_set ?? false,
         comment: item.comment ?? null,
-        net_amount: item.net_amount ?? null,
-
-        // Phase stub : coûts/marges ligne non calculés
+        net_amount: resolvedNetAmount,
         cost_amount: null,
         margin_amount: null,
-
         set_id: null,
         piece_ref: null,
       };
-
+    
       if (item.item_kind === "SET") {
         base.set_id = item.set_id ?? null;
+    
+        if (opts.includeOverrides) {
+          const ov =
+            normalizeOverrides((item as any).overrides) ??
+            normalizeOverrides((item as any).piece_overrides);
+    
+          base.overrides = ov; // null ou JSON clean
+        }
       } else {
         base.piece_ref = item.piece_ref ?? null;
+        // pas d'overrides pour PIECE
       }
-
+    
       return base;
-    });
+    };
 
-    const { data: insertedItemsRaw, error: itemsError } = await supabase
+    // Tentative 1: insert AVEC overrides (si la colonne existe).
+    const itemsInsertWithOverrides = draft.items.map((item, index) =>
+      buildItemInsert(item, index, { includeOverrides: true })
+    );
+
+    // Fallback: si la colonne `overrides` n'existe pas (schema cache PostgREST non à jour, ou DB sans colonne),
+    // on réinsère sans ce champ pour ne pas bloquer la création de vente.
+    const itemsInsertWithoutOverrides: SaleItemInsert[] = draft.items.map((item, index) =>
+      buildItemInsert(item, index, { includeOverrides: false })
+    );
+
+    let insertedItemsRaw: any[] | null = null;
+    let itemsError: any = null;
+
+    // 1) essai avec overrides
+    const attempt1 = await supabase
       .from("sale_items")
-      .insert(itemsInsert)
+      .insert(itemsInsertWithOverrides as any)
       .select("*");
+
+    insertedItemsRaw = (attempt1.data as any[]) ?? null;
+    itemsError = attempt1.error ?? null;
+
+    // 2) fallback si erreur typique "column overrides" / "schema cache" (PostgREST)
+    if (
+      itemsError &&
+      typeof itemsError.message === "string" &&
+      /overrides/i.test(itemsError.message) &&
+      /(schema cache|column)/i.test(itemsError.message)
+    ) {
+      const attempt2 = await supabase
+        .from("sale_items")
+        .insert(itemsInsertWithoutOverrides)
+        .select("*");
+
+      insertedItemsRaw = (attempt2.data as any[]) ?? null;
+      itemsError = attempt2.error ?? null;
+    }
 
     const insertedItems = (insertedItemsRaw ?? []) as SaleItemRow[];
 
@@ -285,7 +394,6 @@ export async function createSaleAction(
         itemsError
       );
 
-      // Cleanup best-effort : si les lignes échouent, on supprime la vente créée
       try {
         await supabase.from("sales").delete().eq("id", sale.id);
       } catch (cleanupError) {
@@ -297,29 +405,79 @@ export async function createSaleAction(
 
       return {
         success: false,
-        error:
-          "Impossible de créer les lignes de vente (sale_items). La vente a été annulée.",
-        debug: { itemsError },
+        error: "Impossible de créer les lignes de vente (sale_items). La vente a été annulée.",
+        debug: {
+          itemsError: {
+            message: itemsError?.message,
+            code: itemsError?.code,
+            details: itemsError?.details,
+            hint: itemsError?.hint,
+          },
+        },
       };
     }
 
     // 3) FIFO + mouvements OUT dans stock_movements + calcul des coûts/marges
     try {
       const movementsToInsert: StockMovementInsert[] = [];
+
+      const saleItemPiecesToInsert: Array<{
+        sale_id: number;
+        sale_item_id: number;
+        piece_ref: string;
+        quantity: number;
+        unit_cost: number;
+        lot_id: string | null;
+      }> = [];
+
+      const toNullableBigintString = (v: unknown): string | null => {
+        if (v === null || v === undefined) return null;
+
+        if (typeof v === "bigint") return v.toString();
+
+        if (typeof v === "string") {
+          const s = v.trim();
+          return s.length ? s : null;
+        }
+
+        if (typeof v === "number" && Number.isFinite(v)) {
+          return String(Math.trunc(v));
+        }
+
+        return null;
+      };
+
       let totalCost = 0;
 
-      // Sécurise l'ordre
       const sortedItems = [...insertedItems].sort(
         (a, b) => (a.line_index ?? 0) - (b.line_index ?? 0)
       );
 
       for (const dbItem of sortedItems) {
         const idx = Number(dbItem.line_index ?? 0);
-        const draftItem = draft.items[idx];
-        if (!draftItem) continue;
+        if (!draft.items[idx]) continue;
 
-        // 3.1) Liste des pièces consommées par cette ligne
-        const demands = await getPiecesForSaleItem(draftItem);
+        const itemForDemand: SaleItemDraft =
+        dbItem.item_kind === "SET"
+    ? {
+        item_kind: "SET",
+        set_id: String(dbItem.set_id ?? ""),
+        quantity: Number(dbItem.quantity ?? 1),
+        is_partial_set: Boolean(dbItem.is_partial_set),
+        net_amount: dbItem.net_amount ?? null,
+        overrides: normalizeOverrides(dbItem.overrides) ?? undefined,
+        comment: dbItem.comment ?? null,
+      }
+    : {
+        item_kind: "PIECE",
+        piece_ref: String(dbItem.piece_ref ?? ""),
+        quantity: Number(dbItem.quantity ?? 1),
+        is_partial_set: Boolean(dbItem.is_partial_set),
+        net_amount: dbItem.net_amount ?? null,
+        comment: dbItem.comment ?? null,
+      };
+
+        const demands = await getPiecesForSaleItem(itemForDemand);
 
         let lineCost = 0;
 
@@ -329,47 +487,48 @@ export async function createSaleAction(
 
           if (!pieceRef || !Number.isFinite(qtyNeeded) || qtyNeeded <= 0) continue;
 
-          // 3.2) Alloue en FIFO
           const fifoRes = await allocateFifoForPiece(pieceRef, qtyNeeded);
+          const chunks = fifoRes.chunks;
 
-          // `allocateFifoForPiece` renvoie un objet (FifoAllocationResult) dans ce projet.
-          // On supporte aussi un ancien format (tableau direct) par sécurité.
-          const allocations: any = Array.isArray(fifoRes)
-            ? fifoRes
-            : (fifoRes as any)?.allocations;
-
-          if (!Array.isArray(allocations)) {
-            const msg =
-              (fifoRes as any)?.error ??
-              `Stock insuffisant ou réponse FIFO invalide pour ${pieceRef}.`;
-            throw new Error(msg);
+          if (!Array.isArray(chunks)) {
+            throw new Error(`Réponse FIFO invalide pour ${pieceRef}`);
           }
 
-          for (const a of allocations) {
-            const q = Number(a.quantity ?? 0);
-            const uc = Number(a.unit_cost ?? 0);
-            const lotId = a.lot_id;
+          for (const c of chunks) {
+            const q = Number(c.quantity ?? 0);
+            const uc = Number(c.unitCost ?? 0);
 
-            if (!lotId || !Number.isFinite(q) || q <= 0) continue;
+            if (!Number.isFinite(q) || q <= 0) continue;
+
+            const safeUnitCost = Number.isFinite(uc) ? uc : 0;
+            const safeLotId = toNullableBigintString((c as any).lotId);
 
             movementsToInsert.push({
               piece_ref: pieceRef,
-              lot_id: lotId,
+              lot_id: safeLotId,
               direction: "OUT",
               quantity: q,
-              unit_cost: Number.isFinite(uc) ? uc : 0,
+              unit_cost: safeUnitCost,
               source_type: "SALE",
               source_id: String(dbItem.id),
               comment: `Vente #${sale.id}`,
             });
 
-            lineCost += q * (Number.isFinite(uc) ? uc : 0);
+            saleItemPiecesToInsert.push({
+              sale_id: sale.id,
+              sale_item_id: dbItem.id,
+              piece_ref: pieceRef,
+              quantity: q,
+              unit_cost: safeUnitCost,
+              lot_id: safeLotId,
+            });
+
+            lineCost += q * safeUnitCost;
           }
         }
 
         totalCost += lineCost;
 
-        // 3.3) MAJ cost/marge sur la ligne
         const lineNet = Number(dbItem.net_amount ?? 0);
         const lineNetIsOk = Number.isFinite(lineNet) && lineNet > 0;
 
@@ -390,11 +549,24 @@ export async function createSaleAction(
 
       // 3.4) Insert des mouvements OUT
       if (movementsToInsert.length > 0) {
-        const { error: movErr } = await supabase
+        const { error: movErr } = await (supabase as any)
           .from("stock_movements")
           .insert(movementsToInsert);
 
         if (movErr) throw movErr;
+      }
+
+      // 3.4 bis) Snapshot des pièces consommées (sale_item_pieces)
+      if (saleItemPiecesToInsert.length > 0) {
+        const { error: snapErr } = await (supabase as any)
+          .from("sale_item_pieces")
+          .insert(saleItemPiecesToInsert);
+
+        if (snapErr) {
+          throw new Error(
+            `Impossible d'enregistrer le snapshot des pièces consommées (sale_item_pieces). ${snapErr.message}`
+          );
+        }
       }
 
       // 3.5) Update totals sur sales
@@ -417,12 +589,27 @@ export async function createSaleAction(
     } catch (fifoErr: any) {
       console.error("createSaleAction - erreur FIFO/stock_movements:", fifoErr);
 
-      // Cleanup best-effort : annuler la vente créée si FIFO échoue
       try {
+        const saleItemIds = insertedItems.map(i => String(i.id));
+      
+        await (supabase as any)
+          .from("sale_item_pieces")
+          .delete()
+          .eq("sale_id", sale.id);
+      
+        if (saleItemIds.length > 0) {
+          await supabase
+            .from("stock_movements")
+            .delete()
+            .eq("source_type", "SALE")
+            .in("source_id", saleItemIds);
+        }
+      
+        // ✅ rollback “vente” lui-même
         await supabase.from("sale_items").delete().eq("sale_id", sale.id);
         await supabase.from("sales").delete().eq("id", sale.id);
-      } catch (cleanupError) {
-        console.error("createSaleAction - cleanup erreur:", cleanupError);
+      } catch (e) {
+        console.error("cleanup failed:", e);
       }
 
       return {
@@ -462,19 +649,12 @@ type LoadedSaleForCancel = {
   items: SaleItemRow[];
 };
 
-/**
- * Charge une vente et ses lignes pour une éventuelle annulation.
- * - Vérifie que l'ID est valide
- * - Vérifie que la vente existe
- * - Vérifie que la vente est encore confirmée (non déjà annulée)
- */
 async function loadSaleForCancel(saleId: number): Promise<LoadedSaleForCancel> {
   const id = Number(saleId);
   if (!Number.isFinite(id) || id <= 0) {
     throw new Error("Identifiant de vente invalide pour l'annulation.");
   }
 
-  // 1) Charger la vente
   const { data: sale, error: saleError } = await supabase
     .from("sales")
     .select("*")
@@ -486,7 +666,6 @@ async function loadSaleForCancel(saleId: number): Promise<LoadedSaleForCancel> {
     throw new Error("Vente introuvable pour l'annulation.");
   }
 
-  // On ne permet d'annuler que les ventes confirmées
   if (sale.status === "CANCELLED") {
     throw new Error("Cette vente est déjà annulée.");
   }
@@ -496,7 +675,6 @@ async function loadSaleForCancel(saleId: number): Promise<LoadedSaleForCancel> {
     );
   }
 
-  // 2) Charger les lignes de vente
   const { data: items, error: itemsError } = await supabase
     .from("sale_items")
     .select("*")
@@ -525,16 +703,19 @@ async function loadSaleForCancel(saleId: number): Promise<LoadedSaleForCancel> {
   };
 }
 
-/**
- * Charge tous les mouvements de stock OUT liés à une vente,
- * c'est-à-dire les mouvements:
- *  - direction = 'OUT'
- *  - source_type = 'SALE'
- *  - source_id ∈ (ids des lignes de la vente)
- *
- * Cette fonction s'appuie sur loadSaleForCancel pour s'assurer
- * que la vente existe et est annulable.
- */
+const toNullableBigintString = (v: unknown): string | null => {
+  if (v === null || v === undefined) return null;
+  if (typeof v === "bigint") return v.toString();
+  if (typeof v === "string") {
+    const s = v.trim();
+    return s.length ? s : null;
+  }
+  if (typeof v === "number" && Number.isFinite(v)) {
+    return String(Math.trunc(v));
+  }
+  return null;
+};
+
 async function loadSaleOutMovementsForCancel(
   saleId: number
 ): Promise<{
@@ -542,7 +723,6 @@ async function loadSaleOutMovementsForCancel(
   items: SaleItemRow[];
   movements: StockMovementRow[];
 }> {
-  // On commence par charger la vente et ses lignes (validation incluse)
   const { sale, items } = await loadSaleForCancel(saleId);
 
   const itemIds = items.map((item) => item.id.toString());
@@ -569,20 +749,19 @@ async function loadSaleOutMovementsForCancel(
     );
   }
 
-  if (movements.length === 0) {
-    console.warn(
-      "loadSaleOutMovementsForCancel - aucun mouvement OUT trouvé pour cette vente."
-    );
-  }
-
+  const normalizedMovements = (movements ?? []).map((m) => ({
+    ...(m as any),
+    lot_id: toNullableBigintString((m as any).lot_id),
+  })) as StockMovementRow[];
+  
   return {
     sale: sale as SaleRow,
     items: items as SaleItemRow[],
-    movements: movements as StockMovementRow[],
+    movements: normalizedMovements,
   };
 }
 
-// ---- 3.2.4.3 - Annulation de vente : mouvements IN miroirs + statut ----
+// ---- 3.2.4.3 - Annulation de vente ----
 
 export type CancelSaleResult =
   | {
@@ -598,14 +777,6 @@ export type CancelSaleResult =
       errors: CreateSaleValidationError[];
     };
 
-/**
- * Annule une vente :
- *  - recharge la vente + lignes + mouvements OUT existants
- *  - crée des mouvements IN miroirs (SALE_CANCEL) avec les mêmes coûts unitaires
- *  - met à jour le statut de la vente en CANCELLED
- *
- * Le stock est ainsi remis dans l'état "comme avant la vente".
- */
 export async function cancelSaleAction(
   saleId: number
 ): Promise<CancelSaleResult> {
@@ -620,18 +791,12 @@ export async function cancelSaleAction(
 
     return {
       ok: false,
-      errors: [
-        {
-          field: "root",
-          message,
-        },
-      ],
+      errors: [{ field: "root", message }],
     };
   }
 
   const { sale, items, movements } = loaded;
 
-  // 1) Construire les mouvements IN miroirs
   const mirrorMovements: StockMovementInsert[] = movements.map((m) => ({
     piece_ref: m.piece_ref,
     lot_id: m.lot_id,
@@ -643,9 +808,8 @@ export async function cancelSaleAction(
     comment: `Annulation de la vente #${sale.id}`,
   }));
 
-  // 2) Insérer les mouvements IN
   if (mirrorMovements.length > 0) {
-    const { error: insertError } = await supabase
+    const { error: insertError } = await (supabase as any)
       .from("stock_movements")
       .insert(mirrorMovements);
 
@@ -667,15 +831,12 @@ export async function cancelSaleAction(
     }
   }
 
-  // 3) Mettre à jour le statut de la vente en CANCELLED
   let updatedSale: SaleRow = sale;
 
   try {
     const { data: saleUpdate, error: saleUpdateError } = await supabase
       .from("sales")
-      .update({
-        status: "CANCELLED",
-      })
+      .update({ status: "CANCELLED" })
       .eq("id", sale.id)
       .select("*")
       .single();
@@ -709,31 +870,18 @@ export async function cancelSaleAction(
 
 export type UpdateSaleMetaPayload = {
   comment?: string | null;
-  // Ces champs ne sont pas NULLABLE en base : si on les fournit, on doit donner une valeur non nulle.
   sales_channel?: string;
   paid_at?: string;
   net_seller_amount?: number;
-  // Ces champs sont nullable en base : on peut explicitement les mettre à null.
   buyer_paid_total?: number | null;
   vat_rate?: number | null;
   sale_number?: string | null;
 };
 
 export type UpdateSaleMetaResult =
-  | {
-      ok: true;
-      errors: [];
-      saleId: number;
-    }
-  | {
-      ok: false;
-      errors: CreateSaleValidationError[];
-    };
+  | { ok: true; errors: []; saleId: number }
+  | { ok: false; errors: CreateSaleValidationError[] };
 
-/**
- * Validation de base pour la mise à jour des métadonnées d'une vente.
- * Ne touche pas à la base de données.
- */
 function validateUpdateSaleMetaInput(
   saleId: number,
   payload: UpdateSaleMetaPayload
@@ -742,13 +890,9 @@ function validateUpdateSaleMetaInput(
 
   const id = Number(saleId);
   if (!Number.isFinite(id) || id <= 0) {
-    errors.push({
-      field: "saleId",
-      message: "Identifiant de vente invalide.",
-    });
+    errors.push({ field: "saleId", message: "Identifiant de vente invalide." });
   }
 
-  // Si aucun champ n'est fourni, on considère que la requête est vide
   const hasAnyField =
     payload.comment !== undefined ||
     payload.sales_channel !== undefined ||
@@ -767,7 +911,6 @@ function validateUpdateSaleMetaInput(
     return errors;
   }
 
-  // sales_channel : si fourni, ne doit pas être une chaîne vide
   if (payload.sales_channel !== undefined) {
     const ch = String(payload.sales_channel).trim();
     if (ch.length === 0) {
@@ -778,7 +921,6 @@ function validateUpdateSaleMetaInput(
     }
   }
 
-  // paid_at : si fourni, doit être une date valide
   if (payload.paid_at !== undefined) {
     const d = new Date(payload.paid_at);
     if (Number.isNaN(d.getTime())) {
@@ -789,20 +931,20 @@ function validateUpdateSaleMetaInput(
     }
   }
 
-  // net_seller_amount : si fourni, doit être un nombre >= 0
   if (payload.net_seller_amount !== undefined) {
     const net = Number(payload.net_seller_amount);
     if (!Number.isFinite(net) || net < 0) {
       errors.push({
         field: "net_seller_amount",
-        message:
-          "Le montant net vendeur doit être un nombre positif ou nul.",
+        message: "Le montant net vendeur doit être un nombre positif ou nul.",
       });
     }
   }
 
-  // buyer_paid_total : si fourni, doit être un nombre >= 0
-  if (payload.buyer_paid_total !== undefined && payload.buyer_paid_total !== null) {
+  if (
+    payload.buyer_paid_total !== undefined &&
+    payload.buyer_paid_total !== null
+  ) {
     const buyerTotal = Number(payload.buyer_paid_total);
     if (!Number.isFinite(buyerTotal) || buyerTotal < 0) {
       errors.push({
@@ -813,7 +955,6 @@ function validateUpdateSaleMetaInput(
     }
   }
 
-  // vat_rate : si fourni, doit être un nombre >= 0
   if (payload.vat_rate !== undefined && payload.vat_rate !== null) {
     const vat = Number(payload.vat_rate);
     if (!Number.isFinite(vat) || vat < 0) {
@@ -825,7 +966,6 @@ function validateUpdateSaleMetaInput(
     }
   }
 
-  // sale_number : si fourni, on accepte les chaînes non vides uniquement
   if (payload.sale_number !== undefined && payload.sale_number !== null) {
     const num = String(payload.sale_number).trim();
     if (num.length === 0) {
@@ -839,12 +979,6 @@ function validateUpdateSaleMetaInput(
   return errors;
 }
 
-/**
- * Server action de mise à jour des métadonnées d'une vente.
- *
- * Ce snippet (3.2.5.1) se concentre sur la signature et la validation.
- * La logique d'UPDATE en base sera ajoutée dans 3.2.5.2.
- */
 export async function updateSaleMetaAction(
   saleId: number,
   payload: UpdateSaleMetaPayload
@@ -852,15 +986,11 @@ export async function updateSaleMetaAction(
   const errors = validateUpdateSaleMetaInput(saleId, payload);
 
   if (errors.length > 0) {
-    return {
-      ok: false,
-      errors,
-    };
+    return { ok: false, errors };
   }
 
   const id = Number(saleId);
 
-  // 1) Charger la vente existante
   const { data: existing, error: existingError } = await supabase
     .from("sales")
     .select("*")
@@ -874,46 +1004,24 @@ export async function updateSaleMetaAction(
     );
     return {
       ok: false,
-      errors: [
-        {
-          field: "root",
-          message: "Vente introuvable pour mise à jour.",
-        },
-      ],
+      errors: [{ field: "root", message: "Vente introuvable pour mise à jour." }],
     };
   }
 
-  // Option : empêcher la modification des ventes annulées
   if (existing.status === "CANCELLED") {
     return {
       ok: false,
-      errors: [
-        {
-          field: "root",
-          message: "Impossible de modifier une vente annulée.",
-        },
-      ],
+      errors: [{ field: "root", message: "Impossible de modifier une vente annulée." }],
     };
   }
 
   const update: SaleUpdate = {};
 
-  // Commentaire
-  if (payload.comment !== undefined) {
-    update.comment = payload.comment;
-  }
-
-  // Canal de vente
-  if (payload.sales_channel !== undefined) {
+  if (payload.comment !== undefined) update.comment = payload.comment;
+  if (payload.sales_channel !== undefined)
     update.sales_channel = String(payload.sales_channel);
-  }
+  if (payload.paid_at !== undefined) update.paid_at = payload.paid_at;
 
-  // Date de paiement
-  if (payload.paid_at !== undefined) {
-    update.paid_at = payload.paid_at;
-  }
-
-  // Montant net vendeur
   let netChanged = false;
   let newNet: number | undefined = undefined;
 
@@ -924,32 +1032,23 @@ export async function updateSaleMetaAction(
     newNet = net;
   }
 
-  // Montant total payé par l'acheteur
-  if (
-    payload.buyer_paid_total !== undefined &&
-    payload.buyer_paid_total !== null
-  ) {
+  if (payload.buyer_paid_total !== undefined && payload.buyer_paid_total !== null) {
     update.buyer_paid_total = Number(payload.buyer_paid_total);
   } else if (payload.buyer_paid_total !== undefined) {
     update.buyer_paid_total = null;
   }
 
-  // Taux de TVA
   if (payload.vat_rate !== undefined && payload.vat_rate !== null) {
     update.vat_rate = Number(payload.vat_rate);
   } else if (payload.vat_rate !== undefined) {
     update.vat_rate = null;
   }
 
-  // Numéro de vente
   if (payload.sale_number !== undefined) {
     update.sale_number =
-      payload.sale_number !== null
-        ? String(payload.sale_number)
-        : null;
+      payload.sale_number !== null ? String(payload.sale_number) : null;
   }
 
-  // Si le net change, on recalcule la marge totale et le taux
   if (netChanged && newNet !== undefined) {
     const cost = Number(existing.total_cost_amount ?? 0);
     const totalMargin = newNet - cost;
@@ -957,7 +1056,6 @@ export async function updateSaleMetaAction(
     update.margin_rate = newNet > 0 ? totalMargin / newNet : null;
   }
 
-  // 2) Appliquer la mise à jour
   const { error: updateError } = await supabase
     .from("sales")
     .update(update)
@@ -971,18 +1069,10 @@ export async function updateSaleMetaAction(
     return {
       ok: false,
       errors: [
-        {
-          field: "root",
-          message:
-            "Impossible de mettre à jour les métadonnées de la vente.",
-        },
+        { field: "root", message: "Impossible de mettre à jour les métadonnées de la vente." },
       ],
     };
   }
 
-  return {
-    ok: true,
-    errors: [],
-    saleId: id,
-  };
+  return { ok: true, errors: [], saleId: id };
 }

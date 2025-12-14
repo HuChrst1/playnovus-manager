@@ -14,9 +14,26 @@ export type SaleItemRow = Tables<"sale_items">;
 export type SaleItemInsert = TablesInsert<"sale_items">;
 export type SaleItemUpdate = TablesUpdate<"sale_items">;
 
-// Lignes de stock_movements (utile pour FIFO + debug)
-export type StockMovementRow = Tables<"stock_movements">;
-export type StockMovementInsert = TablesInsert<"stock_movements">;
+// ----------------------
+// IMPORTANT: bigint-safe lot_id
+// ----------------------
+// Supabase/PostgREST peut renvoyer un int8 (bigint) sous forme de string.
+// On choisit donc string côté app pour éviter tout souci (overflow / mismatch).
+type StockMovementRowBase = Tables<"stock_movements">;
+type StockMovementInsertBase = TablesInsert<"stock_movements">;
+type StockMovementUpdateBase = TablesUpdate<"stock_movements">;
+
+export type StockMovementRow = Omit<StockMovementRowBase, "lot_id"> & {
+  lot_id: string | null;
+};
+
+export type StockMovementInsert = Omit<StockMovementInsertBase, "lot_id"> & {
+  lot_id?: string | null;
+};
+
+export type StockMovementUpdate = Omit<StockMovementUpdateBase, "lot_id"> & {
+  lot_id?: string | null;
+};
 
 // IDs pratiques
 export type SaleId = SaleRow["id"];
@@ -35,7 +52,6 @@ export type SaleWithItems = SaleRow & {
  * On garde des unions littérales côté draft (front/back),
  * même si en DB c'est stocké comme string.
  */
-// Draft-side unions (front/back). We expose them under stable names used across the codebase.
 export type SaleType = "SET" | "PIECE";
 export type SalesChannel =
   | "VINTED"
@@ -44,14 +60,10 @@ export type SalesChannel =
   | "DIRECT"
   | "OTHER";
 
-// Backward/transition aliases (if some files still import *Draft names*)
+// Backward/transition aliases
 export type SaleTypeDraft = SaleType;
 export type SalesChannelDraft = SalesChannel;
 
-/**
- * Métadonnées du brouillon de vente, partagées front/back.
- * (La phase actuelle peut forcer `sale_type: "SET"` côté UI, mais on garde les 2 valeurs ici.)
- */
 export type SaleDraftMeta = {
   sale_type: SaleType;
   sales_channel: SalesChannel | string;
@@ -67,17 +79,9 @@ export type PieceDemand = {
   quantity: number;
 };
 
-/**
- * Overrides (set incomplet / pièces retirées / quantités ajustées)
- * Clé = piece_ref, valeur = quantité finale à consommer pour CETTE ligne.
- */
 export type PieceOverridesMap = Record<string, number>;
+export type PieceOverridesLegacy = PieceOverridesMap | PieceDemand[];
 
-/**
- * Ligne SET (version backend)
- *
- * IMPORTANT: discriminated union sur `item_kind`.
- */
 export type SaleItemSetDraftInput = {
   item_kind: "SET";
   set_id: string;
@@ -85,42 +89,20 @@ export type SaleItemSetDraftInput = {
   is_partial_set: boolean;
   net_amount?: number | null;
 
-  /**
-   * Nouveau format (3.4.4.x) : mapping piece_ref -> quantité finale
-   */
   overrides?: PieceOverridesMap;
-
-  /**
-   * Compat: ancien format (tableau) parfois encore présent dans du code legacy.
-   * On le garde TEMPORAIREMENT pour éviter de casser pendant la migration.
-   * Idéalement, supprimer une fois que tout le code utilise `overrides`.
-   */
-  piece_overrides?: PieceDemand[];
-
+  piece_overrides?: PieceOverridesLegacy; // compat
   comment?: string | null;
 };
 
-/**
- * Ligne PIECE (version backend)
- *
- * IMPORTANT: discriminated union sur `item_kind`.
- */
 export type SaleItemPieceDraftInput = {
   item_kind: "PIECE";
   piece_ref: string;
   quantity: number;
-
-  // Pour compat avec certains usages (`item.is_partial_set ?? false`).
-  // Doit rester faux pour une ligne PIECE.
   is_partial_set?: boolean;
-
   net_amount?: number | null;
   comment?: string | null;
 };
 
-/**
- * Union discriminée: évite les `never` lors des checks sur item_kind.
- */
 export type SaleItemDraft = SaleItemSetDraftInput | SaleItemPieceDraftInput;
 
 export type SaleDraft = SaleDraftMeta & {
@@ -131,7 +113,6 @@ export type SaleDraft = SaleDraftMeta & {
 // UI helpers (front only)
 // ----------------------
 
-// Ligne UI pour une vente PIECE (avec id local pour React)
 export type SaleDraftPieceLine = {
   id: string;
   item_kind: "PIECE";

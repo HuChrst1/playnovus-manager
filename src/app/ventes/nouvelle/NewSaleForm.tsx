@@ -21,7 +21,7 @@ type NewSaleFormErrors = Partial<{
   paidAt: string;
   netAmount: string;
   // erreurs par ligne de set (clé = id local de la ligne)
-  setLines: Record<string, { setId?: string; quantity?: string }>;
+  setLines: Record<string, { setId?: string; quantity?: string; netAmount?: string }>;
   pieceRef: string;
   pieceLines: PieceSelectorErrors;
 }>;
@@ -96,6 +96,41 @@ export function NewSaleForm() {
     }));
   }, [saleType]);
 
+  useEffect(() => {
+    if (saleType !== "SET") return;
+    if (setLines.length !== 1) return;
+  
+    const net = parseDecimalFR(netAmount);
+    const qty = setLines[0]?.quantity ?? 1;
+  
+    const unit = computeSingleSetUnit(net, qty);
+  
+    // On met à jour uniquement si ça change (évite boucle)
+    const current = setLines[0]?.net_amount ?? null;
+    const same =
+      (current === null && unit === null) ||
+      (typeof current === "number" &&
+        typeof unit === "number" &&
+        Math.round(current * 100) === Math.round(unit * 100));
+  
+    if (same) return;
+  
+    setSetLines((prev) => {
+      if (prev.length !== 1) return prev;
+      return [{ ...prev[0], net_amount: unit }];
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saleType, netAmount, setLines.length, setLines[0]?.quantity]);
+  
+  const computeSingleSetUnit = (netSeller: number, qty: number) => {
+    const q = Math.max(1, Number(qty || 1));
+    if (!Number.isFinite(netSeller) || netSeller <= 0) return null;
+  
+    // On veut que (unit * qty) = netSeller au centime
+    const unit = Math.round((netSeller * 100) / q) / 100;
+    return Number.isFinite(unit) && unit > 0 ? unit : null;
+  };
+
   const parseDecimalFR = (raw: string) => {
     const cleaned = (raw ?? "").toString().trim().replace("€", "").replace(/\s/g, "");
     const normalized = cleaned.replace(",", ".");
@@ -115,16 +150,37 @@ export function NewSaleForm() {
     };
 
     if (saleType === "SET") {
+      const isSingle = setLines.length === 1;
+    
       return {
         ...base,
         items: setLines.map((l) => {
           const line = l as SetLineWithOverrides;
+          const qty = Math.max(1, Number(line.quantity || 1));
+    
+          if (isSingle) {
+            // 1 seul set => net_amount total = net vendeur (la DB stocke le total ligne)
+            return {
+              item_kind: "SET" as const,
+              set_id: (line.set_id ?? "").trim(),
+              quantity: qty,
+              is_partial_set: Boolean(line.is_partial_set),
+              net_amount: Number.isFinite(net) ? net : 0,
+              overrides: line.overrides ?? line.piece_overrides ?? undefined,
+            };
+          }
+    
+          // Pack => line.net_amount = tarif unitaire par set, on stocke le total de ligne
+          const unit = line.net_amount;
+          const total =
+            typeof unit === "number" && Number.isFinite(unit) ? unit * qty : null;
+    
           return {
             item_kind: "SET" as const,
             set_id: (line.set_id ?? "").trim(),
-            quantity: Math.max(1, Number(line.quantity || 1)),
+            quantity: qty,
             is_partial_set: Boolean(line.is_partial_set),
-            net_amount: line.net_amount ?? null,
+            net_amount: total,
             overrides: line.overrides ?? line.piece_overrides ?? undefined,
           };
         }),
@@ -158,26 +214,60 @@ export function NewSaleForm() {
     }
 
     if (d.sale_type === "SET") {
-      const lineErrors: Record<string, { setId?: string; quantity?: string }> = {};
-
-      // On se base sur l'état UI (setLines) pour retrouver les IDs locaux
-      // et afficher les erreurs au bon endroit.
+      const isPack = setLines.length > 1;
+      const lineErrors: Record<
+        string,
+        { setId?: string; quantity?: string; netAmount?: string }
+      > = {};
+    
+      let linesCents = 0;
+    
+      // On se base sur l’état UI (setLines) pour retrouver les IDs locaux
       setLines.forEach((uiLine, idx) => {
         const item = d.items[idx];
         const setId = (item && item.item_kind === "SET" ? item.set_id : "").trim();
         const qty = Number(item && item.item_kind === "SET" ? item.quantity : 0);
 
-        const e: { setId?: string; quantity?: string } = {};
+        const e: { setId?: string; quantity?: string; netAmount?: string } = {};
         if (!setId) e.setId = "Le SetID est obligatoire.";
         if (!Number.isFinite(qty) || qty <= 0) e.quantity = "La quantité doit être ≥ 1.";
+
+        // IMPORTANT: tarif par set (unitaire) OBLIGATOIRE
+        if (isPack) {
+          const unit = uiLine.net_amount;
+          const unitIsOk = typeof unit === "number" && Number.isFinite(unit) && unit > 0;
+          if (!unitIsOk) e.netAmount = "Tarif réparti par set obligatoire.";
+        }
+
+        // Si la ligne est OK, on additionne (tarif * quantité) au centime
+        if (!e.setId && !e.quantity && !e.netAmount) {
+          if (isPack) {
+            const unit = uiLine.net_amount as number;
+            linesCents += Math.round(unit * qty * 100);
+          } else {
+            // 1 set => linesCents doit matcher net vendeur, donc on force le total = net
+            const netCents = Math.round((d.net_seller_amount ?? 0) * 100);
+            linesCents += netCents;
+          }
+        }
 
         if (Object.keys(e).length > 0) {
           lineErrors[uiLine.id] = e;
         }
       });
-
+    
       if (Object.keys(lineErrors).length > 0) {
         next.setLines = lineErrors;
+      }
+    
+      // Si aucune erreur par ligne, on impose: somme (tarif set * quantité) = net vendeur
+      if (!next.setLines) {
+        const netCents = Math.round((d.net_seller_amount ?? 0) * 100);
+        if (linesCents !== netCents) {
+          const fmt = (cents: number) =>
+            `${(cents / 100).toFixed(2).replace(".", ",")} €`;
+          next.netAmount = `La somme des tarifs répartis par set (${fmt(linesCents)}) doit être égale au net vendeur (${fmt(netCents)}).`;
+        }
       }
     }
 

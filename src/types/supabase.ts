@@ -101,6 +101,7 @@ export type Database = {
           line_index: number
           margin_amount: number | null
           net_amount: number | null
+          overrides: Json | null
           piece_ref: string | null
           quantity: number
           sale_id: number
@@ -115,6 +116,7 @@ export type Database = {
           line_index: number
           margin_amount?: number | null
           net_amount?: number | null
+          overrides?: Json | null
           piece_ref?: string | null
           quantity: number
           sale_id: number
@@ -129,6 +131,7 @@ export type Database = {
           line_index?: number
           margin_amount?: number | null
           net_amount?: number | null
+          overrides?: Json | null
           piece_ref?: string | null
           quantity?: number
           sale_id?: number

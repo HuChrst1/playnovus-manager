@@ -6,6 +6,23 @@ import type {
   SaleItemSetDraftInput,
 } from "@/lib/sales-types";
 
+// Helper: nettoie/valide overrides (attendu: { [piece_ref]: number })
+function normalizeOverrides(v: unknown): Record<string, number> | null {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return null;
+
+  const raw = v as Record<string, unknown>;
+  const out: Record<string, number> = {};
+
+  for (const [k, val] of Object.entries(raw)) {
+    const key = String(k ?? "").trim();
+    const n = Number(val);
+    if (!key) continue;
+    if (!Number.isFinite(n) || n <= 0) continue;
+    out[key] = n;
+  }
+
+  return Object.keys(out).length > 0 ? out : null;
+}
 /**
  * Charge le BOM d'un set et le renvoie sous forme de { piece_ref, quantity }.
  */
@@ -64,14 +81,29 @@ export async function getPiecesForSaleItemSet(
   item: SaleItemSetDraftInput
 ): Promise<PieceDemand[]> {
   if (!item.set_id) {
-    throw new Error(
-      "getPiecesForSaleItemSet - set_id manquant pour une ligne SET"
-    );
+    throw new Error("getPiecesForSaleItemSet - set_id manquant pour une ligne SET");
   }
 
   const qtySets = Number(item.quantity ?? 0);
   if (!Number.isFinite(qtySets) || qtySets <= 0) return [];
 
+  // ✅ OPTIMISÉ : si overrides existe => on NE CHARGE PAS le BOM
+  const ov = normalizeOverrides((item as any).overrides);
+  if (ov) {
+    return Object.entries(ov).map(([piece_ref, quantity]) => ({
+      piece_ref,
+      quantity,
+    }));
+  }
+
+  // ✅ Compat: si piece_overrides est un mapping (ancien front), on le prend aussi
+  const ovLegacyMap = normalizeOverrides((item as any).piece_overrides);
+  if (ovLegacyMap) {
+    return Object.entries(ovLegacyMap).map(([piece_ref, quantity]) => ({
+      piece_ref,
+      quantity,
+    }));
+  }
   // 1) BOM
   const bomRows = await fetchBomForSet(item.set_id);
 
@@ -83,24 +115,14 @@ export async function getPiecesForSaleItemSet(
     if (!Number.isFinite(baseQty) || baseQty <= 0) continue;
 
     const totalForThisPiece = baseQty * qtySets;
-    aggregated.set(row.piece_ref, (aggregated.get(row.piece_ref) ?? 0) + totalForThisPiece);
+    aggregated.set(
+      row.piece_ref,
+      (aggregated.get(row.piece_ref) ?? 0) + totalForThisPiece
+    );
   }
 
-  // 3) Overrides (NOUVEAU format): mapping { [piece_ref]: qtyFinalePourLaLigne }
-  if (item.overrides && Object.keys(item.overrides).length > 0) {
-    for (const [pieceRef, rawQty] of Object.entries(item.overrides)) {
-      const overrideQty = Number(rawQty ?? 0);
-      if (!pieceRef) continue;
-
-      if (!Number.isFinite(overrideQty) || overrideQty <= 0) {
-        aggregated.delete(pieceRef);
-      } else {
-        aggregated.set(pieceRef, overrideQty);
-      }
-    }
-  }
-  // 3bis) Compat temporaire (ANCIEN format): tableau piece_overrides
-  else if (item.piece_overrides && item.piece_overrides.length > 0) {
+  // 3) Compat temporaire (ANCIEN format): tableau piece_overrides
+  if (Array.isArray(item.piece_overrides) && item.piece_overrides.length > 0) {
     for (const override of item.piece_overrides) {
       const pieceRef = override.piece_ref;
       const overrideQty = Number(override.quantity ?? 0);

@@ -1,15 +1,16 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { supabaseServer } from "@/lib/supabase-server";
 import { cn } from "@/lib/utils";
+import { SalesStatCard } from "@/components/sales/SalesStatCard";
 import type { SaleRow, SaleItemRow } from "@/lib/sales-types";
 
 export const dynamic = "force-dynamic";
 
 type VentesDetailPageProps = {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 };
 
 const euro = new Intl.NumberFormat("fr-FR", {
@@ -20,26 +21,34 @@ const euro = new Intl.NumberFormat("fr-FR", {
 });
 
 export default async function VenteDetailPage({ params }: VentesDetailPageProps) {
-  const saleId = Number(params.id);
+  const { id } = await params;
+  const saleId = Number(id);
+
   if (!Number.isFinite(saleId) || saleId <= 0) {
     notFound();
   }
 
   // 1) Charger la vente
-  const { data: sale, error: saleError } = await supabase
+  const { data: sale, error: saleError } = await supabaseServer
     .from("sales")
     .select("*")
     .eq("id", saleId)
     .single();
 
-  if (saleError || !sale) {
-    // On peut soit afficher un message, soit renvoyer un 404
-    // Ici, on choisit un 404 pour rester cohérent avec les autres pages de détail.
-    notFound();
-  }
+    if (saleError || !sale) {
+      return (
+        <main className="p-6 space-y-3">
+          <h1 className="text-xl font-semibold">Erreur chargement vente</h1>
+          <pre className="text-xs bg-black/5 p-3 rounded">
+            {JSON.stringify({ saleId, saleError, sale }, null, 2)}
+          </pre>
+          <Link className="underline" href="/ventes">← Retour aux ventes</Link>
+        </main>
+      );
+    }
 
   // 2) Charger les lignes de vente
-  const { data: items, error: itemsError } = await supabase
+  const { data: items, error: itemsError } = await supabaseServer
     .from("sale_items")
     .select("*")
     .eq("sale_id", saleId)
@@ -63,6 +72,22 @@ export default async function VenteDetailPage({ params }: VentesDetailPageProps)
       : null;
 
   const isCancelled = saleRow.status === "CANCELLED";
+
+  const renderHeader = (
+    label: string,
+    align: "left" | "right" | "center" = "left"
+  ) => {
+    const alignClass =
+      align === "right"
+        ? "text-right"
+        : align === "center"
+        ? "text-center"
+        : "text-left";
+
+    return (
+      <th className={cn("px-4 py-3 font-medium", alignClass)}>{label}</th>
+    );
+  };
 
   return (
     <main className="space-y-6">
@@ -107,39 +132,33 @@ export default async function VenteDetailPage({ params }: VentesDetailPageProps)
 
       {/* STATS DE LA VENTE */}
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 items-start">
-        <div className="app-card p-4 space-y-1">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-            Net vendeur
-          </p>
-          <p className="text-2xl font-semibold">{euro.format(net)}</p>
-        </div>
+        <SalesStatCard
+          title="Net vendeur"
+          mainValue={euro.format(net)}
+          color="indigo"
+        />
 
-        <div className="app-card p-4 space-y-1">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-            Coût total (FIFO)
-          </p>
-          <p className="text-2xl font-semibold">
-            {euro.format(totalCost)}
-          </p>
-        </div>
+        <SalesStatCard
+          title="Coût total (FIFO)"
+          mainValue={euro.format(totalCost)}
+          color="orange"
+        />
 
-        <div className="app-card p-4 space-y-1">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-            Marge totale
-          </p>
-          <p className="text-2xl font-semibold">
-            {euro.format(totalMargin)}
-          </p>
-        </div>
+        <SalesStatCard
+          title="Marge totale"
+          mainValue={euro.format(totalMargin)}
+          color="amber"
+        />
 
-        <div className="app-card p-4 space-y-1">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-            Taux de marge
-          </p>
-          <p className="text-2xl font-semibold">
-            {marginRate !== null ? `${(marginRate * 100).toFixed(1)}%` : "—"}
-          </p>
-        </div>
+        <SalesStatCard
+          title="Taux de marge"
+          mainValue={
+            marginRate !== null
+              ? `${(marginRate * 100).toFixed(1)}%`
+              : "—"
+          }
+          color="emerald"
+        />
       </section>
 
       {/* COMMENTAIRE GLOBAL */}
@@ -154,32 +173,16 @@ export default async function VenteDetailPage({ params }: VentesDetailPageProps)
 
       {/* LIGNES DE VENTE */}
       <section className="app-card overflow-hidden">
-        <div className="px-4 pt-4 pb-2 flex items-center justify-between">
-          <h2 className="text-sm font-semibold">Lignes de vente</h2>
-          <p className="text-xs text-muted-foreground">
-            {saleItems.length} ligne(s)
-          </p>
-        </div>
-
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead className="app-table-head">
               <tr>
-                <th className="px-4 py-3 text-left font-medium">Ligne</th>
-                <th className="px-4 py-3 text-left font-medium">Type</th>
-                <th className="px-4 py-3 text-left font-medium">
-                  Réf. set / pièce
-                </th>
-                <th className="px-4 py-3 text-right font-medium">Qté</th>
-                <th className="px-4 py-3 text-right font-medium">
-                  Net ligne
-                </th>
-                <th className="px-4 py-3 text-right font-medium">
-                  Coût (FIFO)
-                </th>
-                <th className="px-4 py-3 text-right font-medium">
-                  Marge
-                </th>
+                {renderHeader("Type", "left")}
+                {renderHeader("Réf. set / pièce", "left")}
+                {renderHeader("Qté", "right")}
+                {renderHeader("Net ligne", "right")}
+                {renderHeader("Coût (FIFO)", "right")}
+                {renderHeader("Marge", "right")}
               </tr>
             </thead>
 
@@ -187,7 +190,7 @@ export default async function VenteDetailPage({ params }: VentesDetailPageProps)
               {saleItems.length === 0 ? (
                 <tr className="border-t border-border">
                   <td
-                    colSpan={7}
+                    colSpan={6}
                     className="px-4 py-6 text-center text-sm text-muted-foreground"
                   >
                     Aucune ligne de vente pour cette vente.
@@ -213,9 +216,6 @@ export default async function VenteDetailPage({ params }: VentesDetailPageProps)
 
                   return (
                     <tr key={item.id} className="app-table-row">
-                      <td className="px-4 py-3 font-mono text-xs">
-                        #{item.line_index + 1}
-                      </td>
                       <td className="px-4 py-3">
                         {labelType}
                         {item.item_kind === "SET" && item.is_partial_set && (
@@ -224,7 +224,19 @@ export default async function VenteDetailPage({ params }: VentesDetailPageProps)
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-3">{refValue}</td>
+                      <td className="px-4 py-3">
+                        {item.item_kind === "SET" && item.set_id ? (
+                          <Link
+                            href={`/ventes/${saleId}/${item.id}`}
+                            className="underline-offset-2 hover:underline text-slate-900"
+                            title="Voir les pièces réellement vendues pour ce set"
+                          >
+                            {refValue}
+                          </Link>
+                        ) : (
+                          refValue
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-right tabular-nums">
                         {item.quantity}
                       </td>
