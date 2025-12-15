@@ -19,7 +19,12 @@ export function ClickableRow({ href, children }: ClickableRowProps) {
     if (
       target.closest("a") ||
       target.closest("button") ||
-      target.closest("[data-row-action='true']")
+      target.closest("[data-row-action='true']") ||
+      target.closest("input") ||
+      target.closest("select") ||
+      target.closest("textarea") ||
+      target.closest("[role='button']") ||
+      target.closest("[role='menuitem']")
     ) {
       return;
     }
@@ -37,7 +42,12 @@ export function ClickableRow({ href, children }: ClickableRowProps) {
     if (
       target.closest("a") ||
       target.closest("button") ||
-      target.closest("[data-row-action='true']")
+      target.closest("[data-row-action='true']") ||
+      target.closest("input") ||
+      target.closest("select") ||
+      target.closest("textarea") ||
+      target.closest("[role='button']") ||
+      target.closest("[role='menuitem']")
     ) {
       return;
     }

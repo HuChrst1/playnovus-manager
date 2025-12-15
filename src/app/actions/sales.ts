@@ -13,8 +13,16 @@ import type {
   StockMovementRow,
   SaleUpdate,
 } from "@/lib/sales-types";
+import type { Tables, TablesInsert } from "@/types/supabase";
+type SaleItemDbRow = Tables<"sale_items">;
+type SaleItemInsertDb = TablesInsert<"sale_items">;
+type StockMovementDbRow = Tables<"stock_movements">;
+type StockMovementInsertDb = TablesInsert<"stock_movements">;
+type SaleItemPiecesInsertDb = TablesInsert<"sale_item_pieces">;
+type SaleItemIdRow = Pick<SaleItemDbRow, "id">;
 import { getPiecesForSaleItem } from "@/lib/sales";
 import { allocateFifoForPiece } from "@/lib/stock";
+
 
 export type CreateSaleValidationError = {
   field: string;
@@ -309,13 +317,13 @@ export async function createSaleAction(
       item: SaleItemDraft,
       index: number,
       opts: { includeOverrides: boolean }
-    ): any => {
+    ): SaleItemInsertDb => {
       const quantity = Number(item.quantity ?? 0);
-    
+
       const resolvedNetAmount =
         isSingleSetSale && item.item_kind === "SET" ? net : item.net_amount ?? null;
-    
-      const base: any = {
+
+      const base: SaleItemInsertDb = {
         sale_id: sale.id,
         line_index: index,
         item_kind: item.item_kind,
@@ -327,47 +335,48 @@ export async function createSaleAction(
         margin_amount: null,
         set_id: null,
         piece_ref: null,
+        // overrides: will be set below if needed
       };
-    
+
       if (item.item_kind === "SET") {
         base.set_id = item.set_id ?? null;
-    
+
         if (opts.includeOverrides) {
           const ov =
             normalizeOverrides((item as any).overrides) ??
             normalizeOverrides((item as any).piece_overrides);
-    
-          base.overrides = ov; // null ou JSON clean
+
+            base.overrides = ov; // null ou JSON clean
         }
       } else {
         base.piece_ref = item.piece_ref ?? null;
         // pas d'overrides pour PIECE
       }
-    
+
       return base;
     };
 
     // Tentative 1: insert AVEC overrides (si la colonne existe).
-    const itemsInsertWithOverrides = draft.items.map((item, index) =>
+    const itemsInsertWithOverrides: SaleItemInsertDb[] = draft.items.map((item, index) =>
       buildItemInsert(item, index, { includeOverrides: true })
     );
 
     // Fallback: si la colonne `overrides` n'existe pas (schema cache PostgREST non à jour, ou DB sans colonne),
     // on réinsère sans ce champ pour ne pas bloquer la création de vente.
-    const itemsInsertWithoutOverrides: SaleItemInsert[] = draft.items.map((item, index) =>
+    const itemsInsertWithoutOverrides: SaleItemInsertDb[] = draft.items.map((item, index) =>
       buildItemInsert(item, index, { includeOverrides: false })
     );
 
-    let insertedItemsRaw: any[] | null = null;
+    let insertedItemsRaw: SaleItemDbRow[] | null = null;
     let itemsError: any = null;
 
     // 1) essai avec overrides
     const attempt1 = await supabase
       .from("sale_items")
-      .insert(itemsInsertWithOverrides as any)
+      .insert(itemsInsertWithOverrides)
       .select("*");
 
-    insertedItemsRaw = (attempt1.data as any[]) ?? null;
+    insertedItemsRaw = attempt1.data ?? null;
     itemsError = attempt1.error ?? null;
 
     // 2) fallback si erreur typique "column overrides" / "schema cache" (PostgREST)
@@ -382,7 +391,7 @@ export async function createSaleAction(
         .insert(itemsInsertWithoutOverrides)
         .select("*");
 
-      insertedItemsRaw = (attempt2.data as any[]) ?? null;
+      insertedItemsRaw = attempt2.data ?? null;
       itemsError = attempt2.error ?? null;
     }
 
@@ -419,29 +428,25 @@ export async function createSaleAction(
 
     // 3) FIFO + mouvements OUT dans stock_movements + calcul des coûts/marges
     try {
-      const movementsToInsert: StockMovementInsert[] = [];
+      const movementsToInsert: StockMovementInsertDb[] = [];
 
-      const saleItemPiecesToInsert: Array<{
-        sale_id: number;
-        sale_item_id: number;
-        piece_ref: string;
-        quantity: number;
-        unit_cost: number;
-        lot_id: string | null;
-      }> = [];
+      const saleItemPiecesToInsert: SaleItemPiecesInsertDb[] = [];
 
-      const toNullableBigintString = (v: unknown): string | null => {
+      const toNullableInt = (v: unknown): number | null => {
         if (v === null || v === undefined) return null;
 
-        if (typeof v === "bigint") return v.toString();
+        if (typeof v === "number" && Number.isFinite(v)) return Math.trunc(v);
+
+        if (typeof v === "bigint") {
+          const n = Number(v);
+          return Number.isSafeInteger(n) ? n : null;
+        }
 
         if (typeof v === "string") {
           const s = v.trim();
-          return s.length ? s : null;
-        }
-
-        if (typeof v === "number" && Number.isFinite(v)) {
-          return String(Math.trunc(v));
+          if (!s) return null;
+          const n = Number(s);
+          return Number.isFinite(n) ? Math.trunc(n) : null;
         }
 
         return null;
@@ -501,7 +506,10 @@ export async function createSaleAction(
             if (!Number.isFinite(q) || q <= 0) continue;
 
             const safeUnitCost = Number.isFinite(uc) ? uc : 0;
-            const safeLotId = toNullableBigintString((c as any).lotId);
+            const safeLotId = toNullableInt((c as Record<string, unknown>)["lotId"]);
+            if (safeLotId === null) {
+              throw new Error(`LotId invalide (FIFO) pour ${pieceRef}`);
+            }
 
             movementsToInsert.push({
               piece_ref: pieceRef,
@@ -549,7 +557,7 @@ export async function createSaleAction(
 
       // 3.4) Insert des mouvements OUT
       if (movementsToInsert.length > 0) {
-        const { error: movErr } = await (supabase as any)
+        const { error: movErr } = await supabase
           .from("stock_movements")
           .insert(movementsToInsert);
 
@@ -558,7 +566,7 @@ export async function createSaleAction(
 
       // 3.4 bis) Snapshot des pièces consommées (sale_item_pieces)
       if (saleItemPiecesToInsert.length > 0) {
-        const { error: snapErr } = await (supabase as any)
+        const { error: snapErr } = await supabase
           .from("sale_item_pieces")
           .insert(saleItemPiecesToInsert);
 
@@ -591,12 +599,12 @@ export async function createSaleAction(
 
       try {
         const saleItemIds = insertedItems.map(i => String(i.id));
-      
-        await (supabase as any)
+
+        await supabase
           .from("sale_item_pieces")
           .delete()
           .eq("sale_id", sale.id);
-      
+
         if (saleItemIds.length > 0) {
           await supabase
             .from("stock_movements")
@@ -604,7 +612,7 @@ export async function createSaleAction(
             .eq("source_type", "SALE")
             .in("source_id", saleItemIds);
         }
-      
+
         // ✅ rollback “vente” lui-même
         await supabase.from("sale_items").delete().eq("sale_id", sale.id);
         await supabase.from("sales").delete().eq("id", sale.id);
@@ -721,7 +729,7 @@ async function loadSaleOutMovementsForCancel(
 ): Promise<{
   sale: SaleRow;
   items: SaleItemRow[];
-  movements: StockMovementRow[];
+  movements: StockMovementDbRow[];
 }> {
   const { sale, items } = await loadSaleForCancel(saleId);
 
@@ -749,15 +757,10 @@ async function loadSaleOutMovementsForCancel(
     );
   }
 
-  const normalizedMovements = (movements ?? []).map((m) => ({
-    ...(m as any),
-    lot_id: toNullableBigintString((m as any).lot_id),
-  })) as StockMovementRow[];
-  
   return {
     sale: sale as SaleRow,
     items: items as SaleItemRow[],
-    movements: normalizedMovements,
+    movements: (movements ?? []) as StockMovementDbRow[],
   };
 }
 
@@ -797,7 +800,7 @@ export async function cancelSaleAction(
 
   const { sale, items, movements } = loaded;
 
-  const mirrorMovements: StockMovementInsert[] = movements.map((m) => ({
+  const mirrorMovements: StockMovementInsertDb[] = movements.map((m) => ({
     piece_ref: m.piece_ref,
     lot_id: m.lot_id,
     direction: "IN",
@@ -809,7 +812,7 @@ export async function cancelSaleAction(
   }));
 
   if (mirrorMovements.length > 0) {
-    const { error: insertError } = await (supabase as any)
+    const { error: insertError } = await supabase
       .from("stock_movements")
       .insert(mirrorMovements);
 
@@ -1075,4 +1078,68 @@ export async function updateSaleMetaAction(
   }
 
   return { ok: true, errors: [], saleId: id };
+}
+
+// 3.6.x - Suppression d'une vente (données de test / admin)
+export async function deleteSaleAction(saleId: number) {
+  const id = Number(saleId);
+
+  if (!Number.isFinite(id) || id <= 0) {
+    return { success: false, error: "saleId invalide" };
+  }
+
+  // 1) Charger les sale_items de la vente (pour supprimer les mouvements)
+  const { data: items, error: itemsError } = await supabase
+    .from("sale_items")
+    .select("id")
+    .eq("sale_id", id)
+    .returns<SaleItemIdRow[]>();
+
+  if (itemsError) {
+    return { success: false, error: itemsError.message };
+  }
+
+  const saleItemIds = (items ?? []).map((x) => String(x.id));
+
+  // 2) Supprimer snapshot sale_item_pieces
+  const { error: sipError } = await supabase
+    .from("sale_item_pieces")
+    .delete()
+    .eq("sale_id", id);
+
+  if (sipError) {
+    return { success: false, error: sipError.message };
+  }
+
+  // 3) Supprimer mouvements de vente (SALE + SALE_CANCEL)
+  if (saleItemIds.length > 0) {
+    const { error: mvError } = await supabase
+      .from("stock_movements")
+      .delete()
+      .in("source_type", ["SALE", "SALE_CANCEL"])
+      .in("source_id", saleItemIds);
+
+    if (mvError) {
+      return { success: false, error: mvError.message };
+    }
+  }
+
+  // 4) Supprimer sale_items
+  const { error: siError } = await supabase
+    .from("sale_items")
+    .delete()
+    .eq("sale_id", id);
+
+  if (siError) {
+    return { success: false, error: siError.message };
+  }
+
+  // 5) Supprimer sale
+  const { error: sError } = await supabase.from("sales").delete().eq("id", id);
+
+  if (sError) {
+    return { success: false, error: sError.message };
+  }
+
+  return { success: true };
 }

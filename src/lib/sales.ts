@@ -5,6 +5,8 @@ import type {
   SaleItemPieceDraftInput,
   SaleItemSetDraftInput,
 } from "@/lib/sales-types";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database, Tables } from "@/types/supabase";
 
 // Helper: nettoie/valide overrides (attendu: { [piece_ref]: number })
 function normalizeOverrides(v: unknown): Record<string, number> | null {
@@ -23,6 +25,7 @@ function normalizeOverrides(v: unknown): Record<string, number> | null {
 
   return Object.keys(out).length > 0 ? out : null;
 }
+
 /**
  * Charge le BOM d'un set et le renvoie sous forme de { piece_ref, quantity }.
  */
@@ -81,7 +84,9 @@ export async function getPiecesForSaleItemSet(
   item: SaleItemSetDraftInput
 ): Promise<PieceDemand[]> {
   if (!item.set_id) {
-    throw new Error("getPiecesForSaleItemSet - set_id manquant pour une ligne SET");
+    throw new Error(
+      "getPiecesForSaleItemSet - set_id manquant pour une ligne SET"
+    );
   }
 
   const qtySets = Number(item.quantity ?? 0);
@@ -104,6 +109,7 @@ export async function getPiecesForSaleItemSet(
       quantity,
     }));
   }
+
   // 1) BOM
   const bomRows = await fetchBomForSet(item.set_id);
 
@@ -149,10 +155,170 @@ export async function getPiecesForSaleItemSet(
 /**
  * 3.2.2.4 - Helper unifié
  */
-export async function getPiecesForSaleItem(item: SaleItemDraft): Promise<PieceDemand[]> {
+export async function getPiecesForSaleItem(
+  item: SaleItemDraft
+): Promise<PieceDemand[]> {
   if (item.item_kind === "PIECE") {
     return getPiecesForSaleItemPiece(item);
   }
   // item_kind === "SET"
   return getPiecesForSaleItemSet(item);
+}
+
+// ------------------------------------------------------------
+// 3.6.1 (A) DATA — Liste "commandes" pour /ventes (agrégée)
+// ------------------------------------------------------------
+
+export type SalesListParams = {
+  from?: string; // ISO date/time
+  to?: string; // ISO date/time
+  channel?: string;
+  status?: string; // ex: "CONFIRMED"
+  type?: "SET" | "PIECE";
+  limit?: number;
+  offset?: number;
+};
+
+export type SalesListRow = {
+  sale_id: number;
+  paid_at: string;
+  sales_channel: string;
+  sale_type: "SET" | "PIECE" | "MIXED";
+  net_seller_amount: number;
+
+  total_cost_amount: number;
+  total_margin_amount: number;
+  margin_rate: number | null;
+
+  sets_count: number;
+  pieces_lines_count: number;
+  pieces_qty_total: number;
+};
+
+type SalesDbRow = Pick<
+  Tables<"sales">,
+  | "id"
+  | "paid_at"
+  | "sales_channel"
+  | "sale_type"
+  | "status"
+  | "net_seller_amount"
+  | "total_cost_amount"
+  | "total_margin_amount"
+  | "margin_rate"
+>;
+
+type SaleItemMini = Pick<
+  Tables<"sale_items">,
+  "item_kind" | "quantity" | "cost_amount"
+>;
+
+type SalesWithItems = SalesDbRow & {
+  sale_items: SaleItemMini[] | null;
+};
+
+const toNumber = (v: unknown, fallback = 0) => {
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? n : fallback;
+};
+
+/**
+ * Liste paginée des ventes pour la table "commandes".
+ * - 1 seul appel PostgREST : sales + embed sale_items
+ * - Agrégation côté JS (robuste + simple à maintenir)
+ * - Exclut CANCELLED par défaut
+ */
+export async function listSalesForTable(
+  client: SupabaseClient<Database>,
+  params: SalesListParams = {}
+): Promise<{ rows: SalesListRow[]; total: number | null }> {
+  const limit = Math.min(Math.max(params.limit ?? 50, 1), 200);
+  const offset = Math.max(params.offset ?? 0, 0);
+
+  let q = client
+    .from("sales")
+    .select(
+      `
+        id,
+        paid_at,
+        sales_channel,
+        sale_type,
+        status,
+        net_seller_amount,
+        total_cost_amount,
+        total_margin_amount,
+        margin_rate,
+        sale_items (
+          item_kind,
+          quantity,
+          cost_amount
+        )
+      `,
+      { count: "exact" }
+    )
+    .neq("status", "CANCELLED");
+
+  if (params.status) q = q.eq("status", params.status);
+  if (params.channel) q = q.eq("sales_channel", params.channel);
+  if (params.from) q = q.gte("paid_at", params.from);
+  if (params.to) q = q.lte("paid_at", params.to);
+  if (params.type) q = q.eq("sale_type", params.type);
+
+  // IMPORTANT: on garde .returns() à la toute fin, sinon TS perd .eq/.gte/... selon les versions
+  const { data, error, count } = await q
+    .order("paid_at", { ascending: false })
+    .range(offset, offset + limit - 1)
+    .returns<SalesWithItems[]>();
+
+  if (error) throw error;
+
+  const rows: SalesListRow[] = (data ?? []).map((s) => {
+    const items = Array.isArray(s.sale_items) ? s.sale_items : [];
+
+    const sets_count = items.filter((i) => i.item_kind === "SET").length;
+    const pieces_lines_count = items.filter((i) => i.item_kind === "PIECE").length;
+    const pieces_qty_total = items
+      .filter((i) => i.item_kind === "PIECE")
+      .reduce((acc, i) => acc + toNumber(i.quantity, 0), 0);
+
+    // Fallback coût si sales.total_cost_amount est null (ou pas encore rempli)
+    const fallbackCost = items.reduce(
+      (acc, i) => acc + toNumber(i.cost_amount, 0),
+      0
+    );
+
+    const net = toNumber(s.net_seller_amount, 0);
+    const cost = s.total_cost_amount ?? fallbackCost;
+    const margin = s.total_margin_amount ?? net - cost;
+    const marginRate = s.margin_rate ?? (net > 0 ? margin / net : null);
+
+    const derivedType: "SET" | "PIECE" | "MIXED" =
+      sets_count > 0 && pieces_lines_count > 0
+        ? "MIXED"
+        : sets_count > 0
+          ? "SET"
+          : "PIECE";
+
+    // sale_type DB peut être null/unknown selon ton schéma => on sécurise
+    const saleTypeFromDb =
+      s.sale_type === "SET" || s.sale_type === "PIECE" ? s.sale_type : null;
+
+    return {
+      sale_id: s.id,
+      paid_at: s.paid_at,
+      sales_channel: s.sales_channel,
+      sale_type: saleTypeFromDb ?? derivedType,
+      net_seller_amount: net,
+
+      total_cost_amount: cost,
+      total_margin_amount: margin,
+      margin_rate: marginRate,
+
+      sets_count,
+      pieces_lines_count,
+      pieces_qty_total,
+    };
+  });
+
+  return { rows, total: count ?? null };
 }

@@ -1,31 +1,22 @@
-// src/components/sales/SalesTable.tsx
+"use client";
+
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import type { SaleRow } from "@/lib/sales-types";
+import type { SalesListRow } from "@/lib/sales";
+import { ClickableRow } from "@/app/catalogue/ClickableRow";
 
 export type SalesTableSortDir = "asc" | "desc";
 
 export type SalesTableProps = {
-  /**
-   * Liste des ventes à afficher.
-   */
-  sales: SaleRow[];
-
-  /**
-   * Colonne actuellement utilisée pour le tri (ex: "paid_at").
-   */
+  rows: SalesListRow[];
   activeSortKey: string;
-
-  /**
-   * Sens de tri actuel.
-   */
   sortDir: SalesTableSortDir;
 
   /**
-   * Fonction utilitaire fournie par la page pour construire les URLs
-   * de tri. On garde la logique des query params dans la page.
+   * Query string SANS sort/dir (ex: "tab=sales&from=...&channel=...")
+   * On va reconstruire sort/dir côté client.
    */
-  makeSortHref: (columnKey: string) => string;
+  baseQuery: string;
 };
 
 const euro = new Intl.NumberFormat("fr-FR", {
@@ -36,11 +27,27 @@ const euro = new Intl.NumberFormat("fr-FR", {
 });
 
 export function SalesTable({
-  sales,
+  rows,
   activeSortKey,
   sortDir,
-  makeSortHref,
+  baseQuery,
 }: SalesTableProps) {
+  const makeSortHref = (columnKey: string) => {
+    const params = new URLSearchParams(baseQuery);
+
+    if (activeSortKey === columnKey) {
+      const nextDir = sortDir === "asc" ? "desc" : "asc";
+      params.set("sort", columnKey);
+      params.set("dir", nextDir);
+    } else {
+      params.set("sort", columnKey);
+      params.set("dir", "asc");
+    }
+
+    const qs = params.toString();
+    return qs ? `/ventes?${qs}` : "/ventes";
+  };
+
   const renderSortableHeader = (
     label: string,
     columnKey: string,
@@ -80,93 +87,75 @@ export function SalesTable({
         <table className="min-w-full text-sm">
           <thead className="app-table-head">
             <tr>
-              {renderSortableHeader("ID", "id", "left")}
-              {renderSortableHeader("Date paiement", "paid_at", "left")}
-              {renderSortableHeader("Type", "sale_type", "left")}
+              {renderSortableHeader("ID", "sale_id", "left")}
+              {renderSortableHeader("Date", "paid_at", "left")}
               {renderSortableHeader("Canal", "sales_channel", "left")}
-              {renderSortableHeader(
-                "Net vendeur",
-                "net_seller_amount",
-                "right"
-              )}
-              {renderSortableHeader(
-                "Marge",
-                "total_margin_amount",
-                "right"
-              )}
-              {renderSortableHeader("Statut", "status", "center")}
-              <th className="px-4 py-3 text-right font-medium">Actions</th>
+              {renderSortableHeader("Type", "sale_type", "left")}
+              {renderSortableHeader("CA net", "net_seller_amount", "right")}
+              {renderSortableHeader("Coût total", "total_cost_amount", "right")}
+              {renderSortableHeader("Marge", "total_margin_amount", "right")}
+              {renderSortableHeader("Marge %", "margin_rate", "right")}
+              {renderSortableHeader("Nb sets", "sets_count", "right")}
+              {renderSortableHeader("Nb pièces", "pieces_qty_total", "right")}
             </tr>
           </thead>
 
           <tbody>
-            {sales.length === 0 ? (
+            {rows.length === 0 ? (
               <tr className="border-t border-border">
                 <td
-                  colSpan={8}
+                  colSpan={10}
                   className="px-4 py-6 text-center text-sm text-muted-foreground"
                 >
-                  Aucune vente enregistrée pour le moment.
+                  Aucune commande à afficher.
                 </td>
               </tr>
             ) : (
-              sales.map((sale) => {
-                const netAmount = Number(sale.net_seller_amount ?? 0);
-                const marginAmount = Number(sale.total_margin_amount ?? 0);
-
-                const isCancelled = sale.status === "CANCELLED";
+              rows.map((r) => {
+                const href = `/ventes/${r.sale_id}`;
 
                 return (
-                  <tr key={sale.id} className="app-table-row">
-                    <td className="px-4 py-3 font-mono text-xs">
-                      <Link
-                        href={`/ventes/${sale.id}`}
-                        className="underline-offset-2 hover:underline text-slate-900"
-                      >
-                        #{sale.id}
-                      </Link>
-                    </td>
+                  <ClickableRow key={r.sale_id} href={href}>
+                    <td className="px-4 py-3 font-mono text-xs">#{r.sale_id}</td>
+
+                    <td className="px-4 py-3">{formatDate(r.paid_at)}</td>
+
+                    <td className="px-4 py-3">{r.sales_channel}</td>
 
                     <td className="px-4 py-3">
-                      {formatDate(sale.paid_at)}
-                    </td>
-
-                    <td className="px-4 py-3">
-                      {sale.sale_type === "SET" ? "Set" : "Pièces"}
-                    </td>
-
-                    <td className="px-4 py-3">{sale.sales_channel}</td>
-
-                    <td className="px-4 py-3 text-right tabular-nums">
-                      {euro.format(netAmount)}
+                      {r.sale_type === "SET"
+                        ? "SET"
+                        : r.sale_type === "PIECE"
+                        ? "PIECE"
+                        : "MIXED"}
                     </td>
 
                     <td className="px-4 py-3 text-right tabular-nums">
-                      {euro.format(marginAmount)}
+                      {euro.format(Number(r.net_seller_amount ?? 0))}
                     </td>
 
-                    <td className="px-4 py-3 text-center">
-                      <span
-                        className={cn(
-                          "inline-flex rounded-full px-3 py-1 text-[11px] font-medium",
-                          isCancelled
-                            ? "bg-rose-50 text-rose-700"
-                            : "bg-emerald-50 text-emerald-700"
-                        )}
-                      >
-                        {isCancelled ? "Annulée" : "Confirmée"}
-                      </span>
+                    <td className="px-4 py-3 text-right tabular-nums">
+                      {euro.format(Number(r.total_cost_amount ?? 0))}
                     </td>
 
-                    <td className="px-4 py-3 text-right">
-                      <Link
-                        href={`/ventes/${sale.id}`}
-                        className="text-xs font-medium text-primary hover:underline"
-                      >
-                        Voir le détail
-                      </Link>
+                    <td className="px-4 py-3 text-right tabular-nums">
+                      {euro.format(Number(r.total_margin_amount ?? 0))}
                     </td>
-                  </tr>
+
+                    <td className="px-4 py-3 text-right tabular-nums">
+                      {r.margin_rate !== null && r.margin_rate !== undefined
+                        ? `${(r.margin_rate * 100).toFixed(1)}%`
+                        : "—"}
+                    </td>
+
+                    <td className="px-4 py-3 text-right tabular-nums">
+                      {Number(r.sets_count ?? 0)}
+                    </td>
+
+                    <td className="px-4 py-3 text-right tabular-nums">
+                      {Number(r.pieces_qty_total ?? 0)}
+                    </td>
+                  </ClickableRow>
                 );
               })
             )}

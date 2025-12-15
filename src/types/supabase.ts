@@ -208,6 +208,61 @@ export type Database = {
         }
         Relationships: []
       }
+      sale_item_pieces: {
+        Row: {
+          created_at: string
+          id: number
+          lot_id: number
+          piece_ref: string
+          quantity: number
+          sale_id: number
+          sale_item_id: number
+          unit_cost: number | null
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+          lot_id: number
+          piece_ref: string
+          quantity?: number
+          sale_id: number
+          sale_item_id: number
+          unit_cost?: number | null
+        }
+        Update: {
+          created_at?: string
+          id?: number
+          lot_id?: number
+          piece_ref?: string
+          quantity?: number
+          sale_id?: number
+          sale_item_id?: number
+          unit_cost?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sale_item_pieces_lot_id_fkey"
+            columns: ["lot_id"]
+            isOneToOne: false
+            referencedRelation: "lots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sale_item_pieces_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "sales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sale_item_pieces_sale_item_id_fkey"
+            columns: ["sale_item_id"]
+            isOneToOne: false
+            referencedRelation: "sale_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sets_bom: {
         Row: {
           id: number
@@ -410,6 +465,23 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      sold_pieces_journal: {
+        Row: {
+          piece_ref: string | null
+          source: string | null
+          sale_id: number | null
+          sale_item_id: number | null
+          paid_at: string | null
+          sales_channel: string | null
+          sale_type: string | null
+          status: string | null
+          quantity: number | null
+          unit_cost: number | null
+          total_cost: number | null
+          lot_id: string | null
+        }
+        Relationships: []
       }
       stock_journal: {
         Row: {
