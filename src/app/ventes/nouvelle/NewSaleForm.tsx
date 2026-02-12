@@ -12,9 +12,10 @@ import {
   type PieceSelectorErrors,
 } from "@/components/sales/PieceSelector";
 import { cn } from "@/lib/utils";
-import { createSaleAction } from "@/app/actions/sales";
-import type { SaleDraft, SaleType, SalesChannel, PieceOverridesMap } from "@/lib/sales-types";
-import Link from "next/link";
+import { createSaleAction, updateSaleAction, cancelSaleAction } from "@/app/actions/sales";
+import type { SaleDraft, SaleType, SalesChannel, PieceOverridesMap, SaleStatus } from "@/lib/sales-types";
+import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 
 
 type NewSaleFormErrors = Partial<{
@@ -26,21 +27,28 @@ type NewSaleFormErrors = Partial<{
   pieceLines: PieceSelectorErrors;
 }>;
 
-type SubmitResult = {
-  saleId: number;
-  net: number;
-  totalCost: number;
-  totalMargin: number;
-  marginRate: number | null;
-};
-
 type SetLineWithOverrides = SaleDraftSetLine & {
   overrides?: PieceOverridesMap;
   piece_overrides?: PieceOverridesMap;
 };
 
-export function NewSaleForm() {
+type NewSaleFormProps = {
+  mode?: "create" | "edit";
+  saleId?: number; // requis si mode=edit
+  initialDraft?: SaleDraft;
+  onDone?: () => void; // fermer la modale
+};
+
+export function NewSaleForm({
+  mode = "create",
+  saleId,
+  initialDraft,
+  onDone,
+}: NewSaleFormProps) {
   const [saleType, setSaleType] = useState<SaleType>("SET");
+
+  // ✅ statut (edit uniquement)
+  const [status, setStatus] = useState<SaleStatus>("CONFIRMED");
 
   // Champs "header" de la vente
   const [paidAt, setPaidAt] = useState<string>("");
@@ -57,6 +65,18 @@ export function NewSaleForm() {
     return `${Date.now()}_${Math.random().toString(16).slice(2)}`;
   };
 
+  const toDateInputValue = (v: string | null | undefined) => {
+    if (!v) return "";
+    // accepte ISO (2025-...T...) ou déjà YYYY-MM-DD
+    return v.includes("T") ? v.slice(0, 10) : v;
+  };
+  
+  const toFR = (n: number | null | undefined) => {
+    if (typeof n !== "number" || !Number.isFinite(n)) return "";
+    return String(n).replace(".", ",");
+  };
+  
+
   const [setLines, setSetLines] = useState<SaleDraftSetLine[]>(() => [
     {
       id: makeLocalId(),
@@ -69,6 +89,95 @@ export function NewSaleForm() {
   ]);
   const [pieceLines, setPieceLines] = useState<SaleDraftPieceLine[]>([]);
 
+  useEffect(() => {
+    if (mode !== "edit") return;
+    if (!initialDraft) return;
+  
+    setSaleType(initialDraft.sale_type as SaleType);
+    setPaidAt(toDateInputValue(initialDraft.paid_at));
+    setChannel(initialDraft.sales_channel as any);
+    setNetAmount(toFR(Number(initialDraft.net_seller_amount ?? 0)));
+    setComment(initialDraft.comment ?? "");
+
+    // ✅ statut récupéré uniquement en edit
+    setStatus((initialDraft.status ?? "CONFIRMED") as SaleStatus);
+  
+    const items = initialDraft.items ?? [];
+  
+    if (initialDraft.sale_type === "SET") {
+      setPieceLines([]);
+    
+      const setItems = items.filter((it) => it.item_kind === "SET");
+    
+      setSetLines(
+        setItems.map((it) => {
+          const ov = ((it as any).overrides ?? undefined) as any;
+          const hasOv = !!ov && Object.keys(ov).length > 0;
+    
+          return {
+            id: makeLocalId(),
+            item_kind: "SET" as const,
+            set_id: String((it as any).set_id ?? ""),
+            set_label: null,
+            quantity: Math.max(1, Number((it as any).quantity ?? 1)),
+            is_partial_set: Boolean((it as any).is_partial_set) || hasOv,
+            overrides: hasOv ? ov : undefined,
+            net_amount: null,
+            piece_overrides: undefined,
+          };
+        })
+      );
+    
+      // recalcul net_amount unitaire si pack
+      setTimeout(() => {
+        setSetLines((prev) => {
+          if (prev.length <= 1) return prev;
+    
+          return prev.map((l, idx) => {
+            const src = setItems[idx] as any;
+            const total = Number(src?.net_amount ?? 0);
+            const q = Math.max(1, Number(src?.quantity ?? l.quantity ?? 1));
+            const unit = total > 0 ? Math.round((total * 100) / q) / 100 : null;
+            return { ...l, net_amount: unit };
+          });
+        });
+      }, 0);
+    } else {
+      setSetLines([
+        {
+          id: makeLocalId(),
+          item_kind: "SET",
+          set_id: "",
+          quantity: 1,
+          is_partial_set: false,
+          net_amount: null,
+        },
+      ]);
+    
+      const pieceItems = items.filter((it) => it.item_kind === "PIECE");
+      const onlyOnePieceLine = pieceItems.length === 1;
+    
+      setPieceLines(
+        pieceItems.map((it) => {
+          const qty = Math.max(1, Number((it as any).quantity ?? 1));
+          const total = Number((it as any).net_amount ?? 0);
+    
+          return {
+            id: makeLocalId(),
+            item_kind: "PIECE" as const,
+            piece_ref: String((it as any).piece_ref ?? ""),
+            piece_name: null,
+            available_qty: null,
+            quantity: qty,
+            net_amount: onlyOnePieceLine ? null : (total > 0 ? total : null),
+            comment: (it as any).comment ?? null,
+          };
+        })
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, initialDraft]);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formMessage, setFormMessage] = useState<string | null>(null);
 
@@ -77,13 +186,27 @@ export function NewSaleForm() {
 
   // 3.4.4.3 – États de soumission
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [submitResult, setSubmitResult] = useState<SubmitResult | null>(null);
 
+  type BomStockPiece = {
+    piece_ref: string;
+    bom_qty: number;
+    stock_qty: number;
+  };
+  
+  type BomStockResponse = {
+    set_id: string;
+    pieces: BomStockPiece[];
+  };
+  
+  const [bomBySetId, setBomBySetId] = useState<Record<string, BomStockResponse>>({});
+  const [bomLoading, setBomLoading] = useState(false);
+  const [availableByPieceRef, setAvailableByPieceRef] = useState<Record<string, number>>({});
+  const [stockLoading, setStockLoading] = useState(false);
+  const [stockError, setStockError] = useState<string | null>(null);
   // Quand on change de mode (SET <-> PIECE), on reset les messages de soumission
   // pour éviter d'afficher un succès/erreur d'un mode précédent.
   useEffect(() => {
     setSubmitError(null);
-    setSubmitResult(null);
     setFormMessage(null);
     setDraft(null);
 
@@ -95,6 +218,218 @@ export function NewSaleForm() {
       pieceLines: undefined,
     }));
   }, [saleType]);
+
+  const router = useRouter();
+
+  // 3.6.2.5.6 – Précharger BOM+stock par set (pour vérifier dépassement stock en mode SET)
+  useEffect(() => {
+    if (saleType !== "SET") return;
+
+    const setIds = Array.from(
+      new Set(
+        setLines
+          .map((l) => (l.set_id ?? "").trim())
+          .filter((x) => x.length > 0)
+      )
+    );
+
+    if (setIds.length === 0) return;
+
+    let cancelled = false;
+
+    (async () => {
+      setBomLoading(true);
+      try {
+        const missing = setIds.filter((id) => !bomBySetId[id]);
+        if (missing.length === 0) return;
+
+        const resList = await Promise.all(
+          missing.map(async (setId) => {
+            try {
+              const res = await fetch(
+                `/api/sets/${encodeURIComponent(setId)}/bom-stock`,
+                {
+                  method: "GET",
+                  headers: { Accept: "application/json" },
+                }
+              );
+              if (!res.ok) return null;
+              const json = (await res.json()) as BomStockResponse;
+              return json?.set_id ? json : null;
+            } catch {
+              return null;
+            }
+          })
+        );
+
+        if (cancelled) return;
+
+        const patch: Record<string, BomStockResponse> = {};
+        for (const r of resList) {
+          if (r && r.set_id) patch[r.set_id] = r;
+        }
+
+        if (Object.keys(patch).length > 0) {
+          setBomBySetId((prev) => ({ ...prev, ...patch }));
+        }
+      } finally {
+        if (!cancelled) setBomLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saleType, setLines, bomBySetId]);
+
+  // 3.6.2.5.6 – Calcul demande globale (PIECE + SET) puis comparaison au stock_per_piece
+  const stockDemand = useMemo(() => {
+    const demand = new Map<string, number>();
+
+    // PIECE: somme des quantités
+    for (const l of pieceLines) {
+      const ref = (l.piece_ref ?? "").trim();
+      if (!ref) continue;
+      const qty = Number(l.quantity ?? 0);
+      if (!Number.isFinite(qty) || qty <= 0) continue;
+      demand.set(ref, (demand.get(ref) ?? 0) + Math.max(0, qty));
+    }
+
+    // SET: BOM * qty, ou overrides (déjà des quantités finales par ligne)
+    if (saleType === "SET") {
+      for (const line of setLines) {
+        const setId = (line.set_id ?? "").trim();
+        if (!setId) continue;
+
+        const qtySets = Math.max(1, Number(line.quantity ?? 1));
+        const ov = line.overrides ?? line.piece_overrides;
+
+        // Overrides = quantités finales (pas besoin de multiplier par qtySets)
+        if (ov && Object.keys(ov).length > 0) {
+          for (const [pieceRef, q] of Object.entries(ov)) {
+            const ref = String(pieceRef ?? "").trim();
+            const qty = Number(q);
+            if (!ref || !Number.isFinite(qty) || qty <= 0) continue;
+            demand.set(ref, (demand.get(ref) ?? 0) + qty);
+          }
+          continue;
+        }
+
+        const bom = bomBySetId[setId]?.pieces ?? null;
+        if (!bom) continue;
+
+        for (const p of bom) {
+          const ref = (p.piece_ref ?? "").trim();
+          const bomQty = Number(p.bom_qty ?? 0);
+          if (!ref || !Number.isFinite(bomQty) || bomQty <= 0) continue;
+          demand.set(ref, (demand.get(ref) ?? 0) + bomQty * qtySets);
+        }
+      }
+    }
+
+    return demand;
+  }, [saleType, setLines, pieceLines, bomBySetId]);
+
+  const stockRefsKey = useMemo(() => {
+    const refs = Array.from(stockDemand.keys());
+    refs.sort();
+    return refs.join("|");
+  }, [stockDemand]);
+
+  useEffect(() => {
+    const refs = Array.from(stockDemand.keys());
+
+    if (refs.length === 0) {
+      setAvailableByPieceRef({});
+      setStockError(null);
+      setStockLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      setStockLoading(true);
+      setStockError(null);
+
+      try {
+        const { data, error } = await supabase
+          .from("stock_per_piece")
+          .select("piece_ref, total_quantity")
+          .in("piece_ref", refs)
+          .limit(1000000);
+
+        if (cancelled) return;
+
+        if (error) {
+          setStockError(error.message);
+          // En cas d'erreur, on ne bloque pas par défaut (mais on laisse stockLoading=false)
+          setAvailableByPieceRef({});
+          return;
+        }
+
+        const map: Record<string, number> = {};
+        for (const r of (data ?? []) as any[]) {
+          const ref = String(r.piece_ref ?? "").trim();
+          const qty = Number(r.total_quantity ?? 0);
+          if (!ref) continue;
+          map[ref] = Number.isFinite(qty) ? qty : 0;
+        }
+
+        // Si une ref n'est pas renvoyée, on considère stock = 0
+        for (const ref of refs) {
+          if (!(ref in map)) map[ref] = 0;
+        }
+
+        setAvailableByPieceRef(map);
+      } catch (e: any) {
+        if (cancelled) return;
+        setStockError(e?.message ?? "Erreur chargement stock.");
+        setAvailableByPieceRef({});
+      } finally {
+        if (!cancelled) setStockLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stockRefsKey]);
+
+  const overStockIssues = useMemo(() => {
+    const issues: { piece_ref: string; need: number; have: number }[] = [];
+    for (const [ref, need] of stockDemand.entries()) {
+      const have = Number(availableByPieceRef[ref] ?? 0);
+      if (Number.isFinite(have) && need > have) {
+        issues.push({ piece_ref: ref, need, have });
+      }
+    }
+    issues.sort((a, b) => a.piece_ref.localeCompare(b.piece_ref));
+    return issues;
+  }, [stockDemand, availableByPieceRef]);
+
+  const stockOk = overStockIssues.length === 0;
+
+  const stockCheckPending = useMemo(() => {
+    // SET: si un set est saisi mais BOM pas encore chargé, on attend
+    const hasSetIds =
+      saleType === "SET" &&
+      setLines.some((l) => (l.set_id ?? "").trim().length > 0);
+
+    const missingBom =
+      saleType === "SET" &&
+      setLines.some((l) => {
+        const setId = (l.set_id ?? "").trim();
+        return setId.length > 0 && !bomBySetId[setId];
+      });
+
+    // Stock: si on a des refs à vérifier et que ça charge
+    const hasRefs = stockDemand.size > 0;
+
+    return (hasSetIds && (bomLoading || missingBom)) || (hasRefs && stockLoading);
+  }, [saleType, setLines, bomBySetId, bomLoading, stockDemand, stockLoading]);
 
   useEffect(() => {
     if (saleType !== "SET") return;
@@ -140,7 +475,7 @@ export function NewSaleForm() {
 
   const buildDraft = (): SaleDraft => {
     const net = parseDecimalFR(netAmount);
-
+  
     const base: Omit<SaleDraft, "items"> = {
       sale_type: saleType,
       sales_channel: channel,
@@ -148,57 +483,69 @@ export function NewSaleForm() {
       net_seller_amount: Number.isFinite(net) ? net : 0,
       comment: comment?.trim() ? comment.trim() : null,
     };
-
+  
     if (saleType === "SET") {
       const isSingle = setLines.length === 1;
-    
+  
       return {
         ...base,
         items: setLines.map((l) => {
           const line = l as SetLineWithOverrides;
           const qty = Math.max(1, Number(line.quantity || 1));
-    
+          const ov = line.overrides ?? line.piece_overrides;
+          const isPartial = !!ov && Object.keys(ov).length > 0;
+  
           if (isSingle) {
-            // 1 seul set => net_amount total = net vendeur (la DB stocke le total ligne)
             return {
               item_kind: "SET" as const,
               set_id: (line.set_id ?? "").trim(),
               quantity: qty,
-              is_partial_set: Boolean(line.is_partial_set),
+              is_partial_set: isPartial,
+              overrides: isPartial ? ov : undefined,
               net_amount: Number.isFinite(net) ? net : 0,
-              overrides: line.overrides ?? line.piece_overrides ?? undefined,
             };
           }
-    
-          // Pack => line.net_amount = tarif unitaire par set, on stocke le total de ligne
+  
           const unit = line.net_amount;
           const total =
             typeof unit === "number" && Number.isFinite(unit) ? unit * qty : null;
-    
+  
           return {
             item_kind: "SET" as const,
             set_id: (line.set_id ?? "").trim(),
             quantity: qty,
-            is_partial_set: Boolean(line.is_partial_set),
+            is_partial_set: isPartial,
+            overrides: isPartial ? ov : undefined,
             net_amount: total,
-            overrides: line.overrides ?? line.piece_overrides ?? undefined,
           };
         }),
       };
     }
-
+  
+    // ✅ 3.6.2.5.1 : Vente PIECE -> net_amount = TOTAL LIGNE (pas unitaire)
+    // ✅ 1 seule ligne -> total ligne implicite = net vendeur
+    const isSingleLine = pieceLines.length === 1;
+  
     return {
       ...base,
-      items: pieceLines.map((l) => ({
-        item_kind: "PIECE" as const,
-        piece_ref: (l.piece_ref ?? "").trim(),
-        quantity: Math.max(1, Number(l.quantity || 1)),
-        net_amount:
-          typeof l.net_amount === "number" && Number.isFinite(l.net_amount)
-            ? l.net_amount * Math.max(1, Number(l.quantity || 1))
-            : null,
-        comment: l.comment ?? null,
-      })),
+      items: pieceLines.map((l) => {
+        const qty = Math.max(1, Number(l.quantity || 1));
+  
+        const totalLine = isSingleLine
+          ? (Number.isFinite(net) ? net : 0)
+          : (typeof l.net_amount === "number" && Number.isFinite(l.net_amount) && l.net_amount > 0
+              ? l.net_amount
+              : null);
+  
+        return {
+          item_kind: "PIECE" as const,
+          piece_ref: (l.piece_ref ?? "").trim(),
+          quantity: qty,
+          is_partial_set: false,
+          net_amount: totalLine,
+          comment: l.comment ?? null,
+        };
+      }),
     };
   };
 
@@ -229,6 +576,19 @@ export function NewSaleForm() {
         const qty = Number(item && item.item_kind === "SET" ? item.quantity : 0);
 
         const e: { setId?: string; quantity?: string; netAmount?: string } = {};
+
+        const ov =
+          (uiLine as any).overrides ?? (uiLine as any).piece_overrides;
+
+        const hasOv = !!ov && Object.keys(ov).length > 0;
+
+        // Cas legacy : on a un set marqué partiel (ancienne vente) mais aucun snapshot
+        if (uiLine.is_partial_set && !hasOv) {
+          e.setId =
+            e.setId ??
+            "Set partiel : ouvre “Détail des pièces” et clique Enregistrer (snapshot requis).";
+        }
+
         if (!setId) e.setId = "Le SetID est obligatoire.";
         if (!Number.isFinite(qty) || qty <= 0) e.quantity = "La quantité doit être ≥ 1.";
 
@@ -300,19 +660,34 @@ export function NewSaleForm() {
           eLine.quantity = "Quantité > stock disponible.";
         }
 
-        // IMPORTANT: ici net_amount = TARIF PAR PIECE (unitaire) côté UI
-        const unit = uiLine.net_amount;
-        const unitIsOk = typeof unit === "number" && Number.isFinite(unit) && unit > 0;
-        if (!unitIsOk) {
-          eLine.netAmount = "Tarif par pièce obligatoire.";
+        const isSingleLine = pieceLines.length === 1;
+
+        // ✅ 3.6.2.5.1 : ici net_amount = TOTAL DE LA LIGNE (pas unitaire)
+        const total = uiLine.net_amount;
+        const totalIsOk = typeof total === "number" && Number.isFinite(total) && total > 0;
+
+        // 1 seule ligne => pas de tarif réparti obligatoire (il sera implicite = net vendeur)
+        if (!isSingleLine && !totalIsOk) {
+          eLine.netAmount = "Tarif réparti (total ligne) obligatoire.";
         }
 
         if (Object.keys(eLine).length > 0) {
           lineErrors[uiLine.id] = eLine;
         } else {
-          // À ce stade, unitIsOk est forcément vrai (sinon eLine.netAmount aurait été rempli)
-          linesCents += Math.round((unit as number) * qty * 100);
+          if (!isSingleLine) {
+            linesCents += Math.round((total as number) * 100);
+          }
         }
+      }
+
+      if (pieceLines.length === 1) {
+        // 1 ligne => total implicite = net vendeur, donc pas de contrôle de somme,
+        // MAIS on doit quand même remonter les erreurs (ex: dépassement stock)
+        if (Object.keys(lineErrors).length > 0) {
+          next.pieceLines = lineErrors;
+          next.pieceRef = "Merci de corriger les lignes de pièces.";
+        }
+        return next;
       }
 
       if (Object.keys(lineErrors).length > 0) {
@@ -334,17 +709,63 @@ export function NewSaleForm() {
 
   // UX minimale : on calcule en continu si le formulaire est validable
   const canSubmit = useMemo(() => {
+    // ✅ en edit, si on passe en CANCELLED, on autorise la sauvegarde même si le draft est incomplet
+    if (mode === "edit" && status === "CANCELLED") return true;
+
     const d = buildDraft();
     const e = validateDraft(d);
-    return Object.keys(e).length === 0;
+
+    // 3.6.2.5.6 : bouton désactivé si dépassement stock (PIECE + SET)
+    return Object.keys(e).length === 0 && stockOk && !stockCheckPending;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [saleType, channel, paidAt, netAmount, comment, setLines, pieceLines]);
+  }, [
+    mode,
+    status,
+    saleType,
+    channel,
+    paidAt,
+    netAmount,
+    comment,
+    setLines,
+    pieceLines,
+    stockOk,
+    stockCheckPending,
+  ]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setFormMessage(null);
     setSubmitError(null);
-    setSubmitResult(null);
+
+    // ✅ EDIT: changement de statut en "CANCELLED" = annulation (remet stock + conserve la vente)
+    if (mode === "edit" && status === "CANCELLED") {
+      if (!saleId) {
+        setSubmitError("saleId manquant pour l’annulation.");
+        return;
+      }
+
+      setIsSubmitting(true);
+      try {
+        const res = await cancelSaleAction(Number(saleId));
+
+        if (!res.ok) {
+          const msg =
+            res.errors?.[0]?.message ?? "Erreur lors de l’annulation de la vente.";
+          setSubmitError(msg);
+          return;
+        }
+
+        onDone?.(); // ferme la modale + refresh via parent
+        return;
+      } catch (err) {
+        setSubmitError(
+          err instanceof Error ? err.message : "Erreur lors de l’annulation."
+        );
+        return;
+      } finally {
+        setIsSubmitting(false);
+      }
+    }
 
     const nextDraft = buildDraft();
     const nextErrors = validateDraft(nextDraft);
@@ -361,6 +782,26 @@ export function NewSaleForm() {
     setIsSubmitting(true);
 
     try {
+      if (mode === "edit") {
+        if (!saleId) {
+          setSubmitError("saleId manquant pour l’édition.");
+          return;
+        }
+
+        const res = await updateSaleAction(Number(saleId), nextDraft);
+
+        if (!res?.success) {
+          setSubmitError(res?.error ?? "Erreur lors de la mise à jour de la vente.");
+          if ((res as any)?.debug) console.error("updateSaleAction debug:", (res as any).debug);
+          return;
+        }
+
+        // En édition, on ferme et refresh via le parent
+        onDone?.();
+        return;
+      }
+
+      // mode=create
       const res = await createSaleAction(nextDraft);
 
       if (!res?.success || !res.saleId) {
@@ -369,24 +810,10 @@ export function NewSaleForm() {
         return;
       }
 
-      // Stub totals: tant que FIFO n'est pas branché, coût = 0
-      const net = Number(nextDraft.net_seller_amount ?? 0);
-      const totalCost = 0;
-      const totalMargin = net - totalCost;
-      const marginRate = net > 0 ? totalMargin / net : null;
-
-      setSubmitResult({
-        saleId: res.saleId,
-        net,
-        totalCost,
-        totalMargin,
-        marginRate,
-      });
-
-      setFormMessage("Vente enregistrée.");
-
-      // Option redirection directe :
-      // router.push(`/ventes/${res.saleId}`);
+      // ✅ Succès : fermer la modale + rafraîchir la liste
+      router.refresh();
+      onDone?.();
+      return;
     } catch (err) {
       console.error("NewSaleForm - submit error:", err);
       setSubmitError(
@@ -443,14 +870,21 @@ export function NewSaleForm() {
         overStockCount += 1;
       }
 
-      const unit = line.net_amount;
-      const unitOk = typeof unit === "number" && Number.isFinite(unit) && unit > 0;
-      if (!unitOk) {
-        missingUnitCount += 1;
-        continue;
-      }
+      const isSingleLine = pieceLines.length === 1;
 
-      totalCents += Math.round(unit * qty * 100);
+      const total = line.net_amount;
+      const totalOk = typeof total === "number" && Number.isFinite(total) && total > 0;
+
+      if (!isSingleLine) {
+        if (!totalOk) {
+          missingUnitCount += 1;
+          continue;
+        }
+        totalCents += Math.round((total as number) * 100);
+      } else {
+        // 1 ligne : total implicite = net vendeur
+        totalCents = netCents;
+      }
     }
 
     const hasLines = pieceLines.length > 0;
@@ -481,7 +915,17 @@ export function NewSaleForm() {
       if (!pieceSummary.netOk) {
         return "Renseigne un net vendeur (> 0).";
       }
-      if (pieceSummary.overStockCount > 0) {
+      if (stockCheckPending) {
+        return "Vérification du stock en cours…";
+      }
+      if (pieceSummary.overStockCount > 0 || overStockIssues.length > 0) {
+        if (overStockIssues.length > 0) {
+          const details = overStockIssues
+            .map((x) => `${x.piece_ref} (besoin ${x.need}, dispo ${x.have})`)
+            .join(" · ");
+          return `Stock insuffisant : ${details}.`;
+        }
+
         return "Corrige la quantité : elle dépasse le stock disponible.";
       }
       if (pieceSummary.missingUnitCount > 0) {
@@ -493,9 +937,23 @@ export function NewSaleForm() {
       return "Merci de corriger les champs.";
     }
 
-    // SET mode (générique)
+    // SET mode
+    if (stockCheckPending) return "Vérification du stock en cours…";
+
+    if (overStockIssues.length > 0) {
+      const details = overStockIssues
+        .map((x) => `${x.piece_ref} (besoin ${x.need}, dispo ${x.have})`)
+        .join(" · ");
+
+      return `Stock insuffisant : ${details}.`;
+    }
+
+    if (stockError) {
+      return "Impossible de vérifier le stock pour le moment.";
+    }
+
     return "Complète les champs obligatoires pour pouvoir enregistrer.";
-  }, [canSubmit, saleType, pieceSummary]);
+  }, [canSubmit, saleType, pieceSummary, stockCheckPending, overStockIssues, stockError]);
 
   return (
     <div
@@ -512,47 +970,11 @@ export function NewSaleForm() {
       )}
     >
       <form onSubmit={handleSubmit} className="space-y-8 pb-10">
-      {/* 3.4.4.3 – D) Bannière erreur + card succès */}
+      {/* 3.4.4.3 – Bannière erreur */}
       {submitError && (
         <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
           {submitError}
         </div>
-      )}
-
-      {submitResult && (
-        <section className="app-card p-4">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-            Vente enregistrée
-          </p>
-          <div className="mt-2 grid gap-2 md:grid-cols-4 text-xs">
-            <div>
-              <p className="text-[11px] text-muted-foreground">Net vendeur</p>
-              <p className="font-medium">{euro.format(submitResult.net)}</p>
-            </div>
-            <div>
-              <p className="text-[11px] text-muted-foreground">Coût total</p>
-              <p className="font-medium">{euro.format(submitResult.totalCost)}</p>
-            </div>
-            <div>
-              <p className="text-[11px] text-muted-foreground">Marge</p>
-              <p className="font-medium">{euro.format(submitResult.totalMargin)}</p>
-            </div>
-            <div>
-              <p className="text-[11px] text-muted-foreground">% marge</p>
-              <p className="font-medium">
-                {submitResult.marginRate === null
-                  ? "—"
-                  : `${Math.round(submitResult.marginRate * 1000) / 10}%`}
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-3 flex items-center gap-2">
-            <Button asChild type="button" className="h-9 rounded-full px-4">
-              <Link href={`/ventes/${submitResult.saleId}`}>Voir la vente</Link>
-            </Button>
-          </div>
-        </section>
       )}
       {/* TYPE DE VENTE */}
       <section className="space-y-3">
@@ -594,7 +1016,7 @@ export function NewSaleForm() {
       </section>
 
       {/* Infos générales de la vente */}
-      <section className="grid gap-4 md:grid-cols-3">
+      <section className="grid gap-4 md:grid-cols-4">
         <div className="space-y-1.5">
           <Label
             htmlFor="paid_at"
@@ -642,6 +1064,31 @@ export function NewSaleForm() {
             <option value="OTHER">Autre</option>
           </select>
         </div>
+
+        {mode === "edit" && (
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium text-muted-foreground">
+              Statut
+            </Label>
+            <select
+              className={selectClassName}
+              value={status}
+              onChange={(e: ChangeEvent<HTMLSelectElement>) =>
+                setStatus(e.target.value as SaleStatus)
+              }
+              disabled={isSubmitting}
+            >
+              <option value="CONFIRMED">Confirmée</option>
+              <option value="CANCELLED">Annulée</option>
+            </select>
+
+            {status === "CANCELLED" && (
+              <p className="text-xs text-muted-foreground">
+                Annuler remet le stock et conserve la vente dans l’historique.
+              </p>
+            )}
+          </div>
+        )}
 
         <div className="space-y-1.5">
           <Label
@@ -713,7 +1160,14 @@ export function NewSaleForm() {
             <PieceSelector
               value={pieceLines}
               onChange={(next) => {
-                setPieceLines(next);
+                // ✅ 3.6.2.5.2 : si 1 seule ligne, pas de tarif réparti à saisir
+                // on efface net_amount pour éviter une valeur implicite “fantôme”
+                const normalized =
+                  next.length === 1 && next[0]
+                    ? [{ ...next[0], net_amount: null }]
+                    : next;
+
+                setPieceLines(normalized);
                 setErrors((prev) => ({
                   ...prev,
                   pieceRef: undefined,

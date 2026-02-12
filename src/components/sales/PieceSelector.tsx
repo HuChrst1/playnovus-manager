@@ -31,6 +31,7 @@ type PieceSelectorProps = {
   errors?: PieceSelectorErrors;
 };
 
+
 type StockPerPieceRow = {
   piece_ref: string;
   total_quantity: number | null;
@@ -79,7 +80,8 @@ export function PieceSelector({ value, onChange, disabled, errors }: PieceSelect
     []
   );
 
-  const showNetLineAmount = true;
+  // 3.6.2.5.2 : si 1 seule ligne, on masque le champ "tarif réparti"
+  const showNetLineAmount = value.length > 1;
 
   useEffect(() => {
     const q = query.trim();
@@ -271,7 +273,9 @@ export function PieceSelector({ value, onChange, disabled, errors }: PieceSelect
                     <th className="px-4 py-3 font-medium">Pièce</th>
                     <th className="px-4 py-3 font-medium">Stock dispo</th>
                     <th className="px-4 py-3 font-medium">Quantité vendue</th>
-                    {showNetLineAmount && <th className="px-4 py-3 font-medium">Tarif réparti par pièce</th>}
+                    {showNetLineAmount && (
+                      <th className="px-4 py-3 font-medium">Tarif réparti (total ligne)</th>
+                    )}
                     <th className="px-4 py-3 font-medium">Commentaire</th>
                     <th className="px-4 py-3 font-medium text-right">Actions</th>
                   </tr>
@@ -331,7 +335,7 @@ export function PieceSelector({ value, onChange, disabled, errors }: PieceSelect
                               <Input
                                 type="text"
                                 inputMode="decimal"
-                                placeholder="Ex: 3,00"
+                                placeholder="Ex: 10,00"
                                 value={
                                   typeof line.net_amount === "number" && Number.isFinite(line.net_amount)
                                     ? String(line.net_amount).replace(".", ",")
@@ -351,7 +355,7 @@ export function PieceSelector({ value, onChange, disabled, errors }: PieceSelect
                                 Number.isFinite(line.net_amount) &&
                                 line.net_amount > 0 && (
                                   <p className="text-[11px] text-muted-foreground">
-                                    Total ligne : {euro.format(line.net_amount * (line.quantity ?? 1))}
+                                    Total ligne : {euro.format(line.net_amount)}
                                   </p>
                                 )}
                             </div>

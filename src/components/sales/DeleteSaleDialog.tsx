@@ -1,80 +1,77 @@
 "use client";
 
 import * as React from "react";
+import { useTransition } from "react";
 import { useRouter } from "next/navigation";
+
 import { deleteSaleAction } from "@/app/actions/sales";
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 
 export function DeleteSaleDialog({
-    saleId,
-    triggerLabel = "Supprimer",
-    trigger,
-  }: {
-    saleId: number;
-    triggerLabel?: string;
-    trigger?: React.ReactNode;
-  }) {
+  saleId,
+  trigger,
+}: {
+  saleId: number;
+  trigger: React.ReactNode;
+}) {
   const router = useRouter();
-  const [open, setOpen] = React.useState(false);
-  const [pending, startTransition] = React.useTransition();
-  const [error, setError] = React.useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
 
-  const onDelete = () => {
-    setError(null);
+  const handleDelete = () => {
+    const ok = window.confirm(
+      `Supprimer définitivement la vente #${saleId} ?\n\n` +
+        "Cette action est irréversible. Elle supprime définitivement la vente et ses mouvements associés (SALE / SALE_CANCEL / SALE_EDIT)."
+    );
+
+    if (!ok) return;
+
     startTransition(async () => {
-      const res = await deleteSaleAction(saleId);
-      if (!res?.success) {
-        setError(res?.error ?? "Erreur inconnue");
+      const result = await deleteSaleAction(Number(saleId));
+
+      if (!result?.success) {
+        console.error("Erreur suppression vente:", result?.error);
+        window.alert(
+          "Impossible de supprimer cette vente pour le moment.\n\n" +
+            (result?.error || "")
+        );
         return;
       }
-      setOpen(false);
-      router.refresh();
+
+      // Identique à Appro : on recharge la page pour que la ligne disparaisse
+      window.location.reload();
+
+      // (optionnel) si tu préfères : router.refresh();
+      // router.refresh();
     });
   };
 
+  // On injecte onClick sur le trigger (ton bouton poubelle)
+  if (React.isValidElement(trigger)) {
+    const el = trigger as React.ReactElement<any>;
+    return React.cloneElement(el, {
+      disabled: isPending || el.props?.disabled,
+      onClick: (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        handleDelete();
+      },
+      onMouseDown: (e: React.MouseEvent) => {
+        e.stopPropagation();
+        el.props?.onMouseDown?.(e);
+      },
+    });
+  }
+
+  // Fallback si trigger n’est pas un élément React clonable
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {trigger ?? (
-            <Button variant="destructive" size="sm">
-            {triggerLabel}
-            </Button>
-        )}
-        </DialogTrigger>
-
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Supprimer la vente ?</DialogTitle>
-          <DialogDescription>
-            Cette action supprime la vente et ses mouvements associés (SALE / SALE_CANCEL).
-            À utiliser pour nettoyer des ventes de test.
-          </DialogDescription>
-        </DialogHeader>
-
-        {error && (
-          <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm">
-            {error}
-          </div>
-        )}
-
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => setOpen(false)} disabled={pending}>
-            Annuler
-          </Button>
-          <Button variant="destructive" onClick={onDelete} disabled={pending}>
-            {pending ? "Suppression..." : "Supprimer"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <span
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!isPending) handleDelete();
+      }}
+      onMouseDown={(e) => e.stopPropagation()}
+    >
+      {trigger}
+    </span>
   );
 }

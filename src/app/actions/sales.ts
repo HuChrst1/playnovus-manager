@@ -1,6 +1,7 @@
 "use server";
 
 import { supabaseServer as supabase } from "@/lib/supabase-server";
+import { revalidatePath } from "next/cache";
 import type {
   SaleDraft,
   SaleItemDraft,
@@ -127,23 +128,25 @@ function hasNonEmptyOverrides(item: any): boolean {
   const isNonEmptyMap = (v: unknown) => {
     if (!v || typeof v !== "object" || Array.isArray(v)) return false;
     const obj = v as Record<string, unknown>;
+
+    // IMPORTANT: on accepte 0 (set incomplet)
     return Object.keys(obj).some((k) => {
       const key = String(k ?? "").trim();
       const n = Number(obj[k]);
-      return key.length > 0 && Number.isFinite(n) && n > 0;
+      return key.length > 0 && Number.isFinite(n) && n >= 0;
     });
   };
 
-  // nouveau format (map)
   if (isNonEmptyMap(item?.overrides)) return true;
 
-  // compat: ancien format peut être map OU tableau
   if (isNonEmptyMap(item?.piece_overrides)) return true;
+
+  // compat ancien format tableau
   if (Array.isArray(item?.piece_overrides)) {
     return item.piece_overrides.some((o: any) => {
       const ref = String(o?.piece_ref ?? "").trim();
       const q = Number(o?.quantity ?? 0);
-      return ref.length > 0 && Number.isFinite(q) && q > 0;
+      return ref.length > 0 && Number.isFinite(q) && q >= 0;
     });
   }
 
@@ -292,6 +295,7 @@ export async function createSaleAction(
       };
     }
 
+    let updatedSale: SaleRow | null = null;
     const isSingleSetSale = draft.sale_type === "SET" && draft.items.length === 1;
 
     // 2) Insertion dans sale_items
@@ -301,15 +305,19 @@ export async function createSaleAction(
       if (!v || typeof v !== "object" || Array.isArray(v)) return null;
       const raw = v as Record<string, unknown>;
       const cleaned: Record<string, number> = {};
-
+    
       for (const [k, val] of Object.entries(raw)) {
         const key = String(k ?? "").trim();
         const n = Number(val as any);
         if (!key) continue;
-        if (!Number.isFinite(n) || n <= 0) continue;
-        cleaned[key] = n;
+    
+        // IMPORTANT: on garde 0 (set incomplet), on interdit seulement < 0
+        if (!Number.isFinite(n) || n < 0) continue;
+    
+        // stocker un int propre (ton UI envoie déjà des entiers)
+        cleaned[key] = Math.floor(n);
       }
-
+    
       return Object.keys(cleaned).length > 0 ? cleaned : null;
     };
 
@@ -594,6 +602,19 @@ export async function createSaleAction(
       if (saleUpdErr) {
         throw new Error("Impossible de mettre à jour les totaux de la vente.");
       }
+
+      // Recharge la vente avec les totaux recalculés (utile pour l'encart récap côté UI)
+      const { data: saleReload, error: readErr } = await supabase
+        .from("sales")
+        .select("id, total_cost_amount, total_margin_amount, margin_rate, net_seller_amount")
+        .eq("id", sale.id)
+        .single();
+
+      if (readErr) {
+        console.warn("createSaleAction - cannot reload updated sale:", readErr);
+      } else {
+        updatedSale = (saleReload ?? null) as any;
+      }
     } catch (fifoErr: any) {
       console.error("createSaleAction - erreur FIFO/stock_movements:", fifoErr);
 
@@ -629,14 +650,19 @@ export async function createSaleAction(
       };
     }
 
+    // ✅ Rafraîchir les pages liées aux ventes (liste + détail)
+    revalidatePath("/ventes");
+    revalidatePath(`/ventes/${sale.id}`);
+
     return {
       success: true,
       saleId: sale.id,
       debug: {
-        sale,
+        sale: updatedSale ?? sale,
         items: insertedItems,
       },
     };
+
   } catch (e) {
     console.error("createSaleAction - exception:", e);
     return {
@@ -859,6 +885,10 @@ export async function cancelSaleAction(
     );
   }
 
+  // ✅ Rafraîchir les pages liées aux ventes (liste + détail)
+  revalidatePath("/ventes");
+  revalidatePath(`/ventes/${sale.id}`);
+
   return {
     ok: true,
     errors: [],
@@ -1077,18 +1107,47 @@ export async function updateSaleMetaAction(
     };
   }
 
+  // ✅ Rafraîchir les pages liées aux ventes (liste + détail)
+  revalidatePath("/ventes");
+  revalidatePath(`/ventes/${id}`);
+
   return { ok: true, errors: [], saleId: id };
 }
 
-// 3.6.x - Suppression d'une vente (données de test / admin)
+// 3.6.x - Suppression d'une vente (hard delete)
 export async function deleteSaleAction(saleId: number) {
   const id = Number(saleId);
 
   if (!Number.isFinite(id) || id <= 0) {
-    return { success: false, error: "saleId invalide" };
+    return { success: false as const, error: "saleId invalide" };
   }
 
-  // 1) Charger les sale_items de la vente (pour supprimer les mouvements)
+  const { data: lastSale, error: lastSaleErr } = await supabase
+    .from("sales")
+    .select("id")
+    .order("id", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (lastSaleErr) {
+    return { success: false as const, error: lastSaleErr.message };
+  }
+
+  const wasLast = lastSale?.id === id;
+
+  // 0) Supprimer d'abord les mouvements d'édition liés à la vente
+  // (SALE_EDIT = source_id = saleId)
+  const { error: editMvError } = await supabase
+    .from("stock_movements")
+    .delete()
+    .eq("source_type", "SALE_EDIT")
+    .eq("source_id", String(id));
+
+  if (editMvError) {
+    return { success: false as const, error: editMvError.message };
+  }
+
+  // 1) Charger les sale_items de la vente (pour supprimer les mouvements SALE / SALE_CANCEL)
   const { data: items, error: itemsError } = await supabase
     .from("sale_items")
     .select("id")
@@ -1096,7 +1155,7 @@ export async function deleteSaleAction(saleId: number) {
     .returns<SaleItemIdRow[]>();
 
   if (itemsError) {
-    return { success: false, error: itemsError.message };
+    return { success: false as const, error: itemsError.message };
   }
 
   const saleItemIds = (items ?? []).map((x) => String(x.id));
@@ -1108,10 +1167,10 @@ export async function deleteSaleAction(saleId: number) {
     .eq("sale_id", id);
 
   if (sipError) {
-    return { success: false, error: sipError.message };
+    return { success: false as const, error: sipError.message };
   }
 
-  // 3) Supprimer mouvements de vente (SALE + SALE_CANCEL)
+  // 3) Supprimer mouvements de vente (SALE + SALE_CANCEL) liés aux sale_items
   if (saleItemIds.length > 0) {
     const { error: mvError } = await supabase
       .from("stock_movements")
@@ -1120,7 +1179,7 @@ export async function deleteSaleAction(saleId: number) {
       .in("source_id", saleItemIds);
 
     if (mvError) {
-      return { success: false, error: mvError.message };
+      return { success: false as const, error: mvError.message };
     }
   }
 
@@ -1131,15 +1190,422 @@ export async function deleteSaleAction(saleId: number) {
     .eq("sale_id", id);
 
   if (siError) {
-    return { success: false, error: siError.message };
+    return { success: false as const, error: siError.message };
   }
 
-  // 5) Supprimer sale
-  const { error: sError } = await supabase.from("sales").delete().eq("id", id);
+  // 5) Supprimer la vente
+  const { error: sError } = await supabase
+    .from("sales")
+    .delete()
+    .eq("id", id);
 
   if (sError) {
-    return { success: false, error: sError.message };
+    return { success: false as const, error: sError.message };
   }
 
-  return { success: true };
+    // 6) Rafraîchir /ventes côté Next (même si tu reload côté client)
+    revalidatePath("/ventes");
+    revalidatePath(`/ventes/${id}`);
+
+    // ✅ Réattribue le prochain ID uniquement si tu supprimes la dernière vente
+    if (wasLast) {
+      const { error: seqErr } = await supabase.rpc("reset_sales_id_sequence");
+      if (seqErr) {
+        console.warn("reset_sales_id_sequence error:", seqErr);
+        // on ne bloque pas la suppression pour ça
+      }
+    }
+  
+    return { success: true as const };
+}
+
+// Alias (si tu l'utilises ailleurs)
+export async function hardDeleteSaleAction(saleId: number) {
+  return await deleteSaleAction(saleId);
+}
+
+export async function updateSaleAction(saleId: number, draft: SaleDraft) {
+  try {
+    const id = Number(saleId);
+    if (!Number.isFinite(id) || id <= 0) return { success: false, error: "saleId invalide" };
+
+    const validationErrors = validateSaleDraft(draft);
+    if (validationErrors.length > 0) {
+      return {
+        success: false,
+        error: "Données de vente invalides. Merci de corriger les champs.",
+        debug: { validationErrors },
+      };
+    }
+
+    // 0) Charger vente existante
+    const { data: existingSale, error: saleErr } = await supabase
+      .from("sales")
+      .select("*")
+      .eq("id", id)
+      .single();
+
+    if (saleErr || !existingSale) return { success: false, error: "Vente introuvable" };
+    if (existingSale.status === "CANCELLED") {
+      return { success: false, error: "Impossible de modifier une vente annulée." };
+    }
+
+    // 1) Charger items existants (pour rollback stock)
+    const { data: existingItems, error: itemsErr } = await supabase
+      .from("sale_items")
+      .select("*")
+      .eq("sale_id", id);
+
+    if (itemsErr) return { success: false, error: itemsErr.message };
+
+    const itemIds = (existingItems ?? []).map((x: any) => String(x.id));
+
+    // 2) Nettoyer les mouvements de stock liés à l'ancienne version de la vente
+    // IMPORTANT: ne pas créer de mouvements IN "SALE_EDIT" ici.
+    // Le retour stock se fait en supprimant les mouvements OUT "SALE" (et leurs annulations éventuelles)
+    // associés aux anciens sale_items, puis on recrée la vente (nouveaux sale_items + FIFO + mouvements SALE).
+
+    // Supprime d'abord toute trace d'anciens rollbacks d'édition sur cette vente (si existants)
+    const { error: delEditMvErr } = await supabase
+      .from("stock_movements")
+      .delete()
+      .eq("source_type", "SALE_EDIT")
+      .eq("source_id", String(id));
+
+    if (delEditMvErr) return { success: false, error: delEditMvErr.message };
+
+    // Puis supprime les mouvements liés aux anciens sale_items (SALE + SALE_CANCEL)
+    if (itemIds.length > 0) {
+      const { error: mvDelErr } = await supabase
+        .from("stock_movements")
+        .delete()
+        .in("source_type", ["SALE", "SALE_CANCEL"])
+        .in("source_id", itemIds);
+
+      if (mvDelErr) return { success: false, error: mvDelErr.message };
+    }
+
+    // 3) Nettoyer anciennes lignes + snapshot
+    await supabase.from("sale_item_pieces").delete().eq("sale_id", id);
+    await supabase.from("sale_items").delete().eq("sale_id", id);
+
+    // 4) Mettre à jour la vente (même ID)
+    const net = Number(draft.net_seller_amount);
+
+    const { error: updSaleErr } = await supabase
+      .from("sales")
+      .update({
+        sale_type: draft.sale_type,
+        sales_channel: String(draft.sales_channel),
+        paid_at: draft.paid_at,
+        net_seller_amount: net,
+        comment: draft.comment ?? null,
+        status: "CONFIRMED",
+        currency: draft.currency ?? existingSale.currency ?? "EUR",
+        total_cost_amount: 0,
+        total_margin_amount: 0,
+        margin_rate: null,
+      })
+      .eq("id", id);
+
+    if (updSaleErr) return { success: false, error: updSaleErr.message };
+
+    // 5) Réinsérer sale_items + FIFO (copie de ta logique createSaleAction)
+    const isSingleSetSale = draft.sale_type === "SET" && draft.items.length === 1;
+
+    const normalizeOverrides = (v: unknown): Record<string, number> | null => {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return null;
+  const raw = v as Record<string, unknown>;
+  const cleaned: Record<string, number> = {};
+
+  for (const [k, val] of Object.entries(raw)) {
+    const key = String(k ?? "").trim();
+    const n = Number(val as any);
+    if (!key) continue;
+    if (!Number.isFinite(n) || n < 0) continue; // garde 0
+    cleaned[key] = Math.floor(n);
+  }
+
+  return Object.keys(cleaned).length > 0 ? cleaned : null;
+};
+
+    const buildItemInsert = (
+      item: SaleItemDraft,
+      index: number,
+      opts: { includeOverrides: boolean }
+    ): SaleItemInsertDb => {
+      const quantity = Number(item.quantity ?? 0);
+
+      const resolvedNetAmount =
+        isSingleSetSale && item.item_kind === "SET" ? net : item.net_amount ?? null;
+
+      const base: SaleItemInsertDb = {
+        sale_id: id,
+        line_index: index,
+        item_kind: item.item_kind,
+        quantity,
+        is_partial_set: item.is_partial_set ?? false,
+        comment: item.comment ?? null,
+        net_amount: resolvedNetAmount,
+        cost_amount: null,
+        margin_amount: null,
+        set_id: null,
+        piece_ref: null,
+      };
+
+      if (item.item_kind === "SET") {
+        base.set_id = item.set_id ?? null;
+        if (opts.includeOverrides) {
+          const ov =
+            normalizeOverrides((item as any).overrides) ??
+            normalizeOverrides((item as any).piece_overrides);
+          base.overrides = ov;
+        }
+      } else {
+        base.piece_ref = item.piece_ref ?? null;
+      }
+
+      return base;
+    };
+
+    const itemsInsertWithOverrides = draft.items.map((item, index) =>
+      buildItemInsert(item, index, { includeOverrides: true })
+    );
+    const itemsInsertWithoutOverrides = draft.items.map((item, index) =>
+      buildItemInsert(item, index, { includeOverrides: false })
+    );
+
+    let insertedItemsRaw: SaleItemDbRow[] | null = null;
+    let itemsInsertError: any = null;
+
+    const attempt1 = await supabase.from("sale_items").insert(itemsInsertWithOverrides).select("*");
+    insertedItemsRaw = attempt1.data ?? null;
+    itemsInsertError = attempt1.error ?? null;
+
+    if (
+      itemsInsertError &&
+      typeof itemsInsertError.message === "string" &&
+      /overrides/i.test(itemsInsertError.message) &&
+      /(schema cache|column)/i.test(itemsInsertError.message)
+    ) {
+      const attempt2 = await supabase.from("sale_items").insert(itemsInsertWithoutOverrides).select("*");
+      insertedItemsRaw = attempt2.data ?? null;
+      itemsInsertError = attempt2.error ?? null;
+    }
+
+    const insertedItems = (insertedItemsRaw ?? []) as SaleItemRow[];
+    if (itemsInsertError || insertedItems.length === 0) {
+      return { success: false, error: "Impossible de réinsérer les lignes (sale_items).", debug: { itemsInsertError } };
+    }
+
+    // 6) FIFO + mouvements OUT + snapshot + totaux
+    const movementsToInsert: StockMovementInsertDb[] = [];
+    const saleItemPiecesToInsert: SaleItemPiecesInsertDb[] = [];
+
+    const toNullableInt = (v: unknown): number | null => {
+      if (v === null || v === undefined) return null;
+      if (typeof v === "number" && Number.isFinite(v)) return Math.trunc(v);
+      if (typeof v === "bigint") {
+        const n = Number(v);
+        return Number.isSafeInteger(n) ? n : null;
+      }
+      if (typeof v === "string") {
+        const s = v.trim();
+        if (!s) return null;
+        const n = Number(s);
+        return Number.isFinite(n) ? Math.trunc(n) : null;
+      }
+      return null;
+    };
+
+    let totalCost = 0;
+
+    const sortedItems = [...insertedItems].sort(
+      (a, b) => (a.line_index ?? 0) - (b.line_index ?? 0)
+    );
+
+    for (const dbItem of sortedItems) {
+      const itemForDemand: SaleItemDraft =
+        dbItem.item_kind === "SET"
+          ? {
+              item_kind: "SET",
+              set_id: String(dbItem.set_id ?? ""),
+              quantity: Number(dbItem.quantity ?? 1),
+              is_partial_set: Boolean(dbItem.is_partial_set),
+              net_amount: dbItem.net_amount ?? null,
+              overrides: normalizeOverrides((dbItem as any).overrides) ?? undefined,
+              comment: dbItem.comment ?? null,
+            }
+          : {
+              item_kind: "PIECE",
+              piece_ref: String(dbItem.piece_ref ?? ""),
+              quantity: Number(dbItem.quantity ?? 1),
+              is_partial_set: Boolean(dbItem.is_partial_set),
+              net_amount: dbItem.net_amount ?? null,
+              comment: dbItem.comment ?? null,
+            };
+
+      const demands = await getPiecesForSaleItem(itemForDemand);
+
+      let lineCost = 0;
+
+      for (const demand of demands) {
+        const pieceRef = (demand.piece_ref ?? "").trim();
+        const qtyNeeded = Number(demand.quantity ?? 0);
+        if (!pieceRef || !Number.isFinite(qtyNeeded) || qtyNeeded <= 0) continue;
+
+        const fifoRes = await allocateFifoForPiece(pieceRef, qtyNeeded);
+        const chunks = fifoRes.chunks;
+        if (!Array.isArray(chunks)) throw new Error(`Réponse FIFO invalide pour ${pieceRef}`);
+
+        for (const c of chunks) {
+          const q = Number(c.quantity ?? 0);
+          const uc = Number(c.unitCost ?? 0);
+          if (!Number.isFinite(q) || q <= 0) continue;
+
+          const safeUnitCost = Number.isFinite(uc) ? uc : 0;
+          const safeLotId = toNullableInt((c as Record<string, unknown>)["lotId"]);
+          if (safeLotId === null) throw new Error(`LotId invalide (FIFO) pour ${pieceRef}`);
+
+          movementsToInsert.push({
+            piece_ref: pieceRef,
+            lot_id: safeLotId,
+            direction: "OUT",
+            quantity: q,
+            unit_cost: safeUnitCost,
+            source_type: "SALE",
+            source_id: String(dbItem.id),
+            comment: `Vente #${id}`,
+          });
+
+          saleItemPiecesToInsert.push({
+            sale_id: id,
+            sale_item_id: dbItem.id,
+            piece_ref: pieceRef,
+            quantity: q,
+            unit_cost: safeUnitCost,
+            lot_id: safeLotId,
+          });
+
+          lineCost += q * safeUnitCost;
+        }
+      }
+
+      totalCost += lineCost;
+
+      const lineNet = Number(dbItem.net_amount ?? 0);
+      const lineNetIsOk = Number.isFinite(lineNet) && lineNet > 0;
+
+      const { error: updErr } = await supabase
+        .from("sale_items")
+        .update({
+          cost_amount: lineCost,
+          margin_amount: lineNetIsOk ? lineNet - lineCost : null,
+        })
+        .eq("id", dbItem.id);
+
+      if (updErr) throw new Error(`Impossible de mettre à jour cost/marge sur sale_items(${dbItem.id}).`);
+    }
+
+    if (movementsToInsert.length > 0) {
+      const { error: movErr } = await supabase.from("stock_movements").insert(movementsToInsert);
+      if (movErr) throw movErr;
+    }
+
+    if (saleItemPiecesToInsert.length > 0) {
+      const { error: snapErr } = await supabase.from("sale_item_pieces").insert(saleItemPiecesToInsert);
+      if (snapErr) throw new Error(`Impossible d'enregistrer sale_item_pieces. ${snapErr.message}`);
+    }
+
+    const totalMargin = net - totalCost;
+    const marginRate = net > 0 ? totalMargin / net : null;
+
+    const { error: totalsErr } = await supabase
+      .from("sales")
+      .update({
+        total_cost_amount: totalCost,
+        total_margin_amount: totalMargin,
+        margin_rate: marginRate,
+      })
+      .eq("id", id);
+
+    if (totalsErr) throw new Error("Impossible de mettre à jour les totaux de la vente.");
+
+    // ✅ Rafraîchir les pages liées aux ventes (liste + détail)
+    revalidatePath("/ventes");
+    revalidatePath(`/ventes/${id}`);
+
+    return { success: true, saleId: id };
+  } catch (e: any) {
+    return { success: false, error: e?.message ?? "Erreur updateSaleAction" };
+  }
+}
+
+export type GetSaleDraftForEditResult =
+  | { ok: true; draft: SaleDraft }
+  | { ok: false; error: string };
+
+export async function getSaleDraftForEditAction(
+  saleId: number
+): Promise<GetSaleDraftForEditResult> {
+  const id = Number(saleId);
+  if (!Number.isFinite(id) || id <= 0) return { ok: false, error: "saleId invalide" };
+
+  const { data: sale, error: saleErr } = await supabase
+    .from("sales")
+    .select("*")
+    .eq("id", id)
+    .single();
+
+  if (saleErr || !sale) return { ok: false, error: "Vente introuvable" };
+
+  const { data: items, error: itemsErr } = await supabase
+    .from("sale_items")
+    .select("*")
+    .eq("sale_id", id)
+    .order("line_index", { ascending: true });
+
+  if (itemsErr) return { ok: false, error: itemsErr.message };
+
+  const saleType: SaleType =
+    sale.sale_type === "SET" || sale.sale_type === "PIECE"
+      ? sale.sale_type
+      : "SET";
+
+      const draft: SaleDraft = {
+        sale_type: saleType,
+        sales_channel: sale.sales_channel,
+        paid_at: sale.paid_at,
+        net_seller_amount: Number(sale.net_seller_amount ?? 0),
+        currency: sale.currency ?? "EUR",
+        comment: sale.comment ?? null,
+    
+        // ✅ statut présent uniquement pour l'edit
+        status: (sale.status ?? "CONFIRMED") as any,
+    
+        items: (items ?? []).map((it: any) => {
+          if (it.item_kind === "SET") {
+            return {
+              item_kind: "SET",
+              set_id: String(it.set_id ?? ""),
+              quantity: Number(it.quantity ?? 1),
+              is_partial_set: Boolean(it.is_partial_set),
+              net_amount: it.net_amount ?? null,
+              overrides: (it.overrides ?? undefined) as any,
+              comment: it.comment ?? null,
+            } as SaleItemDraft;
+          }
+    
+          return {
+            item_kind: "PIECE",
+            piece_ref: String(it.piece_ref ?? ""),
+            quantity: Number(it.quantity ?? 1),
+            is_partial_set: Boolean(it.is_partial_set),
+            net_amount: it.net_amount ?? null,
+            comment: it.comment ?? null,
+          } as SaleItemDraft;
+        }),
+      };
+
+  return { ok: true, draft };
 }

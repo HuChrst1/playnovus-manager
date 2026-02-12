@@ -514,7 +514,10 @@ export type Database = {
       }
     }
     Functions: {
-      [_ in never]: never
+      reset_sales_id_sequence: {
+        Args: Record<string, never>
+        Returns: void
+      }
     }
     Enums: {
       [_ in never]: never

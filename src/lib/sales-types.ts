@@ -28,11 +28,11 @@ export type StockMovementRow = Omit<StockMovementRowBase, "lot_id"> & {
 };
 
 export type StockMovementInsert = Omit<StockMovementInsertBase, "lot_id"> & {
-  lot_id?: string | null;
+  lot_id?: string | number | null;
 };
 
 export type StockMovementUpdate = Omit<StockMovementUpdateBase, "lot_id"> & {
-  lot_id?: string | null;
+  lot_id?: string | number | null;
 };
 
 // IDs pratiques
@@ -53,6 +53,9 @@ export type SaleWithItems = SaleRow & {
  * même si en DB c'est stocké comme string.
  */
 export type SaleType = "SET" | "PIECE";
+
+export type SaleStatus = "CONFIRMED" | "CANCELLED";
+
 export type SalesChannel =
   | "VINTED"
   | "LEBONCOIN"
@@ -64,13 +67,16 @@ export type SalesChannel =
 export type SaleTypeDraft = SaleType;
 export type SalesChannelDraft = SalesChannel;
 
+export type SalesChannelAny = SalesChannel | (string & {});
+
 export type SaleDraftMeta = {
   sale_type: SaleType;
-  sales_channel: SalesChannel | string;
+  sales_channel: SalesChannelAny;
   paid_at: string; // YYYY-MM-DD
   net_seller_amount: number;
   currency?: string;
   comment?: string | null;
+  status?: SaleStatus;
 };
 
 // Demande de consommation pour une pièce (utilisé par le moteur FIFO)
@@ -98,7 +104,7 @@ export type SaleItemPieceDraftInput = {
   item_kind: "PIECE";
   piece_ref: string;
   quantity: number;
-  is_partial_set?: boolean;
+  is_partial_set: boolean;
   net_amount?: number | null;
   comment?: string | null;
 };
@@ -119,5 +125,25 @@ export type SaleDraftPieceLine = {
   piece_ref: string;
   quantity: number;
   net_amount?: number | null;
+  comment?: string | null;
+};
+
+export const isOverridesMap = (v: unknown): v is PieceOverridesMap => {
+  return !!v && typeof v === "object" && !Array.isArray(v);
+};
+
+export const isOverridesLegacyArray = (v: unknown): v is PieceDemand[] => {
+  return Array.isArray(v);
+};
+
+export type SaleDraftSetLine = {
+  id: string;
+  item_kind: "SET";
+  set_id: string;
+  quantity: number;
+  is_partial_set: boolean;
+  net_amount?: number | null; // unitaire côté UI si pack, sinon auto
+  overrides?: PieceOverridesMap;
+  piece_overrides?: PieceOverridesLegacy;
   comment?: string | null;
 };

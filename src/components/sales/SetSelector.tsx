@@ -114,7 +114,7 @@ export function SetSelector({
   }, [activeLineId, queryByLineId]);
 
   const showNetLineAmount = value.length > 1;
-  
+
   const piecesDialogSetId = useMemo(() => {
     if (!piecesDialogLineId) return null;
     const line = value.find((l) => l.id === piecesDialogLineId);
@@ -290,6 +290,9 @@ export function SetSelector({
       <div className="space-y-4">
         {value.map((line) => {
           const lineErr = errors?.[line.id];
+          const hasOverrides =
+            (line.overrides && Object.keys(line.overrides).length > 0) ||
+            (line.piece_overrides && Object.keys(line.piece_overrides).length > 0);
           return (
             <div
               key={line.id}
@@ -302,7 +305,7 @@ export function SetSelector({
                     onClick={() => {
                       setPiecesDialogLineId(line.id);
                     }}
-                    disabled={disabled || !(line.set_label && (line.set_id ?? "").trim())}
+                    disabled={disabled || !((line.set_id ?? "").trim().length > 0)}
                     className={cn(
                       "inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs font-medium",
                       "bg-white/70 hover:bg-white shadow-[0_10px_25px_rgba(15,23,42,0.10)]",
@@ -313,12 +316,15 @@ export function SetSelector({
                     <Boxes className="h-4 w-4" />
                     Détail des pièces
                   </button>
-                  {((line.overrides && Object.keys(line.overrides).length > 0) ||
-                    (line.piece_overrides && Object.keys(line.piece_overrides).length > 0)) && (
+                  {hasOverrides ? (
                     <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-800">
-                      Set partiel (détail)
+                        Set partiel
                     </span>
-                  )}
+                    ) : line.is_partial_set ? (
+                    <span className="inline-flex items-center rounded-full bg-rose-50 px-2 py-1 text-[11px] font-semibold text-rose-800">
+                        Set partiel (snapshot manquant)
+                    </span>
+                    ) : null}
                 </div>
                 {value.length > 1 && (
                   <button
@@ -335,9 +341,9 @@ export function SetSelector({
 
               <div
                 className={cn(
-                  "mt-3 grid gap-4",
-                  showNetLineAmount ? "md:grid-cols-4" : "md:grid-cols-3"
-                )}
+                    "mt-3 grid gap-4",
+                    showNetLineAmount ? "md:grid-cols-3" : "md:grid-cols-2"
+                  )}
               >
                 <div className="space-y-1.5">
                   <Label className="text-xs font-medium text-muted-foreground">
@@ -365,9 +371,12 @@ export function SetSelector({
                         // Tant qu'on n'a pas sélectionné dans la liste, on conserve la saisie
                         // dans set_id (utile si l'utilisateur tape directement la réf complète).
                         updateLine(line.id, {
-                          set_id: nextQ,
-                          set_label: null,
-                        });
+                            set_id: nextQ,
+                            set_label: null,
+                            overrides: undefined,
+                            piece_overrides: undefined,
+                            is_partial_set: false,
+                          });
                       }}
                       placeholder="Ex: 3666"
                       className={cn(
@@ -468,11 +477,24 @@ export function SetSelector({
                     type="number"
                     min={1}
                     value={String(line.quantity ?? 1)}
-                    onChange={(e) =>
-                      updateLine(line.id, {
-                        quantity: Math.max(1, Number(e.target.value || 1)),
-                      })
-                    }
+                    onChange={(e) => {
+                        const nextQty = Math.max(1, Number(e.target.value || 1));
+                      
+                        const hasOv =
+                          (line.overrides && Object.keys(line.overrides).length > 0) ||
+                          (line.piece_overrides && Object.keys(line.piece_overrides).length > 0);
+                      
+                        updateLine(line.id, {
+                          quantity: nextQty,
+                          ...(hasOv
+                            ? {
+                                overrides: undefined,
+                                piece_overrides: undefined,
+                                is_partial_set: false,
+                              }
+                            : {}),
+                        });
+                      }}
                     className={inputClassName(Boolean(lineErr?.quantity))}
                     disabled={disabled}
                   />
@@ -481,33 +503,6 @@ export function SetSelector({
                       {lineErr.quantity}
                     </p>
                   )}
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-muted-foreground">
-                    Set partiel ?
-                  </Label>
-                  <div className="flex items-center gap-2 pt-2">
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 rounded border-[#E3ECF8] text-primary focus-visible:outline-none focus-visible:ring-0"
-                      checked={Boolean(line.is_partial_set)}
-                      onChange={(e) => {
-                        const checked = e.target.checked;
-                        const currentOverrides = line.overrides ?? line.piece_overrides;
-
-                        updateLine(line.id, {
-                          is_partial_set: checked,
-                          overrides: checked ? currentOverrides : undefined,
-                          piece_overrides: undefined,
-                        });
-                      }}
-                      disabled={disabled}
-                    />
-                    <span className="text-xs text-muted-foreground">
-                      Le set n&apos;est pas complet
-                    </span>
-                  </div>
                 </div>
 
                 {showNetLineAmount && (
@@ -576,20 +571,37 @@ export function SetSelector({
             if (!piecesDialogLineId) return;
 
             const line = value.find((l) => l.id === piecesDialogLineId);
-            const qty = line?.quantity ?? 1;
+            const qty = Math.max(1, Number(line?.quantity ?? 1));
             const pieces = piecesDialogData?.pieces ?? [];
 
-            const isPartial = computeIsPartialFromOverrides(pieces, qty, overrides);
+            // ✅ Expand : on fabrique un mapping COMPLET piece_ref -> quantité finale (sur toute la ligne)
+            const expanded: Record<string, number> = {};
+            for (const p of pieces) {
+                const required = Math.max(0, Number(p.bom_qty ?? 0) * qty);
+                const raw =
+                overrides && typeof overrides[p.piece_ref] === "number"
+                    ? overrides[p.piece_ref]
+                    : required;
+
+                expanded[p.piece_ref] = Math.max(0, Math.floor(Number(raw)));
+            }
+
+            // (optionnel) si overrides contient une ref hors BOM, on la garde
+            for (const [k, v] of Object.entries(overrides ?? {})) {
+                if (!(k in expanded)) expanded[k] = Math.max(0, Math.floor(Number(v)));
+            }
+
+            const isPartial = computeIsPartialFromOverrides(pieces, qty, expanded);
 
             updateLine(piecesDialogLineId, {
-              overrides,
-              piece_overrides: undefined,
-              is_partial_set: isPartial,
-            });
+                overrides: isPartial ? expanded : undefined,  // ✅ on stocke le mapping complet
+                piece_overrides: undefined,
+                is_partial_set: isPartial,
+              });
 
             setPiecesDialogLineId(null);
             setPiecesError(null);
-          }}
+            }}
         />
       )}
     </div>

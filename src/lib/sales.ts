@@ -19,8 +19,10 @@ function normalizeOverrides(v: unknown): Record<string, number> | null {
     const key = String(k ?? "").trim();
     const n = Number(val);
     if (!key) continue;
-    if (!Number.isFinite(n) || n <= 0) continue;
-    out[key] = n;
+    // IMPORTANT: on accepte 0 (set incomplet), on interdit seulement < 0
+    if (!Number.isFinite(n) || n < 0) continue;
+    // stocker un int propre (le front envoie déjà des entiers)
+    out[key] = Math.floor(n);
   }
 
   return Object.keys(out).length > 0 ? out : null;
@@ -95,19 +97,16 @@ export async function getPiecesForSaleItemSet(
   // ✅ OPTIMISÉ : si overrides existe => on NE CHARGE PAS le BOM
   const ov = normalizeOverrides((item as any).overrides);
   if (ov) {
-    return Object.entries(ov).map(([piece_ref, quantity]) => ({
-      piece_ref,
-      quantity,
-    }));
+    return Object.entries(ov)
+      .filter(([, q]) => Number(q) > 0)
+      .map(([piece_ref, quantity]) => ({ piece_ref, quantity }));
   }
-
-  // ✅ Compat: si piece_overrides est un mapping (ancien front), on le prend aussi
+  
   const ovLegacyMap = normalizeOverrides((item as any).piece_overrides);
   if (ovLegacyMap) {
-    return Object.entries(ovLegacyMap).map(([piece_ref, quantity]) => ({
-      piece_ref,
-      quantity,
-    }));
+    return Object.entries(ovLegacyMap)
+      .filter(([, q]) => Number(q) > 0)
+      .map(([piece_ref, quantity]) => ({ piece_ref, quantity }));
   }
 
   // 1) BOM
@@ -177,6 +176,8 @@ export type SalesListParams = {
   type?: "SET" | "PIECE";
   limit?: number;
   offset?: number;
+  sort?: string;
+  dir?: "asc" | "desc";
 };
 
 export type SalesListRow = {
@@ -184,6 +185,7 @@ export type SalesListRow = {
   paid_at: string;
   sales_channel: string;
   sale_type: "SET" | "PIECE" | "MIXED";
+  status: string; // "CONFIRMED" | "CANCELLED" (selon ta DB)
   net_seller_amount: number;
 
   total_cost_amount: number;
@@ -234,6 +236,25 @@ export async function listSalesForTable(
 ): Promise<{ rows: SalesListRow[]; total: number | null }> {
   const limit = Math.min(Math.max(params.limit ?? 50, 1), 200);
   const offset = Math.max(params.offset ?? 0, 0);
+  const sortRaw = (params.sort ?? "paid_at").toString();
+const dir: "asc" | "desc" = params.dir === "asc" ? "asc" : "desc";
+
+const allowed = new Set([
+  "sale_id",
+  "paid_at",
+  "sales_channel",
+  "sale_type",
+  "status",
+  "net_seller_amount",
+  "total_cost_amount",
+  "total_margin_amount",
+]);
+
+const sortKey = allowed.has(sortRaw) ? sortRaw : "paid_at";
+
+// mapping UI -> DB
+const primaryDbCol =
+  sortKey === "sale_id" ? "id" : sortKey;
 
   let q = client
     .from("sales")
@@ -255,18 +276,29 @@ export async function listSalesForTable(
         )
       `,
       { count: "exact" }
-    )
-    .neq("status", "CANCELLED");
+    );
 
+  // ✅ On inclut CONFIRMED + CANCELLED par défaut (pas de filtre)
+  // ✅ Si tu veux filtrer, tu passes params.status explicitement
   if (params.status) q = q.eq("status", params.status);
+
   if (params.channel) q = q.eq("sales_channel", params.channel);
   if (params.from) q = q.gte("paid_at", params.from);
   if (params.to) q = q.lte("paid_at", params.to);
   if (params.type) q = q.eq("sale_type", params.type);
 
   // IMPORTANT: on garde .returns() à la toute fin, sinon TS perd .eq/.gte/... selon les versions
-  const { data, error, count } = await q
-    .order("paid_at", { ascending: false })
+  let q2 = q.order(primaryDbCol, {
+    ascending: dir === "asc",
+    nullsFirst: dir === "asc",
+  });
+  
+  // tie-breaker stable (sauf si on trie déjà par id)
+  if (primaryDbCol !== "id") {
+    q2 = q2.order("id", { ascending: false });
+  }
+  
+  const { data, error, count } = await q2
     .range(offset, offset + limit - 1)
     .returns<SalesWithItems[]>();
 
@@ -303,21 +335,30 @@ export async function listSalesForTable(
     const saleTypeFromDb =
       s.sale_type === "SET" || s.sale_type === "PIECE" ? s.sale_type : null;
 
-    return {
-      sale_id: s.id,
-      paid_at: s.paid_at,
-      sales_channel: s.sales_channel,
-      sale_type: saleTypeFromDb ?? derivedType,
-      net_seller_amount: net,
+      const paid_at = typeof s.paid_at === "string" ? s.paid_at : "";
+      const sales_channel = typeof s.sales_channel === "string" ? s.sales_channel : "";
 
-      total_cost_amount: cost,
-      total_margin_amount: margin,
-      margin_rate: marginRate,
+      const statusSafe =
+      s.status === "CONFIRMED" || s.status === "CANCELLED"
+        ? s.status
+        : (String(s.status ?? "CONFIRMED") as any);
 
-      sets_count,
-      pieces_lines_count,
-      pieces_qty_total,
-    };
+        return {
+          sale_id: s.id,
+          paid_at,
+          sales_channel,
+          sale_type: saleTypeFromDb ?? derivedType,
+          status: (s.status ?? "CONFIRMED") as any,
+          net_seller_amount: net,
+        
+          total_cost_amount: cost,
+          total_margin_amount: margin,
+          margin_rate: marginRate,
+        
+          sets_count,
+          pieces_lines_count,
+          pieces_qty_total,
+        };
   });
 
   return { rows, total: count ?? null };

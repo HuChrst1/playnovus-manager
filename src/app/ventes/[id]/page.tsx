@@ -4,6 +4,7 @@ import { supabaseServer } from "@/lib/supabase-server";
 import { cn } from "@/lib/utils";
 import { SalesStatCard } from "@/components/sales/SalesStatCard";
 import type { SaleRow, SaleItemRow } from "@/lib/sales-types";
+import type { ReactNode } from "react";
 
 export const dynamic = "force-dynamic";
 
@@ -214,43 +215,60 @@ export default async function VenteDetailPage({ params }: VentesDetailPageProps)
                       ? item.set_id ?? "—"
                       : item.piece_ref ?? "—";
 
+                  const isSetRow = item.item_kind === "SET" && Boolean(item.set_id);
+                  const href = isSetRow ? `/ventes/${saleId}/${item.id}` : null;
+
+                  const Cell = ({
+                    children,
+                    className,
+                    title,
+                  }: {
+                    children: ReactNode;
+                    className?: string;
+                    title?: string;
+                  }) =>
+                    href ? (
+                      <td className="p-0">
+                        <Link
+                          href={href}
+                          className={cn("block px-4 py-3", className)}
+                          title={title}
+                        >
+                          {children}
+                        </Link>
+                      </td>
+                    ) : (
+                      <td className={cn("px-4 py-3", className)}>{children}</td>
+                    );
+
                   return (
-                    <tr key={item.id} className="app-table-row">
-                      <td className="px-4 py-3">
+                    <tr key={item.id} className={cn("app-table-row", href && "cursor-pointer")}>
+                      <Cell title={href ? "Voir les pièces réellement vendues pour ce set" : undefined}>
                         {labelType}
                         {item.item_kind === "SET" && item.is_partial_set && (
                           <span className="ml-1 text-[11px] rounded-full bg-amber-50 px-2 py-0.5 text-amber-700">
                             Set partiel
                           </span>
                         )}
-                      </td>
-                      <td className="px-4 py-3">
-                        {item.item_kind === "SET" && item.set_id ? (
-                          <Link
-                            href={`/ventes/${saleId}/${item.id}`}
-                            className="underline-offset-2 hover:underline text-slate-900"
-                            title="Voir les pièces réellement vendues pour ce set"
-                          >
-                            {refValue}
-                          </Link>
-                        ) : (
-                          refValue
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-right tabular-nums">
-                        {item.quantity}
-                      </td>
-                      <td className="px-4 py-3 text-right tabular-nums">
+                      </Cell>
+
+                      <Cell
+                        className="text-slate-900"
+                        title={href ? "Voir les pièces réellement vendues pour ce set" : undefined}
+                      >
+                        {refValue}
+                      </Cell>
+
+                      <Cell className="text-right tabular-nums">{item.quantity}</Cell>
+                      <Cell className="text-right tabular-nums">
                         {netLine > 0 ? euro.format(netLine) : "—"}
-                      </td>
-                      <td className="px-4 py-3 text-right tabular-nums">
+                      </Cell>
+                      <Cell className="text-right tabular-nums">
                         {costLine > 0 ? euro.format(costLine) : "—"}
-                      </td>
-                      <td className="px-4 py-3 text-right tabular-nums">
-                        {marginLine !== 0
-                          ? euro.format(marginLine)
-                          : "—"}
-                      </td>
+                      </Cell>
+                      <Cell className="text-right tabular-nums">
+                        {marginLine !== 0 ? euro.format(marginLine) : "—"}
+                      </Cell>
                     </tr>
                   );
                 })

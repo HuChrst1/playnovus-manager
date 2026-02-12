@@ -312,7 +312,20 @@ export function SetPiecesDialog({
                     <Button
                       type="button"
                       className="h-9 rounded-full px-4 text-xs bg-slate-900 text-white hover:bg-slate-900/90"
-                      onClick={() => onSave(localOverrides)}
+                      onClick={() => {
+                        // On envoie un mapping COMPLET (quantités finales) uniquement si le set est partiel.
+                        // Sinon, on renvoie {} pour dire "set complet" (pas d’overrides).
+                        const full: Record<string, number> = {};
+                      
+                        for (const r of rows) {
+                          const ref = String(r.piece_ref ?? "").trim();
+                          if (!ref) continue;
+                          const q = Math.max(0, Math.floor(Number(r.current_qty ?? 0)));
+                          full[ref] = q; // on garde 0 (pièce absente)
+                        }
+                      
+                        onSave(isPartial ? full : {});
+                      }}
                       disabled={disabled || loading || !setId}
                     >
                       Enregistrer
