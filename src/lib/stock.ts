@@ -2,9 +2,12 @@
 
 import "server-only";
 import { supabaseServer as supabase } from "@/lib/supabase-server";
-import type { StockMovementRow } from "@/lib/sales-types";
+import type { Tables, TablesInsert } from "@/types/supabase";
 
-type StockMovementRowBigint = Omit<StockMovementRow, "lot_id"> & {
+type StockMovementDbRow = Tables<"stock_movements">;
+type StockMovementDbInsert = TablesInsert<"stock_movements">;
+
+type StockMovementRowBigint = Omit<StockMovementDbRow, "lot_id"> & {
   lot_id: string | null;
 };
 
@@ -26,6 +29,26 @@ const toNullableBigintString = (v: unknown): string | null => {
 
   if (typeof v === "number" && Number.isFinite(v)) {
     return String(Math.trunc(v));
+  }
+
+  return null;
+};
+
+const toNullableInt = (v: unknown): number | null => {
+  if (v === null || v === undefined) return null;
+
+  if (typeof v === "number" && Number.isFinite(v)) return Math.trunc(v);
+
+  if (typeof v === "bigint") {
+    const n = Number(v);
+    return Number.isSafeInteger(n) ? n : null;
+  }
+
+  if (typeof v === "string") {
+    const s = v.trim();
+    if (!s) return null;
+    const n = Number(s);
+    return Number.isFinite(n) ? Math.trunc(n) : null;
   }
 
   return null;
@@ -134,7 +157,7 @@ export function buildFifoBuckets(movements: StockMovementRowBigint[]): FifoBucke
     const unitCost =
       m.unit_cost !== null && m.unit_cost !== undefined ? Number(m.unit_cost) : 0;
 
-    const lotId = toNullableBigintString((m as any).lot_id);
+    const lotId = toNullableBigintString(m.lot_id);
 
     if (m.direction === "IN") {
       buckets.push({
@@ -182,10 +205,12 @@ export async function fetchMovementsForPiece(
   }
 
   // 🔑 Normalisation bigint-safe
-  return (data ?? []).map((m) => ({
-    ...(m as any),
-    lot_id: toNullableBigintString((m as any).lot_id),
-  })) as StockMovementRowBigint[];
+  const rows = (data ?? []) as StockMovementDbRow[];
+
+  return rows.map((m): StockMovementRowBigint => ({
+    ...m,
+    lot_id: toNullableBigintString(m.lot_id),
+  }));
 }
 
 export async function allocateFifoForPiece(
@@ -285,11 +310,11 @@ export async function debugFifoForPiece(pieceRef: string, requestedQty?: number)
 export async function createStockMovements(
   movements: StockMovementInput[]
 ): Promise<{ success: boolean; error?: string }> {
-  const cleaned = movements
+  const cleaned: StockMovementDbInsert[] = movements
     .filter((m) => m.pieceRef && Number.isFinite(m.quantity) && m.quantity > 0)
-    .map((m) => ({
+    .map((m): StockMovementDbInsert => ({
       piece_ref: m.pieceRef,
-      lot_id: m.lotId ?? null, // bigint-safe string
+      lot_id: toNullableInt(m.lotId),
       direction: m.direction,
       quantity: m.quantity,
       unit_cost: m.unitCost !== undefined && m.unitCost !== null ? Number(m.unitCost) : null,
@@ -300,8 +325,7 @@ export async function createStockMovements(
 
   if (cleaned.length === 0) return { success: true };
 
-  // Tant que les types Supabase ne sont pas régénérés, on bypass TS ici.
-  const { error } = await (supabase as any).from("stock_movements").insert(cleaned);
+  const { error } = await supabase.from("stock_movements").insert(cleaned);
 
   if (error) {
     console.error("createStockMovements - insert error:", error);

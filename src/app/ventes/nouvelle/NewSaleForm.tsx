@@ -13,7 +13,15 @@ import {
 } from "@/components/sales/PieceSelector";
 import { cn } from "@/lib/utils";
 import { createSaleAction, updateSaleAction, cancelSaleAction } from "@/app/actions/sales";
-import type { SaleDraft, SaleType, SalesChannel, PieceOverridesMap, SaleStatus } from "@/lib/sales-types";
+import type {
+  SaleDraft,
+  SaleType,
+  SalesChannel,
+  PieceOverridesMap,
+  SaleStatus,
+  SaleItemSetDraftInput,
+  SaleItemPieceDraftInput,
+} from "@/lib/sales-types";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
@@ -36,13 +44,88 @@ type NewSaleFormProps = {
   mode?: "create" | "edit";
   saleId?: number; // requis si mode=edit
   initialDraft?: SaleDraft;
+  editStockCreditByPieceRef?: Record<string, number>;
   onDone?: () => void; // fermer la modale
+};
+
+type StockPerPieceQtyRow = {
+  piece_ref: string | null;
+  total_quantity: number | null;
+};
+
+const isSetItemDraft = (
+  item: SaleDraft["items"][number]
+): item is SaleItemSetDraftInput => item.item_kind === "SET";
+
+const isPieceItemDraft = (
+  item: SaleDraft["items"][number]
+): item is SaleItemPieceDraftInput => item.item_kind === "PIECE";
+
+const getErrorMessage = (error: unknown, fallback: string) => {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === "object" && error !== null && "message" in error) {
+    const maybeMessage = (error as { message?: unknown }).message;
+    if (typeof maybeMessage === "string" && maybeMessage.trim().length > 0) {
+      return maybeMessage;
+    }
+  }
+  return fallback;
+};
+
+const hasDebugPayload = (value: unknown): value is { debug: unknown } => {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "debug" in value &&
+    (value as { debug?: unknown }).debug !== undefined
+  );
+};
+
+const extractDebugMessage = (debug: unknown): string | null => {
+  if (!debug || typeof debug !== "object") return null;
+
+  const rec = debug as Record<string, unknown>;
+
+  const directMessage = getErrorMessage(rec.message, "");
+  if (directMessage) return directMessage;
+
+  const keysByPriority = [
+    "exception",
+    "fifoErr",
+    "saleError",
+    "itemsError",
+    "itemsInsertError",
+    "deletePiecesErr",
+    "deleteItemsErr",
+  ];
+
+  for (const key of keysByPriority) {
+    const message = getErrorMessage(rec[key], "");
+    if (message) return message;
+  }
+
+  const validationErrors = rec.validationErrors;
+  if (Array.isArray(validationErrors) && validationErrors.length > 0) {
+    const first = validationErrors[0] as { message?: unknown } | undefined;
+    if (first?.message && typeof first.message === "string") {
+      return first.message;
+    }
+  }
+
+  return null;
+};
+
+const logDebug = (label: string, debug: unknown) => {
+  if (process.env.NODE_ENV !== "production") {
+    console.debug(label, debug);
+  }
 };
 
 export function NewSaleForm({
   mode = "create",
   saleId,
   initialDraft,
+  editStockCreditByPieceRef,
   onDone,
 }: NewSaleFormProps) {
   const [saleType, setSaleType] = useState<SaleType>("SET");
@@ -93,9 +176,9 @@ export function NewSaleForm({
     if (mode !== "edit") return;
     if (!initialDraft) return;
   
-    setSaleType(initialDraft.sale_type as SaleType);
+    setSaleType(initialDraft.sale_type);
     setPaidAt(toDateInputValue(initialDraft.paid_at));
-    setChannel(initialDraft.sales_channel as any);
+    setChannel(initialDraft.sales_channel as SalesChannel);
     setNetAmount(toFR(Number(initialDraft.net_seller_amount ?? 0)));
     setComment(initialDraft.comment ?? "");
 
@@ -107,20 +190,20 @@ export function NewSaleForm({
     if (initialDraft.sale_type === "SET") {
       setPieceLines([]);
     
-      const setItems = items.filter((it) => it.item_kind === "SET");
+      const setItems = items.filter(isSetItemDraft);
     
       setSetLines(
         setItems.map((it) => {
-          const ov = ((it as any).overrides ?? undefined) as any;
+          const ov = it.overrides ?? undefined;
           const hasOv = !!ov && Object.keys(ov).length > 0;
     
           return {
             id: makeLocalId(),
             item_kind: "SET" as const,
-            set_id: String((it as any).set_id ?? ""),
+            set_id: String(it.set_id ?? ""),
             set_label: null,
-            quantity: Math.max(1, Number((it as any).quantity ?? 1)),
-            is_partial_set: Boolean((it as any).is_partial_set) || hasOv,
+            quantity: Math.max(1, Number(it.quantity ?? 1)),
+            is_partial_set: Boolean(it.is_partial_set) || hasOv,
             overrides: hasOv ? ov : undefined,
             net_amount: null,
             piece_overrides: undefined,
@@ -134,7 +217,7 @@ export function NewSaleForm({
           if (prev.length <= 1) return prev;
     
           return prev.map((l, idx) => {
-            const src = setItems[idx] as any;
+            const src = setItems[idx];
             const total = Number(src?.net_amount ?? 0);
             const q = Math.max(1, Number(src?.quantity ?? l.quantity ?? 1));
             const unit = total > 0 ? Math.round((total * 100) / q) / 100 : null;
@@ -154,28 +237,27 @@ export function NewSaleForm({
         },
       ]);
     
-      const pieceItems = items.filter((it) => it.item_kind === "PIECE");
+      const pieceItems = items.filter(isPieceItemDraft);
       const onlyOnePieceLine = pieceItems.length === 1;
     
       setPieceLines(
         pieceItems.map((it) => {
-          const qty = Math.max(1, Number((it as any).quantity ?? 1));
-          const total = Number((it as any).net_amount ?? 0);
+          const qty = Math.max(1, Number(it.quantity ?? 1));
+          const total = Number(it.net_amount ?? 0);
     
           return {
             id: makeLocalId(),
             item_kind: "PIECE" as const,
-            piece_ref: String((it as any).piece_ref ?? ""),
+            piece_ref: String(it.piece_ref ?? ""),
             piece_name: null,
             available_qty: null,
             quantity: qty,
             net_amount: onlyOnePieceLine ? null : (total > 0 ? total : null),
-            comment: (it as any).comment ?? null,
+            comment: it.comment ?? null,
           };
         })
       );
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, initialDraft]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -203,6 +285,26 @@ export function NewSaleForm({
   const [availableByPieceRef, setAvailableByPieceRef] = useState<Record<string, number>>({});
   const [stockLoading, setStockLoading] = useState(false);
   const [stockError, setStockError] = useState<string | null>(null);
+
+  const effectiveAvailableByPieceRef = useMemo(() => {
+    // En édition CONFIRMED, on réintègre virtuellement les pièces de la vente en cours.
+    if (mode !== "edit" || status === "CANCELLED") return availableByPieceRef;
+
+    const creditEntries = Object.entries(editStockCreditByPieceRef ?? {});
+    if (creditEntries.length === 0) return availableByPieceRef;
+
+    const merged: Record<string, number> = { ...availableByPieceRef };
+    for (const [rawRef, rawCredit] of creditEntries) {
+      const ref = String(rawRef ?? "").trim();
+      const credit = Number(rawCredit ?? 0);
+      if (!ref || !Number.isFinite(credit) || credit <= 0) continue;
+
+      const base = Number(merged[ref] ?? 0);
+      merged[ref] = (Number.isFinite(base) ? base : 0) + credit;
+    }
+
+    return merged;
+  }, [mode, status, availableByPieceRef, editStockCreditByPieceRef]);
   // Quand on change de mode (SET <-> PIECE), on reset les messages de soumission
   // pour éviter d'afficher un succès/erreur d'un mode précédent.
   useEffect(() => {
@@ -280,7 +382,6 @@ export function NewSaleForm({
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [saleType, setLines, bomBySetId]);
 
   // 3.6.2.5.6 – Calcul demande globale (PIECE + SET) puis comparaison au stock_per_piece
@@ -369,8 +470,9 @@ export function NewSaleForm({
           return;
         }
 
+        const rows = (data ?? []) as StockPerPieceQtyRow[];
         const map: Record<string, number> = {};
-        for (const r of (data ?? []) as any[]) {
+        for (const r of rows) {
           const ref = String(r.piece_ref ?? "").trim();
           const qty = Number(r.total_quantity ?? 0);
           if (!ref) continue;
@@ -383,9 +485,9 @@ export function NewSaleForm({
         }
 
         setAvailableByPieceRef(map);
-      } catch (e: any) {
+      } catch (e: unknown) {
         if (cancelled) return;
-        setStockError(e?.message ?? "Erreur chargement stock.");
+        setStockError(getErrorMessage(e, "Erreur chargement stock."));
         setAvailableByPieceRef({});
       } finally {
         if (!cancelled) setStockLoading(false);
@@ -401,14 +503,14 @@ export function NewSaleForm({
   const overStockIssues = useMemo(() => {
     const issues: { piece_ref: string; need: number; have: number }[] = [];
     for (const [ref, need] of stockDemand.entries()) {
-      const have = Number(availableByPieceRef[ref] ?? 0);
+      const have = Number(effectiveAvailableByPieceRef[ref] ?? 0);
       if (Number.isFinite(have) && need > have) {
         issues.push({ piece_ref: ref, need, have });
       }
     }
     issues.sort((a, b) => a.piece_ref.localeCompare(b.piece_ref));
     return issues;
-  }, [stockDemand, availableByPieceRef]);
+  }, [stockDemand, effectiveAvailableByPieceRef]);
 
   const stockOk = overStockIssues.length === 0;
 
@@ -577,8 +679,7 @@ export function NewSaleForm({
 
         const e: { setId?: string; quantity?: string; netAmount?: string } = {};
 
-        const ov =
-          (uiLine as any).overrides ?? (uiLine as any).piece_overrides;
+        const ov = uiLine.overrides ?? uiLine.piece_overrides;
 
         const hasOv = !!ov && Object.keys(ov).length > 0;
 
@@ -652,11 +753,9 @@ export function NewSaleForm({
         if (!Number.isFinite(qty) || qty <= 0) eLine.quantity = "Quantité invalide.";
 
         // Soft validation stock si on a la dispo
-        if (
-          typeof uiLine.available_qty === "number" &&
-          Number.isFinite(uiLine.available_qty) &&
-          qty > uiLine.available_qty
-        ) {
+        const available =
+          Number(effectiveAvailableByPieceRef[ref] ?? uiLine.available_qty ?? Number.NaN);
+        if (ref && Number.isFinite(available) && qty > available) {
           eLine.quantity = "Quantité > stock disponible.";
         }
 
@@ -791,8 +890,18 @@ export function NewSaleForm({
         const res = await updateSaleAction(Number(saleId), nextDraft);
 
         if (!res?.success) {
-          setSubmitError(res?.error ?? "Erreur lors de la mise à jour de la vente.");
-          if ((res as any)?.debug) console.error("updateSaleAction debug:", (res as any).debug);
+          const fallbackError = "Erreur lors de la mise à jour de la vente.";
+          const baseError = res?.error ?? fallbackError;
+          const debugMessage =
+            hasDebugPayload(res) ? extractDebugMessage(res.debug) : null;
+
+          setSubmitError(
+            debugMessage ? `${baseError} (${debugMessage})` : baseError
+          );
+
+          if (hasDebugPayload(res)) {
+            logDebug("updateSaleAction debug:", res.debug);
+          }
           return;
         }
 
@@ -805,17 +914,30 @@ export function NewSaleForm({
       const res = await createSaleAction(nextDraft);
 
       if (!res?.success || !res.saleId) {
-        setSubmitError(res?.error ?? "Erreur lors de l'enregistrement de la vente.");
-        if (res?.debug) console.error("createSaleAction debug:", res.debug);
+        const fallbackError = "Erreur lors de l'enregistrement de la vente.";
+        const baseError = res?.error ?? fallbackError;
+        const debugMessage =
+          hasDebugPayload(res) ? extractDebugMessage(res.debug) : null;
+
+        setSubmitError(
+          debugMessage ? `${baseError} (${debugMessage})` : baseError
+        );
+
+        if (hasDebugPayload(res)) {
+          logDebug("createSaleAction debug:", res.debug);
+        }
         return;
       }
 
-      // ✅ Succès : fermer la modale + rafraîchir la liste
-      router.refresh();
-      onDone?.();
+      // ✅ Succès : fermer la modale (si présente) ou revenir à /ventes
+      if (onDone) {
+        onDone();
+      } else {
+        router.push("/ventes");
+      }
       return;
     } catch (err) {
-      console.error("NewSaleForm - submit error:", err);
+      logDebug("NewSaleForm - submit error:", err);
       setSubmitError(
         err instanceof Error
           ? err.message
@@ -856,20 +978,16 @@ export function NewSaleForm({
 
     let totalCents = 0;
     let missingUnitCount = 0;
-    let overStockCount = 0;
+    const refsInPieceLines = new Set(
+      pieceLines
+        .map((line) => String(line.piece_ref ?? "").trim())
+        .filter((ref) => ref.length > 0)
+    );
+    const overStockCount = overStockIssues.filter((issue) =>
+      refsInPieceLines.has(issue.piece_ref)
+    ).length;
 
     for (const line of pieceLines) {
-      const qty = Math.max(1, Number(line.quantity || 1));
-
-      const available =
-        typeof line.available_qty === "number" && Number.isFinite(line.available_qty)
-          ? line.available_qty
-          : null;
-
-      if (available !== null && qty > available) {
-        overStockCount += 1;
-      }
-
       const isSingleLine = pieceLines.length === 1;
 
       const total = line.net_amount;
@@ -901,7 +1019,7 @@ export function NewSaleForm({
       overStockCount,
       totalsMatch,
     };
-  }, [saleType, netAmount, pieceLines]);
+  }, [saleType, netAmount, pieceLines, overStockIssues]);
 
   const footerAutoMessage = useMemo(() => {
     // If the form is valid, no hint needed

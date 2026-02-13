@@ -95,14 +95,14 @@ export async function getPiecesForSaleItemSet(
   if (!Number.isFinite(qtySets) || qtySets <= 0) return [];
 
   // ✅ OPTIMISÉ : si overrides existe => on NE CHARGE PAS le BOM
-  const ov = normalizeOverrides((item as any).overrides);
+  const ov = normalizeOverrides(item.overrides);
   if (ov) {
     return Object.entries(ov)
       .filter(([, q]) => Number(q) > 0)
       .map(([piece_ref, quantity]) => ({ piece_ref, quantity }));
   }
   
-  const ovLegacyMap = normalizeOverrides((item as any).piece_overrides);
+  const ovLegacyMap = normalizeOverrides(item.piece_overrides);
   if (ovLegacyMap) {
     return Object.entries(ovLegacyMap)
       .filter(([, q]) => Number(q) > 0)
@@ -338,17 +338,17 @@ const primaryDbCol =
       const paid_at = typeof s.paid_at === "string" ? s.paid_at : "";
       const sales_channel = typeof s.sales_channel === "string" ? s.sales_channel : "";
 
-      const statusSafe =
+    const statusSafe =
       s.status === "CONFIRMED" || s.status === "CANCELLED"
         ? s.status
-        : (String(s.status ?? "CONFIRMED") as any);
+        : "CONFIRMED";
 
         return {
           sale_id: s.id,
           paid_at,
           sales_channel,
           sale_type: saleTypeFromDb ?? derivedType,
-          status: (s.status ?? "CONFIRMED") as any,
+          status: statusSafe,
           net_seller_amount: net,
         
           total_cost_amount: cost,

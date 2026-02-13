@@ -17,24 +17,41 @@ export function EditSaleDialog({ saleId }: { saleId: number }) {
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [draft, setDraft] = React.useState<SaleDraft | null>(null);
+  const [stockCreditByPieceRef, setStockCreditByPieceRef] = React.useState<Record<string, number>>({});
 
   React.useEffect(() => {
     if (!open) return;
 
+    let cancelled = false;
+
     setError(null);
     setDraft(null);
+    setStockCreditByPieceRef({});
     setLoading(true);
 
     (async () => {
-      const res = await getSaleDraftForEditAction(saleId);
-      if (!res.ok) {
-        setError(res.error);
-        setLoading(false);
-        return;
+      try {
+        const res = await getSaleDraftForEditAction(saleId);
+        if (cancelled) return;
+
+        if (!res.ok) {
+          setError(res.error);
+          return;
+        }
+
+        setDraft(res.draft);
+        setStockCreditByPieceRef(res.stockCreditByPieceRef ?? {});
+      } catch (e) {
+        if (cancelled) return;
+        setError(e instanceof Error ? e.message : "Erreur chargement édition.");
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-      setDraft(res.draft);
-      setLoading(false);
     })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [open, saleId]);
 
   return (
@@ -68,6 +85,7 @@ export function EditSaleDialog({ saleId }: { saleId: number }) {
             mode="edit"
             saleId={saleId}
             initialDraft={draft}
+            editStockCreditByPieceRef={stockCreditByPieceRef}
             onDone={() => {
               setOpen(false);
               router.refresh();

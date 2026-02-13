@@ -9,18 +9,17 @@ import type {
   SaleRow,
   SaleItemRow,
   SaleInsert,
-  SaleItemInsert,
-  StockMovementInsert,
-  StockMovementRow,
   SaleUpdate,
 } from "@/lib/sales-types";
 import type { Tables, TablesInsert } from "@/types/supabase";
+import type { PostgrestError } from "@supabase/supabase-js";
 type SaleItemDbRow = Tables<"sale_items">;
 type SaleItemInsertDb = TablesInsert<"sale_items">;
 type StockMovementDbRow = Tables<"stock_movements">;
 type StockMovementInsertDb = TablesInsert<"stock_movements">;
 type SaleItemPiecesInsertDb = TablesInsert<"sale_item_pieces">;
 type SaleItemIdRow = Pick<SaleItemDbRow, "id">;
+type SaleItemPieceQtyRow = Pick<Tables<"sale_item_pieces">, "piece_ref" | "quantity">;
 import { getPiecesForSaleItem } from "@/lib/sales";
 import { allocateFifoForPiece } from "@/lib/stock";
 
@@ -34,8 +33,95 @@ export type CreateSaleActionResult = {
   success: boolean;
   saleId?: number;
   error?: string;
-  debug?: any;
+  debug?: unknown;
 };
+
+export type UpdateSaleActionResult = {
+  success: boolean;
+  saleId?: number;
+  error?: string;
+  debug?: unknown;
+};
+
+type SaleTotalsSnapshot = Pick<
+  SaleRow,
+  | "id"
+  | "total_cost_amount"
+  | "total_margin_amount"
+  | "margin_rate"
+  | "net_seller_amount"
+>;
+
+function normalizeOverrides(v: unknown): Record<string, number> | null {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return null;
+  const raw = v as Record<string, unknown>;
+  const cleaned: Record<string, number> = {};
+
+  for (const [k, val] of Object.entries(raw)) {
+    const key = String(k ?? "").trim();
+    const n = Number(val);
+    if (!key) continue;
+    // IMPORTANT: on garde 0 (set incomplet), on interdit seulement < 0
+    if (!Number.isFinite(n) || n < 0) continue;
+    cleaned[key] = Math.floor(n);
+  }
+
+  return Object.keys(cleaned).length > 0 ? cleaned : null;
+}
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message) return error.message;
+
+  if (typeof error === "object" && error !== null && "message" in error) {
+    const maybeMessage = (error as { message?: unknown }).message;
+    if (typeof maybeMessage === "string" && maybeMessage.trim().length > 0) {
+      return maybeMessage;
+    }
+  }
+
+  return fallback;
+}
+
+function serializePostgrestError(
+  error: PostgrestError | null | undefined
+): Record<string, unknown> | null {
+  if (!error) return null;
+
+  return {
+    message: error.message,
+    code: error.code,
+    details: error.details,
+    hint: error.hint,
+  };
+}
+
+function serializeUnknownError(error: unknown): Record<string, unknown> {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+    };
+  }
+
+  if (typeof error === "object" && error !== null) {
+    const rec = error as Record<string, unknown>;
+    return {
+      message:
+        typeof rec.message === "string"
+          ? rec.message
+          : "Erreur inconnue (objet non-Error).",
+      ...("code" in rec ? { code: rec.code } : {}),
+      ...("details" in rec ? { details: rec.details } : {}),
+      ...("hint" in rec ? { hint: rec.hint } : {}),
+    };
+  }
+
+  return {
+    message: typeof error === "string" ? error : "Erreur inconnue.",
+    value: error,
+  };
+}
 
 /**
  * Validation métier de base pour une demande de création de vente.
@@ -124,28 +210,17 @@ function validateSaleDraft(draft: SaleDraft): CreateSaleValidationError[] {
 }
 
 
-function hasNonEmptyOverrides(item: any): boolean {
-  const isNonEmptyMap = (v: unknown) => {
-    if (!v || typeof v !== "object" || Array.isArray(v)) return false;
-    const obj = v as Record<string, unknown>;
+function hasNonEmptyOverrides(item: SaleItemDraft): boolean {
+  if (item.item_kind !== "SET") return false;
 
-    // IMPORTANT: on accepte 0 (set incomplet)
-    return Object.keys(obj).some((k) => {
-      const key = String(k ?? "").trim();
-      const n = Number(obj[k]);
-      return key.length > 0 && Number.isFinite(n) && n >= 0;
-    });
-  };
-
-  if (isNonEmptyMap(item?.overrides)) return true;
-
-  if (isNonEmptyMap(item?.piece_overrides)) return true;
+  if (normalizeOverrides(item.overrides)) return true;
+  if (normalizeOverrides(item.piece_overrides)) return true;
 
   // compat ancien format tableau
-  if (Array.isArray(item?.piece_overrides)) {
-    return item.piece_overrides.some((o: any) => {
-      const ref = String(o?.piece_ref ?? "").trim();
-      const q = Number(o?.quantity ?? 0);
+  if (Array.isArray(item.piece_overrides)) {
+    return item.piece_overrides.some((o) => {
+      const ref = String(o.piece_ref ?? "").trim();
+      const q = Number(o.quantity ?? 0);
       return ref.length > 0 && Number.isFinite(q) && q >= 0;
     });
   }
@@ -228,7 +303,7 @@ function validateSaleItemDraft(
       }
     }
   } else {
-    const unknownKind = (item as any)?.item_kind;
+    const unknownKind = (item as { item_kind?: unknown }).item_kind;
 
     errors.push({
       field: `${prefix}.item_kind`,
@@ -291,35 +366,14 @@ export async function createSaleAction(
         success: false,
         error:
           "Impossible de créer la vente (erreur lors de l'insertion dans la table sales).",
-        debug: { saleError },
+        debug: { saleError: serializePostgrestError(saleError) },
       };
     }
 
-    let updatedSale: SaleRow | null = null;
+    let updatedSale: SaleTotalsSnapshot | null = null;
     const isSingleSetSale = draft.sale_type === "SET" && draft.items.length === 1;
 
     // 2) Insertion dans sale_items
-
-    // Normalise les overrides (mapping piece_ref -> qty) pour être sûr de stocker un JSON propre.
-    const normalizeOverrides = (v: unknown): Record<string, number> | null => {
-      if (!v || typeof v !== "object" || Array.isArray(v)) return null;
-      const raw = v as Record<string, unknown>;
-      const cleaned: Record<string, number> = {};
-    
-      for (const [k, val] of Object.entries(raw)) {
-        const key = String(k ?? "").trim();
-        const n = Number(val as any);
-        if (!key) continue;
-    
-        // IMPORTANT: on garde 0 (set incomplet), on interdit seulement < 0
-        if (!Number.isFinite(n) || n < 0) continue;
-    
-        // stocker un int propre (ton UI envoie déjà des entiers)
-        cleaned[key] = Math.floor(n);
-      }
-    
-      return Object.keys(cleaned).length > 0 ? cleaned : null;
-    };
 
     const buildItemInsert = (
       item: SaleItemDraft,
@@ -350,11 +404,8 @@ export async function createSaleAction(
         base.set_id = item.set_id ?? null;
 
         if (opts.includeOverrides) {
-          const ov =
-            normalizeOverrides((item as any).overrides) ??
-            normalizeOverrides((item as any).piece_overrides);
-
-            base.overrides = ov; // null ou JSON clean
+          const ov = normalizeOverrides(item.overrides) ?? normalizeOverrides(item.piece_overrides);
+          base.overrides = ov; // null ou JSON clean
         }
       } else {
         base.piece_ref = item.piece_ref ?? null;
@@ -376,7 +427,7 @@ export async function createSaleAction(
     );
 
     let insertedItemsRaw: SaleItemDbRow[] | null = null;
-    let itemsError: any = null;
+    let itemsError: PostgrestError | null = null;
 
     // 1) essai avec overrides
     const attempt1 = await supabase
@@ -516,7 +567,9 @@ export async function createSaleAction(
             const safeUnitCost = Number.isFinite(uc) ? uc : 0;
             const safeLotId = toNullableInt((c as Record<string, unknown>)["lotId"]);
             if (safeLotId === null) {
-              throw new Error(`LotId invalide (FIFO) pour ${pieceRef}`);
+              throw new Error(
+                `LotId manquant dans l'allocation FIFO pour ${pieceRef}. Vérifie les mouvements d'entrée historiques.`
+              );
             }
 
             movementsToInsert.push({
@@ -613,9 +666,9 @@ export async function createSaleAction(
       if (readErr) {
         console.warn("createSaleAction - cannot reload updated sale:", readErr);
       } else {
-        updatedSale = (saleReload ?? null) as any;
+        updatedSale = (saleReload ?? null) as SaleTotalsSnapshot | null;
       }
-    } catch (fifoErr: any) {
+    } catch (fifoErr: unknown) {
       console.error("createSaleAction - erreur FIFO/stock_movements:", fifoErr);
 
       try {
@@ -643,10 +696,11 @@ export async function createSaleAction(
 
       return {
         success: false,
-        error:
-          fifoErr?.message ??
-          "Erreur lors de la consommation de stock (FIFO). Vente annulée.",
-        debug: { fifoErr },
+        error: getErrorMessage(
+          fifoErr,
+          "Erreur lors de la consommation de stock (FIFO). Vente annulée."
+        ),
+        debug: { fifoErr: serializeUnknownError(fifoErr) },
       };
     }
 
@@ -671,7 +725,7 @@ export async function createSaleAction(
         e instanceof Error
           ? e.message
           : "Erreur inattendue lors de la création de la vente.",
-      debug: { e },
+      debug: { exception: serializeUnknownError(e) },
     };
   }
 }
@@ -736,19 +790,6 @@ async function loadSaleForCancel(saleId: number): Promise<LoadedSaleForCancel> {
     items: items as SaleItemRow[],
   };
 }
-
-const toNullableBigintString = (v: unknown): string | null => {
-  if (v === null || v === undefined) return null;
-  if (typeof v === "bigint") return v.toString();
-  if (typeof v === "string") {
-    const s = v.trim();
-    return s.length ? s : null;
-  }
-  if (typeof v === "number" && Number.isFinite(v)) {
-    return String(Math.trunc(v));
-  }
-  return null;
-};
 
 async function loadSaleOutMovementsForCancel(
   saleId: number
@@ -1224,7 +1265,10 @@ export async function hardDeleteSaleAction(saleId: number) {
   return await deleteSaleAction(saleId);
 }
 
-export async function updateSaleAction(saleId: number, draft: SaleDraft) {
+export async function updateSaleAction(
+  saleId: number,
+  draft: SaleDraft
+): Promise<UpdateSaleActionResult> {
   try {
     const id = Number(saleId);
     if (!Number.isFinite(id) || id <= 0) return { success: false, error: "saleId invalide" };
@@ -1258,7 +1302,7 @@ export async function updateSaleAction(saleId: number, draft: SaleDraft) {
 
     if (itemsErr) return { success: false, error: itemsErr.message };
 
-    const itemIds = (existingItems ?? []).map((x: any) => String(x.id));
+    const itemIds = (existingItems ?? []).map((x) => String(x.id));
 
     // 2) Nettoyer les mouvements de stock liés à l'ancienne version de la vente
     // IMPORTANT: ne pas créer de mouvements IN "SALE_EDIT" ici.
@@ -1286,8 +1330,29 @@ export async function updateSaleAction(saleId: number, draft: SaleDraft) {
     }
 
     // 3) Nettoyer anciennes lignes + snapshot
-    await supabase.from("sale_item_pieces").delete().eq("sale_id", id);
-    await supabase.from("sale_items").delete().eq("sale_id", id);
+    const { error: deletePiecesErr } = await supabase
+      .from("sale_item_pieces")
+      .delete()
+      .eq("sale_id", id);
+    if (deletePiecesErr) {
+      return {
+        success: false,
+        error: "Impossible de nettoyer les snapshots de l'ancienne vente.",
+        debug: { deletePiecesErr: serializePostgrestError(deletePiecesErr) },
+      };
+    }
+
+    const { error: deleteItemsErr } = await supabase
+      .from("sale_items")
+      .delete()
+      .eq("sale_id", id);
+    if (deleteItemsErr) {
+      return {
+        success: false,
+        error: "Impossible de nettoyer les lignes de l'ancienne vente.",
+        debug: { deleteItemsErr: serializePostgrestError(deleteItemsErr) },
+      };
+    }
 
     // 4) Mettre à jour la vente (même ID)
     const net = Number(draft.net_seller_amount);
@@ -1312,22 +1377,6 @@ export async function updateSaleAction(saleId: number, draft: SaleDraft) {
 
     // 5) Réinsérer sale_items + FIFO (copie de ta logique createSaleAction)
     const isSingleSetSale = draft.sale_type === "SET" && draft.items.length === 1;
-
-    const normalizeOverrides = (v: unknown): Record<string, number> | null => {
-  if (!v || typeof v !== "object" || Array.isArray(v)) return null;
-  const raw = v as Record<string, unknown>;
-  const cleaned: Record<string, number> = {};
-
-  for (const [k, val] of Object.entries(raw)) {
-    const key = String(k ?? "").trim();
-    const n = Number(val as any);
-    if (!key) continue;
-    if (!Number.isFinite(n) || n < 0) continue; // garde 0
-    cleaned[key] = Math.floor(n);
-  }
-
-  return Object.keys(cleaned).length > 0 ? cleaned : null;
-};
 
     const buildItemInsert = (
       item: SaleItemDraft,
@@ -1356,9 +1405,7 @@ export async function updateSaleAction(saleId: number, draft: SaleDraft) {
       if (item.item_kind === "SET") {
         base.set_id = item.set_id ?? null;
         if (opts.includeOverrides) {
-          const ov =
-            normalizeOverrides((item as any).overrides) ??
-            normalizeOverrides((item as any).piece_overrides);
+          const ov = normalizeOverrides(item.overrides) ?? normalizeOverrides(item.piece_overrides);
           base.overrides = ov;
         }
       } else {
@@ -1376,7 +1423,7 @@ export async function updateSaleAction(saleId: number, draft: SaleDraft) {
     );
 
     let insertedItemsRaw: SaleItemDbRow[] | null = null;
-    let itemsInsertError: any = null;
+    let itemsInsertError: PostgrestError | null = null;
 
     const attempt1 = await supabase.from("sale_items").insert(itemsInsertWithOverrides).select("*");
     insertedItemsRaw = attempt1.data ?? null;
@@ -1395,7 +1442,11 @@ export async function updateSaleAction(saleId: number, draft: SaleDraft) {
 
     const insertedItems = (insertedItemsRaw ?? []) as SaleItemRow[];
     if (itemsInsertError || insertedItems.length === 0) {
-      return { success: false, error: "Impossible de réinsérer les lignes (sale_items).", debug: { itemsInsertError } };
+      return {
+        success: false,
+        error: "Impossible de réinsérer les lignes (sale_items).",
+        debug: { itemsInsertError: serializePostgrestError(itemsInsertError) },
+      };
     }
 
     // 6) FIFO + mouvements OUT + snapshot + totaux
@@ -1433,7 +1484,7 @@ export async function updateSaleAction(saleId: number, draft: SaleDraft) {
               quantity: Number(dbItem.quantity ?? 1),
               is_partial_set: Boolean(dbItem.is_partial_set),
               net_amount: dbItem.net_amount ?? null,
-              overrides: normalizeOverrides((dbItem as any).overrides) ?? undefined,
+              overrides: normalizeOverrides(dbItem.overrides) ?? undefined,
               comment: dbItem.comment ?? null,
             }
           : {
@@ -1465,7 +1516,11 @@ export async function updateSaleAction(saleId: number, draft: SaleDraft) {
 
           const safeUnitCost = Number.isFinite(uc) ? uc : 0;
           const safeLotId = toNullableInt((c as Record<string, unknown>)["lotId"]);
-          if (safeLotId === null) throw new Error(`LotId invalide (FIFO) pour ${pieceRef}`);
+          if (safeLotId === null) {
+            throw new Error(
+              `LotId manquant dans l'allocation FIFO pour ${pieceRef}. Vérifie les mouvements d'entrée historiques.`
+            );
+          }
 
           movementsToInsert.push({
             piece_ref: pieceRef,
@@ -1536,13 +1591,17 @@ export async function updateSaleAction(saleId: number, draft: SaleDraft) {
     revalidatePath(`/ventes/${id}`);
 
     return { success: true, saleId: id };
-  } catch (e: any) {
-    return { success: false, error: e?.message ?? "Erreur updateSaleAction" };
+  } catch (e: unknown) {
+    return {
+      success: false,
+      error: getErrorMessage(e, "Erreur updateSaleAction"),
+      debug: { exception: serializeUnknownError(e) },
+    };
   }
 }
 
 export type GetSaleDraftForEditResult =
-  | { ok: true; draft: SaleDraft }
+  | { ok: true; draft: SaleDraft; stockCreditByPieceRef: Record<string, number> }
   | { ok: false; error: string };
 
 export async function getSaleDraftForEditAction(
@@ -1572,40 +1631,82 @@ export async function getSaleDraftForEditAction(
       ? sale.sale_type
       : "SET";
 
-      const draft: SaleDraft = {
-        sale_type: saleType,
-        sales_channel: sale.sales_channel,
-        paid_at: sale.paid_at,
-        net_seller_amount: Number(sale.net_seller_amount ?? 0),
-        currency: sale.currency ?? "EUR",
-        comment: sale.comment ?? null,
-    
-        // ✅ statut présent uniquement pour l'edit
-        status: (sale.status ?? "CONFIRMED") as any,
-    
-        items: (items ?? []).map((it: any) => {
-          if (it.item_kind === "SET") {
-            return {
-              item_kind: "SET",
-              set_id: String(it.set_id ?? ""),
-              quantity: Number(it.quantity ?? 1),
-              is_partial_set: Boolean(it.is_partial_set),
-              net_amount: it.net_amount ?? null,
-              overrides: (it.overrides ?? undefined) as any,
-              comment: it.comment ?? null,
-            } as SaleItemDraft;
-          }
-    
-          return {
-            item_kind: "PIECE",
-            piece_ref: String(it.piece_ref ?? ""),
-            quantity: Number(it.quantity ?? 1),
-            is_partial_set: Boolean(it.is_partial_set),
-            net_amount: it.net_amount ?? null,
-            comment: it.comment ?? null,
-          } as SaleItemDraft;
-        }),
-      };
+  const saleStatus = sale.status === "CANCELLED" ? "CANCELLED" : "CONFIRMED";
 
-  return { ok: true, draft };
+  const draft: SaleDraft = {
+    sale_type: saleType,
+    sales_channel: sale.sales_channel,
+    paid_at: sale.paid_at,
+    net_seller_amount: Number(sale.net_seller_amount ?? 0),
+    currency: sale.currency ?? "EUR",
+    comment: sale.comment ?? null,
+
+    // ✅ statut présent uniquement pour l'edit
+    status: saleStatus,
+
+    items: (items ?? []).map((it): SaleItemDraft => {
+      if (it.item_kind === "SET") {
+        return {
+          item_kind: "SET",
+          set_id: String(it.set_id ?? ""),
+          quantity: Number(it.quantity ?? 1),
+          is_partial_set: Boolean(it.is_partial_set),
+          net_amount: it.net_amount ?? null,
+          overrides: normalizeOverrides(it.overrides) ?? undefined,
+          comment: it.comment ?? null,
+        };
+      }
+
+      return {
+        item_kind: "PIECE",
+        piece_ref: String(it.piece_ref ?? ""),
+        quantity: Number(it.quantity ?? 1),
+        is_partial_set: Boolean(it.is_partial_set),
+        net_amount: it.net_amount ?? null,
+        comment: it.comment ?? null,
+      };
+    }),
+  };
+
+  const stockCreditByPieceRef: Record<string, number> = {};
+  const addStockCredit = (pieceRef: unknown, quantity: unknown) => {
+    const ref = String(pieceRef ?? "").trim();
+    const qty = Number(quantity ?? 0);
+    if (!ref || !Number.isFinite(qty) || qty <= 0) return;
+    stockCreditByPieceRef[ref] = (stockCreditByPieceRef[ref] ?? 0) + qty;
+  };
+
+  const { data: snapshotRows, error: snapshotErr } = await supabase
+    .from("sale_item_pieces")
+    .select("piece_ref, quantity")
+    .eq("sale_id", id);
+
+  if (snapshotErr) {
+    console.warn(
+      "getSaleDraftForEditAction - impossible de charger sale_item_pieces, fallback via draft.items:",
+      snapshotErr
+    );
+  } else {
+    for (const row of (snapshotRows ?? []) as SaleItemPieceQtyRow[]) {
+      addStockCredit(row.piece_ref, row.quantity);
+    }
+  }
+
+  if (Object.keys(stockCreditByPieceRef).length === 0) {
+    for (const item of draft.items) {
+      try {
+        const demands = await getPiecesForSaleItem(item);
+        for (const demand of demands) {
+          addStockCredit(demand.piece_ref, demand.quantity);
+        }
+      } catch (err: unknown) {
+        console.warn(
+          "getSaleDraftForEditAction - fallback stock credit failed for item:",
+          err
+        );
+      }
+    }
+  }
+
+  return { ok: true, draft, stockCreditByPieceRef };
 }
