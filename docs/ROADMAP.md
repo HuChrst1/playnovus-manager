@@ -23,7 +23,7 @@ Perimetre: finaliser PlayNovus Manager avec fiabilite metier, coherence UX et qu
 
 ## Phase 0 - Qualite globale (gate bloquant)
 
-Statut global: `A FAIRE`
+Statut global: `EN COURS`
 
 ### F0.1 - Standardiser les scripts qualite
 
@@ -37,13 +37,19 @@ Definition of done:
 
 ### F0.2 - Nettoyage lint domaine Ventes/FIFO
 
-Statut: `A FAIRE`
+Statut: `FAIT`
 Objectif: supprimer les erreurs lint et types instables des flux critiques.
 Fichiers cibles prioritaires:
 - `src/app/actions/sales.ts`
 - `src/app/ventes/nouvelle/NewSaleForm.tsx`
 - `src/lib/sales.ts`
 - `src/lib/stock.ts`
+Livrables realises:
+- lint cible vert sur le perimetre F0.2 (plus d'erreurs/warnings sur les fichiers cibles)
+- suppression des `any` explicites non justifies sur le flux Ventes/FIFO cible
+- stabilisation des types sur les actions ventes et le formulaire (sans changement de logique metier FIFO)
+- correctif edition stock virtuel (`PIECE + SET`) pour comparer la demande a `stock actuel + stock de la vente editee`
+- propagation de `stockCreditByPieceRef` dans le flux d'edition (`getSaleDraftForEditAction` -> `EditSaleDialog` -> `NewSaleForm`)
 Definition of done:
 - plus d'erreurs ESLint dans ces fichiers
 - aucun `any` non justifie

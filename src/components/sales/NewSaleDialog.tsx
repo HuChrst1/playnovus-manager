@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Plus } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -20,6 +21,7 @@ import { NewSaleForm } from "@/app/ventes/nouvelle/NewSaleForm";
  * Cette modale encapsule le formulaire NewSaleForm.
  */
 export function NewSaleDialog() {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
 
   return (
@@ -44,7 +46,12 @@ export function NewSaleDialog() {
         </DialogHeader>
 
         {/* Contenu : formulaire de création de vente */}
-        <NewSaleForm />
+        <NewSaleForm
+          onDone={() => {
+            setOpen(false);
+            router.refresh();
+          }}
+        />
       </DialogContent>
     </Dialog>
   );
