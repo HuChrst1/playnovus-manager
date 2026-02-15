@@ -2,6 +2,7 @@
 
 import { supabase } from "@/lib/supabase";
 import { revalidatePath } from "next/cache";
+import type { TablesUpdate } from "@/types/supabase";
 
 type LotStatus = "draft" | "confirmed";
 
@@ -25,6 +26,34 @@ type NormalizedLot = {
   totalPieces: number;
   status: "draft" | "confirmed";
   notes: string | null;
+};
+
+type LotActionReason =
+  | "LOT_NOT_FOUND"
+  | "LOT_USED_BY_SALES"
+  | "DELETE_FAILED"
+  | "UPDATE_FAILED";
+
+type LotActionFailure = {
+  success: false;
+  error: string;
+  reason?: LotActionReason;
+  linkedSaleIds?: number[];
+  linkedSalesCount?: number;
+};
+
+type LotActionSuccess = {
+  success: true;
+};
+
+export type UpdateLotResult = LotActionSuccess | LotActionFailure;
+export type DeleteLotResult = LotActionSuccess | LotActionFailure;
+
+type LotSalesUsage = {
+  usedBySales: boolean;
+  linkedSaleIds: number[];
+  linkedSalesCount: number;
+  error?: string;
 };
 
 // Fonction interne utilisée par les deux variantes
@@ -225,6 +254,114 @@ async function createStockMovementsForLot(lotId: number) {
   return { success: true };
 }
 
+async function deletePurchaseMovementsForLot(lotId: number) {
+  if (!lotId || Number.isNaN(lotId)) {
+    return { success: false as const, error: "Lot invalide pour suppression des mouvements." };
+  }
+
+  const sourceId = String(lotId);
+
+  const { error: bySourceIdError } = await supabase
+    .from("stock_movements")
+    .delete()
+    .eq("source_type", "PURCHASE")
+    .eq("source_id", sourceId);
+
+  if (bySourceIdError) {
+    console.error("deletePurchaseMovementsForLot - delete by source_id error:", bySourceIdError);
+    return {
+      success: false as const,
+      error:
+        "Impossible de retirer les mouvements d'achat du lot. Détail technique : " +
+        bySourceIdError.message,
+    };
+  }
+
+  const { error: byLotIdError } = await supabase
+    .from("stock_movements")
+    .delete()
+    .eq("source_type", "PURCHASE")
+    .eq("lot_id", lotId);
+
+  if (byLotIdError) {
+    console.error("deletePurchaseMovementsForLot - delete by lot_id error:", byLotIdError);
+    return {
+      success: false as const,
+      error:
+        "Impossible de retirer les mouvements d'achat du lot. Détail technique : " +
+        byLotIdError.message,
+    };
+  }
+
+  return { success: true as const };
+}
+
+async function createPurchaseMovementsForLot(lotId: number) {
+  const cleanup = await deletePurchaseMovementsForLot(lotId);
+  if (!cleanup.success) {
+    return cleanup;
+  }
+  return createStockMovementsForLot(lotId);
+}
+
+async function getLotSalesUsage(lotId: number): Promise<LotSalesUsage> {
+  if (!lotId || Number.isNaN(lotId)) {
+    return {
+      usedBySales: false,
+      linkedSaleIds: [],
+      linkedSalesCount: 0,
+      error: "Lot invalide pour vérification d'usage ventes.",
+    };
+  }
+
+  const [
+    { count: movementsCount, error: movementsCountError },
+    { data: salePieceRows, error: salePiecesError },
+  ] = await Promise.all([
+    supabase
+      .from("stock_movements")
+      .select("id", { head: true, count: "exact" })
+      .eq("lot_id", lotId)
+      .in("source_type", ["SALE", "SALE_CANCEL", "SALE_EDIT"]),
+    supabase
+      .from("sale_item_pieces")
+      .select("sale_id")
+      .eq("lot_id", lotId),
+  ]);
+
+  if (movementsCountError || salePiecesError) {
+    console.error("getLotSalesUsage - query error:", {
+      movementsCountError,
+      salePiecesError,
+    });
+    return {
+      usedBySales: false,
+      linkedSaleIds: [],
+      linkedSalesCount: 0,
+      error:
+        "Impossible de vérifier si le lot a déjà été utilisé dans des ventes.",
+    };
+  }
+
+  const saleIdSet = new Set<number>();
+  for (const row of salePieceRows ?? []) {
+    const saleId = Number(row.sale_id);
+    if (Number.isFinite(saleId) && saleId > 0) {
+      saleIdSet.add(saleId);
+    }
+  }
+
+  const linkedSaleIds = Array.from(saleIdSet).slice(0, 5);
+  const linkedSalesCount = saleIdSet.size;
+  const usedBySales = linkedSalesCount > 0 || (movementsCount ?? 0) > 0;
+
+  return {
+    usedBySales,
+    linkedSaleIds,
+    linkedSalesCount,
+  };
+}
+
 export async function updateLotFromDialog(
   lotId: number,
   args: {
@@ -237,11 +374,12 @@ export async function updateLotFromDialog(
     status: "draft" | "confirmed";
     notes?: string;
   }
-) {
+): Promise<UpdateLotResult> {
   if (!lotId || lotId <= 0) {
     return {
       success: false,
       error: "Identifiant de lot invalide.",
+      reason: "UPDATE_FAILED",
     };
   }
 
@@ -249,6 +387,7 @@ export async function updateLotFromDialog(
     return {
       success: false,
       error: "La date du lot est obligatoire.",
+      reason: "UPDATE_FAILED",
     };
   }
 
@@ -256,20 +395,21 @@ export async function updateLotFromDialog(
     return {
       success: false,
       error: "Le coût total doit être un nombre positif.",
+      reason: "UPDATE_FAILED",
     };
   }
 
-  const status: LotStatus =
+  const nextStatus: LotStatus =
     args.status === "confirmed" ? "confirmed" : "draft";
 
-  // 1) On récupère le statut actuel pour détecter un passage draft -> confirmed
+  // 1) On récupère le statut actuel pour détecter les transitions
   const { data: existingLot, error: fetchError } = await supabase
     .from("lots")
     .select("status")
     .eq("id", lotId)
-    .single();
+    .maybeSingle();
 
-  if (fetchError || !existingLot) {
+  if (fetchError) {
     console.error(
       "updateLotFromDialog - erreur lors de la lecture du lot:",
       fetchError
@@ -277,88 +417,283 @@ export async function updateLotFromDialog(
     return {
       success: false,
       error: "Impossible de récupérer le lot avant mise à jour.",
+      reason: "UPDATE_FAILED",
+    };
+  }
+
+  if (!existingLot) {
+    return {
+      success: false,
+      error: "Lot introuvable.",
+      reason: "LOT_NOT_FOUND",
     };
   }
 
   const previousStatus = (existingLot.status as LotStatus) ?? "draft";
 
-  const updatePayload: any = {
+  const updatePayload: TablesUpdate<"lots"> = {
     purchase_date: args.purchaseDate,
     label: args.label ?? null,
     supplier: args.supplier ?? null,
     lot_code: args.lotCode ?? null,
     total_cost: args.totalCost,
-    status,
+    status: nextStatus,
     notes: args.notes ?? null,
   };
 
-  // ⚠️ On ne touche plus jamais à total_pieces ici :
-  // il est recalculé automatiquement via les lignes d'inventaire.
+  // 2) Cas sans changement de statut: metadata uniquement.
+  if (previousStatus === nextStatus) {
+    const { error: updateError } = await supabase
+      .from("lots")
+      .update(updatePayload)
+      .eq("id", lotId);
 
-  // 2) Mise à jour du lot
-  const { error: updateError } = await supabase
+    if (updateError) {
+      console.error("updateLotFromDialog error:", updateError);
+      return {
+        success: false,
+        error:
+          "Impossible de mettre à jour le lot. Détail technique : " +
+          updateError.message,
+        reason: "UPDATE_FAILED",
+      };
+    }
+
+    revalidatePath("/approvisionnement");
+    revalidatePath(`/approvisionnement/${lotId}`);
+    revalidatePath("/stock");
+    revalidatePath("/historique-stock");
+
+    return { success: true };
+  }
+
+  // 3) draft -> confirmed: recréer les mouvements d'achat puis passer le lot en confirmed.
+  if (previousStatus === "draft" && nextStatus === "confirmed") {
+    const movementResult = await createPurchaseMovementsForLot(lotId);
+    if (!movementResult.success) {
+      return {
+        success: false,
+        error:
+          movementResult.error ??
+          "Impossible de recréer les mouvements d'achat pour ce lot.",
+        reason: "UPDATE_FAILED",
+      };
+    }
+
+    const { error: updateError } = await supabase
+      .from("lots")
+      .update(updatePayload)
+      .eq("id", lotId);
+
+    if (updateError) {
+      console.error("updateLotFromDialog - error after createPurchaseMovementsForLot:", updateError);
+      // rollback best-effort vers draft
+      const rollbackResult = await deletePurchaseMovementsForLot(lotId);
+      if (!rollbackResult.success) {
+        console.error("updateLotFromDialog - rollback failed (delete PURCHASE):", rollbackResult.error);
+      }
+      return {
+        success: false,
+        error:
+          "Impossible de confirmer le lot après préparation des mouvements de stock.",
+        reason: "UPDATE_FAILED",
+      };
+    }
+
+    revalidatePath("/approvisionnement");
+    revalidatePath(`/approvisionnement/${lotId}`);
+    revalidatePath("/stock");
+    revalidatePath("/historique-stock");
+
+    return { success: true };
+  }
+
+  // 4) confirmed -> draft: bloqué si lot déjà utilisé en ventes; sinon retrait des PURCHASE.
+  if (previousStatus === "confirmed" && nextStatus === "draft") {
+    const salesUsage = await getLotSalesUsage(lotId);
+    if (salesUsage.error) {
+      return {
+        success: false,
+        error: salesUsage.error,
+        reason: "UPDATE_FAILED",
+      };
+    }
+
+    if (salesUsage.usedBySales) {
+      return {
+        success: false,
+        reason: "LOT_USED_BY_SALES",
+        linkedSaleIds: salesUsage.linkedSaleIds,
+        linkedSalesCount: salesUsage.linkedSalesCount,
+        error:
+          salesUsage.linkedSaleIds.length > 0
+            ? `Ce lot a déjà été utilisé dans des ventes (#${salesUsage.linkedSaleIds.join(", #")}). Annule/supprime d'abord les ventes liées.`
+            : "Ce lot a déjà été utilisé dans des ventes. Annule/supprime d'abord les ventes liées.",
+      };
+    }
+
+    const deleteResult = await deletePurchaseMovementsForLot(lotId);
+    if (!deleteResult.success) {
+      return {
+        success: false,
+        error:
+          deleteResult.error ??
+          "Impossible de retirer les mouvements d'achat de ce lot.",
+        reason: "UPDATE_FAILED",
+      };
+    }
+
+    const { error: updateError } = await supabase
+      .from("lots")
+      .update(updatePayload)
+      .eq("id", lotId);
+
+    if (updateError) {
+      console.error("updateLotFromDialog - error after deletePurchaseMovementsForLot:", updateError);
+      // rollback best-effort vers confirmed
+      const rollbackResult = await createPurchaseMovementsForLot(lotId);
+      if (!rollbackResult.success) {
+        console.error("updateLotFromDialog - rollback failed (recreate PURCHASE):", rollbackResult.error);
+      }
+      return {
+        success: false,
+        error:
+          "Impossible de repasser le lot en brouillon après retrait des mouvements de stock.",
+        reason: "UPDATE_FAILED",
+      };
+    }
+
+    revalidatePath("/approvisionnement");
+    revalidatePath(`/approvisionnement/${lotId}`);
+    revalidatePath("/stock");
+    revalidatePath("/historique-stock");
+
+    return { success: true };
+  }
+
+  // Fallback défensif (ne devrait pas arriver avec le type LotStatus)
+  const { error: fallbackUpdateError } = await supabase
     .from("lots")
     .update(updatePayload)
     .eq("id", lotId);
 
-  if (updateError) {
-    console.error("updateLotFromDialog error:", updateError);
+  if (fallbackUpdateError) {
+    console.error("updateLotFromDialog - fallback update error:", fallbackUpdateError);
     return {
       success: false,
       error:
         "Impossible de mettre à jour le lot. Détail technique : " +
-        updateError.message,
+        fallbackUpdateError.message,
+      reason: "UPDATE_FAILED",
     };
   }
 
-  // 3) Si on vient de passer de draft -> confirmed,
-  //    on crée les mouvements IN pour ce lot
-  if (previousStatus !== "confirmed" && status === "confirmed") {
-    const movementsResult = await createStockMovementsForLot(lotId);
-
-    if (!movementsResult.success) {
-      // On log l'erreur mais on ne bloque pas la mise à jour du lot
-      console.error(
-        "updateLotFromDialog - erreur lors de la création des mouvements de stock:",
-        movementsResult.error
-      );
-      // Optionnel : on pourrait renvoyer un warning dans le futur
-    }
-  }
-
-  // 4) On rafraîchit les pages liées
   revalidatePath("/approvisionnement");
   revalidatePath(`/approvisionnement/${lotId}`);
   revalidatePath("/stock");
+  revalidatePath("/historique-stock");
 
-  return {
-    success: true,
-  };
+  return { success: true };
 }
 
-export async function deleteLot(lotId: number) {
+export async function deleteLot(lotId: number): Promise<DeleteLotResult> {
   // Sécurité minimale
   if (!lotId || Number.isNaN(lotId)) {
-    return { success: false, error: "Lot invalide." };
+    return { success: false, error: "Lot invalide.", reason: "DELETE_FAILED" };
   }
 
-  const { error } = await supabase
+  const { data: lotRow, error: lotError } = await supabase
+    .from("lots")
+    .select("id, status, lot_code")
+    .eq("id", lotId)
+    .maybeSingle();
+
+  if (lotError) {
+    console.error("deleteLot - lot lookup error:", lotError);
+    return {
+      success: false,
+      error: "Impossible de charger le lot avant suppression.",
+      reason: "DELETE_FAILED",
+    };
+  }
+
+  if (!lotRow) {
+    return {
+      success: false,
+      error: "Lot introuvable.",
+      reason: "LOT_NOT_FOUND",
+    };
+  }
+
+  const salesUsage = await getLotSalesUsage(lotId);
+  if (salesUsage.error) {
+    return {
+      success: false,
+      error: salesUsage.error,
+      reason: "DELETE_FAILED",
+    };
+  }
+
+  if (salesUsage.usedBySales) {
+    return {
+      success: false,
+      reason: "LOT_USED_BY_SALES",
+      linkedSaleIds: salesUsage.linkedSaleIds,
+      linkedSalesCount: salesUsage.linkedSalesCount,
+      error:
+        salesUsage.linkedSaleIds.length > 0
+          ? `Ce lot a déjà été utilisé dans des ventes (#${salesUsage.linkedSaleIds.join(", #")}). Annule/supprime d'abord les ventes liées.`
+          : "Ce lot a déjà été utilisé dans des ventes. Annule/supprime d'abord les ventes liées.",
+    };
+  }
+
+  const deletePurchaseResult = await deletePurchaseMovementsForLot(lotId);
+  if (!deletePurchaseResult.success) {
+    return {
+      success: false,
+      error:
+        deletePurchaseResult.error ??
+        "Impossible de retirer les mouvements d'achat de ce lot.",
+      reason: "DELETE_FAILED",
+    };
+  }
+
+  const { error: inventoryDeleteError } = await supabase
+    .from("inventory")
+    .delete()
+    .eq("lot_id", lotId);
+
+  if (inventoryDeleteError) {
+    console.error("deleteLot - inventory delete error:", inventoryDeleteError);
+    return {
+      success: false,
+      error:
+        "Impossible de supprimer les lignes de pièces de ce lot. Détail technique : " +
+        inventoryDeleteError.message,
+      reason: "DELETE_FAILED",
+    };
+  }
+
+  const { error: lotDeleteError } = await supabase
     .from("lots")
     .delete()
     .eq("id", lotId);
 
-  if (error) {
-    console.error("deleteLot error:", error);
+  if (lotDeleteError) {
+    console.error("deleteLot - lot delete error:", lotDeleteError);
     return {
       success: false,
       error:
         "Impossible de supprimer ce lot. Détail technique : " +
-        error.message,
+        lotDeleteError.message,
+      reason: "DELETE_FAILED",
     };
   }
 
-  // On invalide les caches de la page d'approvisionnement
   revalidatePath("/approvisionnement");
+  revalidatePath(`/approvisionnement/${lotId}`);
+  revalidatePath("/stock");
+  revalidatePath("/historique-stock");
 
   return { success: true };
 }

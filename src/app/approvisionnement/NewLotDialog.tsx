@@ -19,6 +19,13 @@ import { createLotFromDialog } from "./action";
 
 type LotStatus = "draft" | "confirmed";
 
+const getErrorMessage = (error: unknown) => {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  return "Une erreur inattendue est survenue lors de l'enregistrement.";
+};
+
 export function NewLotDialog() {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -67,11 +74,8 @@ const totalCost = Number(totalCostRaw.toString().replace(",", "."));
         // Succès : on reset le formulaire et on ferme la modale
         form.reset();
         setOpen(false);
-      } catch (err: any) {
-        setError(
-          err?.message ||
-            "Une erreur inattendue est survenue lors de l'enregistrement."
-        );
+      } catch (err: unknown) {
+        setError(getErrorMessage(err));
       }
     });
   };

@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import { useTransition } from "react";
-import { useRouter } from "next/navigation";
 
 import { deleteSaleAction } from "@/app/actions/sales";
 
@@ -13,7 +12,6 @@ export function DeleteSaleDialog({
   saleId: number;
   trigger: React.ReactNode;
 }) {
-  const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
   const handleDelete = () => {
@@ -45,8 +43,14 @@ export function DeleteSaleDialog({
   };
 
   // On injecte onClick sur le trigger (ton bouton poubelle)
-  if (React.isValidElement(trigger)) {
-    const el = trigger as React.ReactElement<any>;
+  type TriggerElementProps = {
+    disabled?: boolean;
+    onClick?: (e: React.MouseEvent<Element>) => void;
+    onMouseDown?: (e: React.MouseEvent<Element>) => void;
+  };
+
+  if (React.isValidElement<TriggerElementProps>(trigger)) {
+    const el = trigger;
     return React.cloneElement(el, {
       disabled: isPending || el.props?.disabled,
       onClick: (e: React.MouseEvent) => {

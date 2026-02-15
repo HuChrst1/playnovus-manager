@@ -23,7 +23,7 @@ Perimetre: finaliser PlayNovus Manager avec fiabilite metier, coherence UX et qu
 
 ## Phase 0 - Qualite globale (gate bloquant)
 
-Statut global: `EN COURS`
+Statut global: `FAIT`
 
 ### F0.1 - Standardiser les scripts qualite
 
@@ -56,12 +56,17 @@ Definition of done:
 
 ### F0.3 - Nettoyage lint UI shared + Catalogue/Appro/Stock
 
-Statut: `A FAIRE`
+Statut: `FAIT`
 Objectif: passer le repo sur une base saine.
 Fichiers cibles:
 - composants UI (`src/components/ui/*`)
 - pages Catalogue/Appro/Stock
 - composants ventes annexes
+Livrables realises:
+- suppression des erreurs/warnings lint sur les composants UI shared, pages Catalogue/Appro/Stock et composants ventes annexes
+- corrections de typage minimales sans changement de logique metier (suppression des `any`, catches `unknown`, typage payloads Supabase)
+- corrections lint minimales additionnelles sur `src/components/dashboard/DashboardStatCard.tsx` et `src/lib/import-data.ts` pour atteindre `0 warning` global
+- correction typecheck/build sur `src/app/approvisionnement/[id]/page.tsx` et `src/app/catalogue/actions.ts` (typage uniquement, logique inchangee)
 Definition of done:
 - `npm run lint` vert global
 - `npm run build` vert
@@ -127,7 +132,22 @@ Definition of done:
 
 ## Phase 2 - Verrouillage Approvisionnement et Stock
 
-Statut global: `A FAIRE`
+Statut global: `EN COURS`
+
+### F2.0 - Suppression lot confirme + synchronisation statut/stock
+
+Statut: `FAIT`
+Objectif: corriger un approvisionnement confirme tout en conservant la coherence stock/historique.
+Livrables realises:
+- suppression autorisee des lots `draft` et `confirmed` (y compris `LOT_0`) si aucune vente liee
+- suppression des effets stock/historique du lot via retrait des mouvements `PURCHASE`
+- blocage explicite si lot deja utilise en ventes (`LOT_USED_BY_SALES` + guidage ids ventes)
+- synchronisation statut/stock:
+  - `draft -> confirmed`: recreation des mouvements `PURCHASE`
+  - `confirmed -> draft`: retrait des mouvements `PURCHASE` avec blocage si ventes liees
+Definition of done:
+- coherence stock/historique verifiee sur transitions `draft/confirmed`
+- suppression lot confirme possible sans suppression en cascade des ventes
 
 ### F2.1 - Garde-fou serveur lot vide non confirmable
 
@@ -360,6 +380,7 @@ Definition of done:
 8. DB bloque toute tentative menant a stock negatif
 9. DB bloque les doublons de mouvements selon la contrainte d'unicite
 10. healthcheck DB retourne 0 anomalie avant validation finale
+11. transition `confirmed -> draft` retire les mouvements `PURCHASE` si aucune vente liee, sinon echoue explicitement
 
 ## Ordre recommande de lancement des agents Codex (feature par feature)
 

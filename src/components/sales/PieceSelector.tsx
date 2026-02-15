@@ -69,6 +69,13 @@ const clampQty = (wanted: number, available?: number | null) => {
   return Math.min(w, a);
 };
 
+const getErrorMessage = (error: unknown) => {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  return "Erreur de recherche.";
+};
+
 export function PieceSelector({ value, onChange, disabled, errors }: PieceSelectorProps) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<StockPerPieceRow[]>([]);
@@ -113,9 +120,9 @@ export function PieceSelector({ value, onChange, disabled, errors }: PieceSelect
         }
 
         setResults((data ?? []) as StockPerPieceRow[]);
-      } catch (e: any) {
+      } catch (e: unknown) {
         setResults([]);
-        setSearchError(e?.message ?? "Erreur de recherche.");
+        setSearchError(getErrorMessage(e));
       } finally {
         setLoading(false);
       }

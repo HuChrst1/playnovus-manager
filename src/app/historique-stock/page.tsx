@@ -137,13 +137,11 @@ export default async function StockHistoryPage({
   // Petites stats globales
   let totalIn = 0;
   let totalOut = 0;
-  let totalAdjust = 0;
 
   for (const m of rows) {
     const qty = m.quantity ?? 0;
     if (m.direction === "IN") totalIn += qty;
     else if (m.direction === "OUT") totalOut += qty;
-    else if (m.direction === "ADJUST") totalAdjust += qty;
   }
 
   const renderDirectionBadge = (dir: JournalRow["direction"]) => {

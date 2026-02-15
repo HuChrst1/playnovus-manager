@@ -67,7 +67,7 @@ export function EditPieceDialog({ setId, piece }: EditPieceDialogProps) {
         } else {
           alert("Erreur : " + result.error);
         }
-      } catch (e) {
+      } catch {
         alert("Une erreur est survenue");
       }
     });

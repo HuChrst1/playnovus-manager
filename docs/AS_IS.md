@@ -1,6 +1,6 @@
 # AS-IS - État réel implémenté
 
-Date de référence: 2026-02-12
+Date de référence: 2026-02-15
 Méthode: lecture directe du code dans `src/app`, `src/components`, `src/lib`, `src/types/supabase.ts`.
 
 ## 1. Routes existantes (preuves)
@@ -45,10 +45,13 @@ Implémenté:
 - liste de lots avec tri
 - création lot (modale)
 - édition lot (modale)
-- suppression lot (avec garde-fou UI Lot 0 confirmé)
+- suppression lot `draft` et `confirmed` (y compris `LOT_0`) si non utilisé en ventes
 - détail lot avec ajout rapide pièce, édition/suppression ligne
 - verrouillage édition des lignes quand lot confirmé
-- passage `draft -> confirmed` générant des mouvements `IN`
+- synchronisation stock/statut:
+  - `draft -> confirmed`: création des mouvements `PURCHASE` (`IN`)
+  - `confirmed -> draft`: retrait des mouvements `PURCHASE` si aucune vente liée
+- blocage explicite de suppression et de downgrade statut si le lot a déjà été utilisé en ventes
 - recalcul `total_pieces` et `unit_cost` global des lignes d'un lot
 
 Limite constatée:

@@ -44,16 +44,14 @@ export default async function SaleSetPiecesPage({ params }: Props) {
     lot_id: string | null; // bigint-safe
   };
 
-  const sb = supabaseServer as any;
-
-  const { data: rowsRaw, error: rowsError } = await sb
+  const { data: rowsRaw, error: rowsError } = await supabaseServer
     .from("sale_item_pieces")
     .select("piece_ref, quantity, unit_cost, lot_id")
     .eq("sale_id", saleId)
     .eq("sale_item_id", itemId)
     .order("piece_ref", { ascending: true });
 
-  const pieces = ((rowsRaw ?? []) as any[]).map((r) => {
+  const pieces = (rowsRaw ?? []).map((r) => {
     const unitCost = r.unit_cost;
     const lotId = r.lot_id;
 

@@ -30,6 +30,24 @@ interface PmContentRecord {
   'Quantité': string;
 }
 
+type SetCatalogUpsertRow = {
+  id: string;
+  display_ref: string;
+  name: string;
+  version: string;
+  year_start: number | null;
+  year_end: number | null;
+  image_url: string;
+  theme: string;
+};
+
+type SetBomInsertRow = {
+  set_id: string;
+  piece_ref: string;
+  piece_name: string;
+  quantity: number;
+};
+
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -83,8 +101,8 @@ async function importData() {
   });
 
   // --- TRAITEMENT & INSERTION ---
-  let catalogBatch: any[] = [];
-  let bomBatch: any[] = [];
+  let catalogBatch: SetCatalogUpsertRow[] = [];
+  let bomBatch: SetBomInsertRow[] = [];
   const BATCH_SIZE = 100;
   let totalProcessed = 0;
 

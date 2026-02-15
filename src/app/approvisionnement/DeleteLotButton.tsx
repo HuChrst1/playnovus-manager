@@ -24,18 +24,19 @@ export function DeleteLotButton({
   const [isPending, startTransition] = useTransition();
 
   const handleDelete = () => {
-    // Protection : on ne supprime pas le Lot 0 une fois confirmé
-    if (isInitial && isConfirmed) {
-      window.alert(
-        "Ce lot est le Lot 0 (stock initial) confirmé. Tu ne peux pas le supprimer."
-      );
-      return;
-    }
-
     const label = lotLabel || `lot #${lotId}`;
+    const confirmedWarning = isConfirmed
+      ? "\n\nCe lot est confirmé : ses mouvements d'achat seront retirés du stock et de l'historique si la suppression est autorisée."
+      : "";
+    const lot0Hint = isInitial
+      ? "\n\nNote: il s'agit du Lot 0 (stock initial)."
+      : "";
+
     const ok = window.confirm(
       `Supprimer définitivement ${label} ?\n\n` +
-        "Cette action est irréversible. Les mouvements de stock liés devront être recréés si besoin."
+        "Cette action est irréversible." +
+        confirmedWarning +
+        lot0Hint
     );
 
     if (!ok) return;
@@ -44,10 +45,17 @@ export function DeleteLotButton({
       const result = await deleteLot(lotId);
 
       if (!result.success) {
-        console.error("Erreur suppression lot:", result.error);
+        const linkedSalesHint =
+          result.reason === "LOT_USED_BY_SALES"
+            ? result.linkedSaleIds && result.linkedSaleIds.length > 0
+              ? `\n\nVentes liées détectées: #${result.linkedSaleIds.join(", #")}.\nAnnule/supprime d'abord ces ventes.`
+              : "\n\nAnnule/supprime d'abord les ventes liées à ce lot."
+            : "";
+
         window.alert(
           "Impossible de supprimer ce lot pour le moment.\n\n" +
-            (result.error || "")
+            (result.error || "") +
+            linkedSalesHint
         );
         return;
       }

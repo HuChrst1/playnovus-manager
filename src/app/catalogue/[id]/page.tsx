@@ -58,42 +58,52 @@ export default async function SetDetailPage({
   const stockByPiece = await getStockForPieces(pieceRefs);
 
   // 3. Calculs complétion
-  let totalPartsNeeded = 0;
-  let totalPartsOwned = 0;
-  let maxCompleteSets: number | null = null;
-
   // On garde la même structure que précédemment :
   // chaque "part" a un champ inStock utilisé par SetPartsList.
-  const partsWithStock =
-  bom.map((part) => {
+  const partsWithStock = bom.map((part) => {
     const stockInfo = stockByPiece[part.piece_ref] ?? {
       totalQuantity: 0,
       avgUnitCost: null,
       totalValue: 0,
     };
 
-    const qtyInStock = stockInfo.totalQuantity;
+    return {
+      ...part,
+      inStock: stockInfo.totalQuantity,
+    };
+  });
 
-    totalPartsNeeded += part.quantity;
-    totalPartsOwned += Math.min(qtyInStock, part.quantity);
+  const completionStats = partsWithStock.reduce(
+    (acc, part) => {
+      const totalPartsNeeded = acc.totalPartsNeeded + part.quantity;
+      const totalPartsOwned = acc.totalPartsOwned + Math.min(part.inStock, part.quantity);
 
-    // 🔢 Calcul du nombre de sets complets possibles pour cette pièce
-    if (part.quantity > 0) {
-      const setsForThisPart = Math.floor(qtyInStock / part.quantity);
+      const setsForThisPart =
+        part.quantity > 0 ? Math.floor(part.inStock / part.quantity) : null;
 
-      if (maxCompleteSets === null) {
-        maxCompleteSets = setsForThisPart;
-      } else {
-        maxCompleteSets = Math.min(maxCompleteSets, setsForThisPart);
-      }
+      const maxCompleteSets =
+        setsForThisPart === null
+          ? acc.maxCompleteSets
+          : acc.maxCompleteSets === null
+            ? setsForThisPart
+            : Math.min(acc.maxCompleteSets, setsForThisPart);
+
+      return {
+        totalPartsNeeded,
+        totalPartsOwned,
+        maxCompleteSets,
+      };
+    },
+    {
+      totalPartsNeeded: 0,
+      totalPartsOwned: 0,
+      maxCompleteSets: null as number | null,
     }
+  );
 
-    return { ...part, inStock: qtyInStock };
-  }) || [];
-
-  if (maxCompleteSets === null) {
-    maxCompleteSets = 0;
-  }
+  const totalPartsNeeded = completionStats.totalPartsNeeded;
+  const totalPartsOwned = completionStats.totalPartsOwned;
+  const maxCompleteSets = completionStats.maxCompleteSets ?? 0;
 
   const completionPercent =
     totalPartsNeeded > 0

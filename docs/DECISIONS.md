@@ -1,6 +1,7 @@
 # Journal des décisions
 
 Date de mise à jour initiale: 2026-02-12
+Derniere mise a jour: 2026-02-15
 
 ## Décisions prises
 
@@ -89,6 +90,30 @@ Date de mise à jour initiale: 2026-02-12
 - Impact:
   - réduction des incohérences de stock/couts sur les lots incomplets
   - garde-fou produit explicite avant intégration stock
+
+### D-010 - Suppression contrôlée des lots confirmés
+
+- Statut: validée
+- Constat:
+  - un lot confirmé peut être supprimé pour corriger un approvisionnement erroné
+  - la suppression doit retirer les mouvements d'achat du stock/historique
+  - la suppression est interdite si le lot a déjà été utilisé en ventes
+- Impact:
+  - suppression autorisée pour `draft` et `confirmed` si aucune consommation ventes
+  - blocage explicite + guidage utilisateur si ventes liées détectées
+  - aucune suppression en cascade des ventes
+
+### D-011 - Synchronisation stock sur transition de statut lot
+
+- Statut: validée
+- Constat:
+  - passer `confirmed -> draft` doit retirer les entrées `PURCHASE` du lot
+  - passer `draft -> confirmed` doit recréer les entrées `PURCHASE` du lot
+  - le downgrade `confirmed -> draft` est bloqué si le lot est déjà utilisé en ventes
+- Impact:
+  - cohérence stock/historique sur les changements de statut
+  - prévention des doublons de mouvements lors des aller-retours de statut
+  - conservation des invariants FIFO/ventes existants
 
 ## Hypothèses / décisions en attente
 

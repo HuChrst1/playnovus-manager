@@ -19,7 +19,7 @@ export function SetImage({ url, name }: SetImageProps) {
         ) : (
           <div className="flex flex-col items-center text-zinc-300 gap-2">
             <ImageIcon className="h-10 w-10" />
-            <span className="italic">Pas d'image</span>
+            <span className="italic">Pas d&apos;image</span>
           </div>
         )}
       </div>

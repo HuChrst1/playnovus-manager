@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import type { SalesListRow } from "@/lib/sales";
 import { ClickableRow } from "@/app/catalogue/ClickableRow";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Pencil, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
 import { DeleteSaleDialog } from "@/components/sales/DeleteSaleDialog";
 import { EditSaleDialog } from "@/components/sales/EditSaleDialog";
 

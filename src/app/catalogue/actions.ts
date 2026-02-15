@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import type { TablesInsert } from "@/types/supabase";
 
 /**
  * Création d’un set
@@ -30,17 +31,19 @@ export async function createSet(formData: FormData) {
     return;
   }
 
+  const insertPayload = {
+    display_ref,
+    name,
+    version,
+    theme,
+    image_url,
+    year_start,
+    year_end,
+  } satisfies Omit<TablesInsert<"sets_catalog">, "id">;
+
   const { data, error } = await supabase
     .from("sets_catalog")
-    .insert({
-      display_ref,
-      name,
-      version,
-      theme,
-      image_url,
-      year_start,
-      year_end,
-    })
+    .insert(insertPayload as unknown as TablesInsert<"sets_catalog">)
     .select("id")
     .single();
 

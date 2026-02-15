@@ -91,6 +91,13 @@ const parseDecimalFR = (raw: string) => {
     return Number.isFinite(n) ? n : NaN;
   };
 
+const getErrorMessage = (error: unknown, fallback: string) => {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  return fallback;
+};
+
 export function SetSelector({
   value,
   onChange,
@@ -163,8 +170,8 @@ export function SetSelector({
 
       const json = (await res.json()) as SetPiecesResponse;
       setPiecesBySetId((prev) => ({ ...prev, [setId]: json }));
-    } catch (e: any) {
-      setPiecesError(e?.message ?? "Erreur lors du chargement des pièces.");
+    } catch (e: unknown) {
+      setPiecesError(getErrorMessage(e, "Erreur lors du chargement des pièces."));
     } finally {
       setPiecesLoading(false);
     }
@@ -205,8 +212,8 @@ export function SetSelector({
           ...prev,
           [activeLineId]: (data ?? []) as SetSearchRow[],
         }));
-      } catch (e: any) {
-        setSearchError(e?.message ?? "Erreur de recherche.");
+      } catch (e: unknown) {
+        setSearchError(getErrorMessage(e, "Erreur de recherche."));
         setResultsByLineId((prev) => ({ ...prev, [activeLineId]: [] }));
       } finally {
         setLoadingLineId((cur) => (cur === activeLineId ? null : cur));
@@ -543,6 +550,7 @@ export function SetSelector({
       </div>
       {piecesDialogLineId && (
         <SetPiecesDialog
+          key={piecesDialogLineId}
           open={Boolean(piecesDialogLineId)}
           setId={piecesDialogSetId}
           setQty={

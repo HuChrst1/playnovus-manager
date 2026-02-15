@@ -1,7 +1,7 @@
 # Cahier des charges fonctionnel - PlayNovus Manager
 
-Version: 1.0
-Date: 2026-02-12
+Version: 1.1
+Date: 2026-02-15
 
 ## 1. Finalité du produit
 
@@ -79,7 +79,8 @@ Fonctions attendues:
 - saisie du contenu du lot (référence pièce + quantité)
 - lot modifiable tant qu'il est en brouillon
 - confirmation du lot pour intégration stock
-- lot verrouillé après confirmation
+- retour `confirmed -> draft` possible uniquement si le lot n'a jamais été utilisé en ventes
+- suppression d'un lot `draft` ou `confirmed` possible uniquement si le lot n'a jamais été utilisé en ventes
 - calcul automatique du nombre total de pièces et du coût moyen par pièce
 
 Règles de gestion:
@@ -88,8 +89,10 @@ Règles de gestion:
   - sa confirmation est interdite
 
 Critères d'acceptation:
-- un lot confirmé ne peut plus être modifié
+- un lot confirmé utilisé en ventes ne peut plus revenir en brouillon ni être supprimé
+- un lot confirmé non utilisé peut revenir en brouillon et retire ses entrées d'achat du stock/historique
 - la confirmation met à jour le stock immédiatement et correctement
+- un aller-retour `draft -> confirmed -> draft -> confirmed` ne crée pas de doublons de mouvements d'achat
 
 ## 5.3 Stock
 

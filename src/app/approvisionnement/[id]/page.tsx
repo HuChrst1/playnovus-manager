@@ -17,7 +17,7 @@ type LotRow = {
   purchase_date: string; // ISO string
   supplier: string | null;
   total_pieces: number | null;
-  total_cost: string; // numeric => string côté JS
+  total_cost: number;
   status: string;
   notes: string | null;
 };

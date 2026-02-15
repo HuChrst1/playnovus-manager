@@ -15,7 +15,9 @@ Index unique de documentation pour le produit et pour les agents.
 1. `docs/CAHIER_DES_CHARGES.md`
 2. `docs/AS_IS.md`
 3. `docs/ROADMAP.md`
-4. `docs/AGENTS.md`
+4. `docs/DECISIONS.md`
+5. `docs/HISTORIQUE.md`
+6. `docs/AGENTS.md`
 
 ## Regle anti-incoherence
 
@@ -31,6 +33,7 @@ En cas de contradiction entre documents:
 - `docs/ROADMAP.md`
 - `docs/AGENTS.md`
 - `docs/DECISIONS.md`
+- `docs/HISTORIQUE.md`
 
 ## Docs secondaires archivees (et quand les consulter)
 

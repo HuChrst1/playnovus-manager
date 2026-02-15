@@ -8,6 +8,7 @@ import { ClickableRow } from "./ClickableRow";
 import { AddSetDialog } from "./AddSetDialog";
 import { createSet, deleteSet } from "./actions";
 import { DeleteSetButton } from "./DeleteSetButton";
+import type { PostgrestError } from "@supabase/supabase-js";
 
 export const dynamic = "force-dynamic";
 
@@ -186,8 +187,8 @@ export default async function CataloguePage({
   query = query.ilike("theme", `%${themeFilter}%`);
   }
 
-  let data: any[] | null = null;
-  let error: any = null;
+  let data: SetRow[] | null = null;
+  let error: PostgrestError | null = null;
   let count: number | null = null;
 
   // Tri + pagination 100% côté SQL (y compris sur la complétion)
@@ -200,11 +201,11 @@ export default async function CataloguePage({
   })
   .range(from, to);
 
-  data = resp.data ?? [];
+  data = (resp.data ?? []) as SetRow[];
   error = resp.error;
   count = resp.count ?? data.length;
 
-  const sets = (data ?? []) as SetRow[];
+  const sets = data ?? [];
   const totalCount = count ?? sets.length;
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 

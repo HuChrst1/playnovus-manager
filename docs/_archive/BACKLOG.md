@@ -339,11 +339,11 @@ Objectif: consolider les écrans métier hors ventes avec les nouveaux garde-fou
 ### Ticket T-330 - Politique suppression lot confirmé
 - ID: `T-330`
 - But métier: définir un comportement sûr pour éviter la corruption d'historique stock.
-- Statut: `BLOCKED (decision needed)`
+- Statut: `DONE (decision appliquee)`
 - Critères d'acceptation:
-  - [ ] décision explicite: interdiction stricte ou suppression contrôlée
-  - [ ] impact historique documenté
-  - [ ] implémentation alignée avec la décision
+  - [x] décision explicite: suppression contrôlée
+  - [x] impact historique documenté
+  - [x] implémentation alignée avec la décision
 - Fichiers impactés (probables):
   - `src/app/approvisionnement/action.ts`
   - `src/app/approvisionnement/page.tsx`
@@ -353,7 +353,8 @@ Objectif: consolider les écrans métier hors ventes avec les nouveaux garde-fou
 - Risque de conflit: `moyen` (règle métier transverse)
 - Dépendances: `T-100`, `T-110`
 - Tests/recettes à faire:
-  - scénario suppression lot confirmé selon décision retenue
+  - scénario suppression lot confirmé non utilisé (OK)
+  - scénario suppression lot utilisé en ventes (blocage attendu)
   - vérification non-régression historique stock
 - Done: `Definition of Done (standard)`
 

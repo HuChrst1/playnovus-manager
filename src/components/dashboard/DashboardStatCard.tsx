@@ -1,5 +1,4 @@
 "use client";
-"use client";
 
 import * as React from "react";
 
@@ -58,6 +57,7 @@ export function DashboardStatCard({
     : "bg-slate-100 text-slate-500";
 
   const clickable = typeof onClick === "function";
+  const periodLabel = windowLabel?.trim() || `vs ${windowDays} derniers jours`;
 
   return (
     <div
@@ -109,7 +109,7 @@ export function DashboardStatCard({
               <span>{percentLabel}</span>
             </span>
             <span className="text-[10px] text-slate-400">
-                vs {windowDays} derniers jours
+                {periodLabel}
             </span>
           </div>
         </div>

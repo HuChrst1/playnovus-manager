@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -45,14 +45,8 @@ export function SetPiecesDialog({
   onSave,
 }: Props) {
   const [localOverrides, setLocalOverrides] = useState<Record<string, number>>(
-    {}
+    () => initialOverrides ?? {}
   );
-
-  // Reset quand on ouvre / change de set
-  useEffect(() => {
-    if (!open) return;
-    setLocalOverrides(initialOverrides ?? {});
-  }, [open, setId, initialOverrides]);
 
   const rows = useMemo(() => {
     const list = pieces ?? [];
