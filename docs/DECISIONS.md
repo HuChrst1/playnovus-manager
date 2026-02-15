@@ -115,17 +115,19 @@ Derniere mise a jour: 2026-02-15
   - prévention des doublons de mouvements lors des aller-retours de statut
   - conservation des invariants FIFO/ventes existants
 
+### D-012 - Baseline migrations SQL issue de la DB reelle + seed desactive en F1.1
+
+- Statut: validée
+- Constat:
+  - baseline SQL versionnee generee depuis la DB Supabase reelle (`public`)
+  - `supabase/migrations/` initialise avec migration timestampée
+  - `seed.sql` n'existe pas encore (scope F1.2)
+- Impact:
+  - le schema est versionne et rejouable localement depuis le repo
+  - la valeur de verite schema devient la baseline migration
+  - `db.seed.enabled` est desactive temporairement pour eviter les resets casses en F1.1
+
 ## Hypothèses / décisions en attente
-
-### H-001 - Stratégie de migrations SQL
-
-- Statut: ouverte
-- Observation:
-  - `supabase/migrations` absent
-  - `schema_paths` vide
-  - `seed.sql` référencé mais absent
-- A décider:
-  - baseline et convention de versioning migrations
 
 ### H-002 - Politique d'authentification applicative
 

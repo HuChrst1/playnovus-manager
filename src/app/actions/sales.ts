@@ -14,7 +14,9 @@ import type {
 import type { Tables, TablesInsert } from "@/types/supabase";
 import type { PostgrestError } from "@supabase/supabase-js";
 type SaleItemDbRow = Tables<"sale_items">;
-type SaleItemInsertDb = TablesInsert<"sale_items">;
+type SaleItemInsertDb = TablesInsert<"sale_items"> & {
+  overrides?: unknown | null;
+};
 type StockMovementDbRow = Tables<"stock_movements">;
 type StockMovementInsertDb = TablesInsert<"stock_movements">;
 type SaleItemPiecesInsertDb = TablesInsert<"sale_item_pieces">;
@@ -529,7 +531,7 @@ export async function createSaleAction(
         quantity: Number(dbItem.quantity ?? 1),
         is_partial_set: Boolean(dbItem.is_partial_set),
         net_amount: dbItem.net_amount ?? null,
-        overrides: normalizeOverrides(dbItem.overrides) ?? undefined,
+        overrides: normalizeOverrides((dbItem as { overrides?: unknown }).overrides) ?? undefined,
         comment: dbItem.comment ?? null,
       }
     : {
@@ -1484,7 +1486,7 @@ export async function updateSaleAction(
               quantity: Number(dbItem.quantity ?? 1),
               is_partial_set: Boolean(dbItem.is_partial_set),
               net_amount: dbItem.net_amount ?? null,
-              overrides: normalizeOverrides(dbItem.overrides) ?? undefined,
+              overrides: normalizeOverrides((dbItem as { overrides?: unknown }).overrides) ?? undefined,
               comment: dbItem.comment ?? null,
             }
           : {
@@ -1652,7 +1654,7 @@ export async function getSaleDraftForEditAction(
           quantity: Number(it.quantity ?? 1),
           is_partial_set: Boolean(it.is_partial_set),
           net_amount: it.net_amount ?? null,
-          overrides: normalizeOverrides(it.overrides) ?? undefined,
+          overrides: normalizeOverrides((it as { overrides?: unknown }).overrides) ?? undefined,
           comment: it.comment ?? null,
         };
       }

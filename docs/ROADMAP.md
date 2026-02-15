@@ -73,16 +73,18 @@ Definition of done:
 
 ## Phase 1 - DB versionnee et garde-fous
 
-Statut global: `A FAIRE`
+Statut global: `EN COURS`
 
 ### F1.1 - Initialiser les migrations versionnees
 
-Statut: `A FAIRE`
+Statut: `FAIT`
 Objectif: rendre l'etat DB reproductible dans le repo.
-Livrables:
-- dossier `supabase/migrations/`
-- migration baseline refletant l'etat reel
-- maj `supabase/config.toml` si necessaire
+Livrables realises:
+- dossier `supabase/migrations/` initialise
+- migration baseline depuis la DB reelle: `supabase/migrations/20260215214134_f1_1_baseline_public.sql`
+- snapshot de securite pre-baseline: `supabase/_snapshots/pre_f1_1_public.sql`
+- mise a jour `supabase/config.toml` (`[db.seed].enabled = false` en attente F1.2)
+- regeneration des types Supabase: `src/types/supabase.ts`
 Definition of done:
 - schema rejouable localement a partir du repo
 

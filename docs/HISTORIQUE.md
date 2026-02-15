@@ -166,3 +166,50 @@ Statut: `FAIT`
 ### Perimetre / limites
 
 - Les docs archivees dans `docs/_archive/` restent historiques; seules les contradictions critiques ont ete corrigees.
+
+## 2026-02-15 - F1.1 Initialiser les migrations versionnees
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Baseline migration generee depuis la DB Supabase reelle:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/supabase/migrations/20260215214134_f1_1_baseline_public.sql`
+- Snapshot de securite pre-baseline cree:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/supabase/_snapshots/pre_f1_1_public.sql`
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/supabase/config.toml`:
+  - `[db.seed].enabled = false` (seed hors perimetre F1.1, traite en F1.2)
+- Regeneration des types Supabase dans:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/types/supabase.ts`
+- Ajustement de typage uniquement (sans changement metier) dans:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/actions/sales.ts`
+  - prise en charge defensive de l'absence de colonne `sale_items.overrides` dans la DB reelle
+- Mise a jour documentation F1.1:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/ROADMAP.md`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/HISTORIQUE.md`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/DECISIONS.md`
+- Mise a jour safety git:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/supabase/.gitignore` avec `_snapshots/`
+
+### Verifications executees
+
+- Supabase / migrations:
+  - `npx supabase link --project-ref cxnbrqfhyyhnrhahdzcb --password <env>`: OK
+  - `npx supabase db dump --linked --schema public --file supabase/_snapshots/pre_f1_1_public.sql --password <env>`: OK
+  - `npx supabase db pull f1_1_baseline_public --linked --schema public --password <env>`: OK
+  - `npx supabase start`: OK
+  - `npx supabase db reset --local`: OK
+- Verification objets cles apres reset (DB locale):
+  - tables cles attendues: presentes (`inventory`, `lots`, `sales`, `sale_items`, `sale_item_pieces`, `stock_movements`, `sets_catalog`, `sets_bom`, `transactions`, `stock_balance`)
+  - vues cles attendues: presentes (`stock_per_piece`, `stock_journal`, `piece_movements`, `set_with_completion`)
+  - fonction attendue: presente (`reset_sales_id_sequence`)
+- Qualite projet:
+  - `npm ci`: OK
+  - `npm run lint`: OK
+  - `npm run typecheck`: OK
+  - `npm run build`: OK
+
+### Perimetre / limites
+
+- Aucun changement de logique metier applicative.
+- Aucun changement destructif applique au schema distant.

@@ -91,6 +91,61 @@ export type Database = {
         }
         Relationships: []
       }
+      sale_item_pieces: {
+        Row: {
+          created_at: string
+          id: number
+          lot_id: number | null
+          piece_ref: string
+          quantity: number
+          sale_id: number
+          sale_item_id: number
+          unit_cost: number | null
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+          lot_id?: number | null
+          piece_ref: string
+          quantity: number
+          sale_id: number
+          sale_item_id: number
+          unit_cost?: number | null
+        }
+        Update: {
+          created_at?: string
+          id?: number
+          lot_id?: number | null
+          piece_ref?: string
+          quantity?: number
+          sale_id?: number
+          sale_item_id?: number
+          unit_cost?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sale_item_pieces_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "sales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sale_item_pieces_sale_item_id_fkey"
+            columns: ["sale_item_id"]
+            isOneToOne: false
+            referencedRelation: "sale_item_movements"
+            referencedColumns: ["sale_item_id"]
+          },
+          {
+            foreignKeyName: "sale_item_pieces_sale_item_id_fkey"
+            columns: ["sale_item_id"]
+            isOneToOne: false
+            referencedRelation: "sale_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sale_items: {
         Row: {
           comment: string | null
@@ -101,7 +156,6 @@ export type Database = {
           line_index: number
           margin_amount: number | null
           net_amount: number | null
-          overrides: Json | null
           piece_ref: string | null
           quantity: number
           sale_id: number
@@ -116,7 +170,6 @@ export type Database = {
           line_index: number
           margin_amount?: number | null
           net_amount?: number | null
-          overrides?: Json | null
           piece_ref?: string | null
           quantity: number
           sale_id: number
@@ -131,7 +184,6 @@ export type Database = {
           line_index?: number
           margin_amount?: number | null
           net_amount?: number | null
-          overrides?: Json | null
           piece_ref?: string | null
           quantity?: number
           sale_id?: number
@@ -143,6 +195,13 @@ export type Database = {
             columns: ["sale_id"]
             isOneToOne: false
             referencedRelation: "sales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sale_items_set_id_fkey"
+            columns: ["set_id"]
+            isOneToOne: false
+            referencedRelation: "set_with_completion"
             referencedColumns: ["id"]
           },
           {
@@ -208,61 +267,6 @@ export type Database = {
         }
         Relationships: []
       }
-      sale_item_pieces: {
-        Row: {
-          created_at: string
-          id: number
-          lot_id: number
-          piece_ref: string
-          quantity: number
-          sale_id: number
-          sale_item_id: number
-          unit_cost: number | null
-        }
-        Insert: {
-          created_at?: string
-          id?: number
-          lot_id: number
-          piece_ref: string
-          quantity?: number
-          sale_id: number
-          sale_item_id: number
-          unit_cost?: number | null
-        }
-        Update: {
-          created_at?: string
-          id?: number
-          lot_id?: number
-          piece_ref?: string
-          quantity?: number
-          sale_id?: number
-          sale_item_id?: number
-          unit_cost?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "sale_item_pieces_lot_id_fkey"
-            columns: ["lot_id"]
-            isOneToOne: false
-            referencedRelation: "lots"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "sale_item_pieces_sale_id_fkey"
-            columns: ["sale_id"]
-            isOneToOne: false
-            referencedRelation: "sales"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "sale_item_pieces_sale_item_id_fkey"
-            columns: ["sale_item_id"]
-            isOneToOne: false
-            referencedRelation: "sale_items"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       sets_bom: {
         Row: {
           id: number
@@ -286,6 +290,13 @@ export type Database = {
           set_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "sets_bom_set_id_fkey"
+            columns: ["set_id"]
+            isOneToOne: false
+            referencedRelation: "set_with_completion"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "sets_bom_set_id_fkey"
             columns: ["set_id"]
@@ -328,6 +339,24 @@ export type Database = {
           version?: string | null
           year_end?: number | null
           year_start?: number | null
+        }
+        Relationships: []
+      }
+      stock_balance: {
+        Row: {
+          lot_id: number
+          piece_ref: string
+          quantity: number
+        }
+        Insert: {
+          lot_id: number
+          piece_ref: string
+          quantity?: number
+        }
+        Update: {
+          lot_id?: number
+          piece_ref?: string
+          quantity?: number
         }
         Relationships: []
       }
@@ -408,23 +437,6 @@ export type Database = {
       }
     }
     Views: {
-      set_with_completion: {
-        Row: {
-          id: string
-          display_ref: string
-          name: string
-          version: string | null
-          year_start: number | null
-          year_end: number | null
-          theme: string | null
-          image_url: string | null
-          total_parts_needed: number | null
-          total_parts_owned: number | null
-          completion_percent: number | null
-          max_complete_sets: number | null
-        }
-        Relationships: []
-      }
       piece_movements: {
         Row: {
           comment: string | null
@@ -466,22 +478,86 @@ export type Database = {
           },
         ]
       }
-      sold_pieces_journal: {
+      set_completion: {
         Row: {
-          piece_ref: string | null
-          source: string | null
-          sale_id: number | null
-          sale_item_id: number | null
-          paid_at: string | null
-          sales_channel: string | null
-          sale_type: string | null
-          status: string | null
-          quantity: number | null
-          unit_cost: number | null
-          total_cost: number | null
-          lot_id: string | null
+          completion_percent: number | null
+          max_complete_sets: number | null
+          set_id: string | null
+          total_parts_needed: number | null
+          total_parts_owned: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sets_bom_set_id_fkey"
+            columns: ["set_id"]
+            isOneToOne: false
+            referencedRelation: "set_with_completion"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sets_bom_set_id_fkey"
+            columns: ["set_id"]
+            isOneToOne: false
+            referencedRelation: "sets_catalog"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      set_with_completion: {
+        Row: {
+          completion_percent: number | null
+          display_ref: string | null
+          id: string | null
+          image_url: string | null
+          max_complete_sets: number | null
+          name: string | null
+          theme: string | null
+          total_parts_needed: number | null
+          total_parts_owned: number | null
+          version: string | null
+          year_end: number | null
+          year_start: number | null
         }
         Relationships: []
+      }
+      sold_pieces_journal: {
+        Row: {
+          lot_id: string | null
+          paid_at: string | null
+          piece_ref: string | null
+          quantity: number | null
+          sale_id: number | null
+          sale_item_id: number | null
+          sale_type: string | null
+          sales_channel: string | null
+          source: string | null
+          status: string | null
+          total_cost: number | null
+          unit_cost: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sale_item_pieces_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "sales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sale_item_pieces_sale_item_id_fkey"
+            columns: ["sale_item_id"]
+            isOneToOne: false
+            referencedRelation: "sale_item_movements"
+            referencedColumns: ["sale_item_id"]
+          },
+          {
+            foreignKeyName: "sale_item_pieces_sale_item_id_fkey"
+            columns: ["sale_item_id"]
+            isOneToOne: false
+            referencedRelation: "sale_items"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       stock_journal: {
         Row: {
@@ -514,10 +590,7 @@ export type Database = {
       }
     }
     Functions: {
-      reset_sales_id_sequence: {
-        Args: Record<string, never>
-        Returns: void
-      }
+      reset_sales_id_sequence: { Args: never; Returns: undefined }
     }
     Enums: {
       [_ in never]: never
