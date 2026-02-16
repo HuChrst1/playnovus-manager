@@ -337,3 +337,69 @@ Statut: `FAIT`
 - Aucune commande d'ecriture remote executee.
 - Aucun ajout de secret sensible dans le repo.
 - Aucun changement F1.4+ (pas d'anti-doublon, pas d'index perf additionnels).
+
+## 2026-02-16 - F1.4 Anti-doublons de mouvements + indexes perf
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Creation de la migration incrementale:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/supabase/migrations/20260216144649_f1_4_anti_duplicate_movements_indexes.sql`
+- Ajouts DB dans la migration:
+  - fail-fast pre-migration si mouvements coeur sans `source_id` exploitable (`PURCHASE`, `SALE`, `SALE_CANCEL`)
+  - fail-fast pre-migration si doublons deja presents sur la cle metier `(source_type, source_id, piece_ref, lot_id, direction)` pour flux coeur
+  - contrainte `ck_stock_movements_source_id_required_core` sur `public.stock_movements`
+  - index unique partiel `ux_stock_movements_no_duplicate_core` sur `(source_type, source_id, piece_ref, lot_id, direction)` (scope `PURCHASE|SALE|SALE_CANCEL`, `IN|OUT`)
+  - index lookup source `idx_stock_movements_source_id_direction` sur `(source_type, source_id, direction)`
+  - suppression des indexes redondants `idx_stock_movements_source` et `stock_movements_source_type_id_idx`
+- Mise a jour documentation F1.4:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/ROADMAP.md`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/DECISIONS.md`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/HISTORIQUE.md` (cette entree)
+
+### Verifications executees
+
+- Pre-check local:
+  - `npx supabase --version`: OK (`2.65.10`)
+  - `docker info --format '{{.ServerVersion}}'`: OK (`29.2.0`)
+  - `npx supabase status`: OK (stack locale detectee)
+- Validation rejouabilite locale:
+  - `npx supabase start`: KO initial (conflit conteneur deja existant `supabase_db_playnovus-manager`)
+  - `npx supabase stop --no-backup`: OK (remise a plat locale)
+  - `npx supabase start`: OK (migrations F1.1 + F1.3 + F1.4 appliquees, seed execute)
+  - `npx supabase db reset --local`: OK (baseline + F1.3 + F1.4 + seed)
+- Verification SQL post-migration (DB locale):
+  - inventaire contraintes/index/triggers/fonctions F1.4: OK
+    - `ck_stock_movements_source_id_required_core`: presente
+    - `ux_stock_movements_no_duplicate_core`: present
+    - `idx_stock_movements_source_id_direction`: present
+    - `idx_stock_movements_source` / `stock_movements_source_type_id_idx`: absents
+    - `trg_stock_balance_ins|upd|del` et `trg_reject_negative_stock_balance`: presents
+    - `apply_stock_balance_delta`, `apply_stock_balance_from_movements`, `reject_negative_stock_balance`: presentes
+  - test echec doublon cible: OK (duplicate insert rejete, `unique_violation`)
+  - test succes insertion legitime non dupliquee: OK (`INSERT 0 1` dans transaction de test puis `ROLLBACK`)
+  - integrite:
+    - `stock_balance.quantity < 0`: `0` ligne
+  - vues operationnelles:
+    - `stock_per_piece`: lisible (`2` lignes)
+    - `stock_journal`: lisible (`4` lignes)
+    - `piece_movements`: lisible (`4` lignes)
+  - EXPLAIN requetes critiques:
+    - lookup source (`source_type+source_id+direction`) utilise `ux_stock_movements_no_duplicate_core` / `idx_stock_movements_source_id_direction`
+    - journal filtre `source_type` utilise `idx_stock_movements_source_id_direction`
+    - FIFO force (`piece_ref + order created_at,id`) couvre `idx_stock_movements_piece_created_id`
+- Qualite projet:
+  - `npm ci`: OK
+  - `npm run lint`: OK
+  - `npm run typecheck`: OK
+  - `npm run build`: OK
+  - warning non bloquant observe au build: `baseline-browser-mapping` data > 2 mois
+
+### Perimetre / limites
+
+- Aucun changement de schema distant Supabase.
+- Aucune commande d'ecriture remote executee.
+- Aucun ajout de secret sensible dans le repo.
+- Aucun changement de logique metier applicative (scope strict DB + docs F1.4).
+- Aucun changement F1.5+ (pas de healthcheck metier SQL additionnel).

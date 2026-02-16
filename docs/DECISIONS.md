@@ -139,6 +139,20 @@ Derniere mise a jour: 2026-02-16
   - tout rejet de stock negatif remonte un message SQL explicite
   - compatibilite conservee avec le modele ledger (`stock_movements` source de verite, `stock_balance` derive)
 
+### D-014 - Anti-doublon strict metier sur stock_movements + fail-fast (F1.4)
+
+- Statut: validee
+- Constat:
+  - `stock_movements` etait protege par PK `id` uniquement, sans unicite metier anti-double insertion
+  - les flux coeur (`PURCHASE`, `SALE`, `SALE_CANCEL`) peuvent etre reinvoques accidentellement (retry/double-submit)
+  - deux indexes strictement redondants existaient deja sur `(source_type, source_id)`
+- Impact:
+  - contrainte DB `ck_stock_movements_source_id_required_core` pour exiger `source_id` non vide sur flux coeur
+  - index unique partiel `ux_stock_movements_no_duplicate_core` sur `(source_type, source_id, piece_ref, lot_id, direction)` pour `PURCHASE|SALE|SALE_CANCEL`
+  - strategie migration `fail-fast` en presence de donnees invalides/doublons preexistants (pas de dedup auto)
+  - remplacement de lookup source par `idx_stock_movements_source_id_direction`
+  - suppression des indexes source redondants pour limiter le cout d'ecriture inutile
+
 ## Hypothèses / décisions en attente
 
 ### H-002 - Politique d'authentification applicative

@@ -117,14 +117,22 @@ Definition of done:
 
 ### F1.4 - Anti-doublons de mouvements + indexes perf
 
-Statut: `A FAIRE`
+Statut: `FAIT`
 Objectif: fiabilite et performance du ledger.
-Livrables:
-- contrainte unicite anti insertion double accidentelle
-- index adaptes aux requetes FIFO/journal
+Livrables realises:
+- migration incrementale `supabase/migrations/20260216144649_f1_4_anti_duplicate_movements_indexes.sql`
+- fail-fast pre-migration sur donnees invalides:
+  - lignes coeur sans `source_id` exploitable (`PURCHASE`, `SALE`, `SALE_CANCEL`)
+  - doublons existants sur la cle metier `(source_type, source_id, piece_ref, lot_id, direction)`
+- contrainte `ck_stock_movements_source_id_required_core` sur `public.stock_movements`
+- index unique partiel anti-doublon `ux_stock_movements_no_duplicate_core` sur la cle metier coeur
+- index lookup source `idx_stock_movements_source_id_direction` sur `(source_type, source_id, direction)`
+- suppression des indexes source strictement redondants:
+  - `idx_stock_movements_source`
+  - `stock_movements_source_type_id_idx`
 Definition of done:
 - doublon bloque
-- requetes critiques conservees performantes
+- requetes critiques conservees performantes (plans EXPLAIN coherents)
 
 ### F1.5 - Healthcheck SQL des anomalies metier
 
