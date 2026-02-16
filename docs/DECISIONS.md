@@ -153,6 +153,19 @@ Derniere mise a jour: 2026-02-16
   - remplacement de lookup source par `idx_stock_movements_source_id_direction`
   - suppression des indexes source redondants pour limiter le cout d'ecriture inutile
 
+### D-015 - Healthcheck metier SQL canonique via vue versionnee (F1.5)
+
+- Statut: validee
+- Constat:
+  - besoin d'un audit pre-release des anomalies metier sans bloquer les ecritures
+  - les anomalies cibles couvrent: ventes `CONFIRMED`, mouvements orphelins flux coeur, incoherences inventory, stock negatif
+- Impact:
+  - creation de `public.healthcheck_business_anomalies_v1` comme contrat canonique de healthcheck SQL
+  - sortie normalisee stable (`v1`) avec colonnes techniques/metier exploitables en lecture humaine et automatisation
+  - `anomaly_code`/`anomaly_family` imposes comme cles machine de tri et suivi
+  - strategie `fail-open` explicite: aucun trigger/contrainte bloquante supplementaire introduit en F1.5
+  - compatibilite preservee avec le modele ledger existant (`stock_movements` source de verite, `stock_balance` derive)
+
 ## Hypothèses / décisions en attente
 
 ### H-002 - Politique d'authentification applicative

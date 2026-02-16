@@ -71,9 +71,24 @@ Definition of done:
 - `npm run lint` vert global
 - `npm run build` vert
 
+### F0.4 - Gouvernance securite dependances npm (supabase/tar)
+
+Statut: `FAIT`
+Objectif: eliminer les vulnerabilites high de la chaine outillage npm sans impacter le runtime applicatif.
+Livrables realises:
+- override npm ajoute pour forcer `tar` patche sous `supabase` (`tar > 7.5.6`)
+- verification `npm audit` a `0 vulnerability`
+- note de gouvernance:
+  - conserver l'override tant que `supabase` pinne une version `tar` vulnereable
+  - a chaque upgrade `supabase`, retester sans override
+  - retirer l'override quand `supabase` embarque nativement une version `tar` corrigee
+Definition of done:
+- `npm ls supabase tar` montre `tar` patche sous `supabase`
+- `npm audit` ne remonte plus de high sur `tar`
+
 ## Phase 1 - DB versionnee et garde-fous
 
-Statut global: `EN COURS`
+Statut global: `FAIT`
 
 ### F1.1 - Initialiser les migrations versionnees
 
@@ -136,16 +151,20 @@ Definition of done:
 
 ### F1.5 - Healthcheck SQL des anomalies metier
 
-Statut: `A FAIRE`
+Statut: `FAIT`
 Objectif: auditer l'integrite metier avant release.
-Livrables:
-- vue ou fonction de healthcheck retournant:
-- ventes confirmees sans mouvements
-- mouvements orphelins
-- inventory incoherente
-- stock negatif
+Livrables realises:
+- migration incrementale `supabase/migrations/20260216164515_f1_5_healthcheck_sql_anomalies.sql`
+- vue SQL canonique `public.healthcheck_business_anomalies_v1` (audit fail-open, non bloquant)
+- contrat de sortie stable `v1` (14 colonnes): `contract_version`, `anomaly_code`, `anomaly_family`, `severity`, `entity_table`, `entity_id`, `sale_id`, `sale_item_id`, `lot_id`, `movement_id`, `piece_ref`, `expected_quantity`, `observed_quantity`, `details`
+- couverture des anomalies metier:
+  - ventes `CONFIRMED` sans mouvements attendus (incluant reconciliation quantitative snapshot vs `SALE/OUT`)
+  - mouvements orphelins flux coeur (`PURCHASE`, `SALE`, `SALE_CANCEL`, `SALE_EDIT`)
+  - incoherences inventory (double controle: `lots.total_pieces` vs somme `inventory`, et `inventory` vs `PURCHASE/IN` pour lots `confirmed`)
+  - stock negatif (`stock_balance.quantity < 0`)
+- grants `SELECT` sur la vue pour `anon`, `authenticated`, `service_role`
 Definition of done:
-- healthcheck disponible et documente
+- healthcheck disponible, documente, et rejouable via `npx supabase db reset --local`
 
 ## Phase 2 - Verrouillage Approvisionnement et Stock
 

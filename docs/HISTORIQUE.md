@@ -403,3 +403,128 @@ Statut: `FAIT`
 - Aucun ajout de secret sensible dans le repo.
 - Aucun changement de logique metier applicative (scope strict DB + docs F1.4).
 - Aucun changement F1.5+ (pas de healthcheck metier SQL additionnel).
+
+## 2026-02-16 - F1.5 Healthcheck SQL des anomalies metier
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Creation de la migration incrementale:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/supabase/migrations/20260216164515_f1_5_healthcheck_sql_anomalies.sql`
+- Ajouts DB dans la migration:
+  - creation de la vue canonique `public.healthcheck_business_anomalies_v1`
+  - contrat de sortie stable `v1` (14 colonnes):
+    - `contract_version`
+    - `anomaly_code`
+    - `anomaly_family`
+    - `severity`
+    - `entity_table`
+    - `entity_id`
+    - `sale_id`
+    - `sale_item_id`
+    - `lot_id`
+    - `movement_id`
+    - `piece_ref`
+    - `expected_quantity`
+    - `observed_quantity`
+    - `details`
+  - couverture des anomalies:
+    - `CONFIRMED_SALE`: `SALE_CONFIRMED_WITHOUT_ITEMS`, `SALE_ITEM_WITHOUT_SNAPSHOT`, `SALE_ITEM_MOVEMENT_QTY_MISMATCH`
+    - `ORPHAN_MOVEMENT`: `ORPHAN_PURCHASE_MOVEMENT`, `ORPHAN_SALE_MOVEMENT`, `ORPHAN_SALE_CANCEL_MOVEMENT`, `ORPHAN_SALE_EDIT_MOVEMENT`
+    - `INVENTORY_INCONSISTENCY`: `LOT_TOTAL_PIECES_MISMATCH`, `CONFIRMED_LOT_PURCHASE_INVENTORY_QTY_MISMATCH`
+    - `NEGATIVE_STOCK`: `NEGATIVE_STOCK_BALANCE_ROW`
+  - grants de lecture explicites sur la vue pour `anon`, `authenticated`, `service_role`
+- Strategie appliquee:
+  - audit `fail-open` (aucun blocage de migration sur anomalies metier detectees)
+  - aucun changement des contraintes/triggers F1.3/F1.4
+- Mise a jour documentation F1.5:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/ROADMAP.md`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/DECISIONS.md`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/HISTORIQUE.md` (cette entree)
+
+### Verifications executees
+
+- Pre-check local:
+  - `npx supabase --version`: OK (`2.65.10`)
+  - `docker info`: OK (Docker engine `29.2.0`)
+  - `npx supabase status`: OK (stack locale active)
+- Validation rejouabilite locale:
+  - `npx supabase start`: OK (stack deja active)
+  - `npx supabase db reset --local --debug`: OK (baseline + F1.3 + F1.4 + F1.5 + seed)
+  - `npx supabase db reset --local`: OK (validation finale en mode standard)
+- Verification SQL post-migration (DB locale):
+  - vue `public.healthcheck_business_anomalies_v1`: presente
+  - contrat colonnes/types: conforme (14 colonnes attendues)
+  - etat nominal apres reset:
+    - `anomalies total`: `0`
+    - `stock_balance.quantity < 0`: `0`
+  - tests d'injection controles (transaction + rollback): OK
+    - `SALE_CONFIRMED_WITHOUT_ITEMS`: detecte (`detected_rows=1`)
+    - `ORPHAN_SALE_MOVEMENT`: detecte (`detected_rows=1`)
+    - `LOT_TOTAL_PIECES_MISMATCH`: detecte (`detected_rows=1`)
+    - `CONFIRMED_LOT_PURCHASE_INVENTORY_QTY_MISMATCH`: detecte (`detected_rows=1`)
+    - post-rollback: `anomalies total = 0`
+  - non-regression F1.3/F1.4: OK
+    - garde-fou anti-stock negatif: actif (test negatif bloque, `stock_balance.quantity < 0 = 0`)
+    - anti-doublon metier: actif (`unique_violation` capturee sur tentative de doublon)
+  - vues metier existantes toujours lisibles:
+    - `stock_per_piece`: OK (`2` lignes seed)
+    - `stock_journal`: OK (`4` lignes seed)
+    - `piece_movements`: OK (`4` lignes seed)
+- Qualite projet:
+  - `npm ci`: OK
+  - `npm run lint`: OK
+  - `npm run typecheck`: OK
+  - `npm run build`: OK
+  - warning non bloquant observe au build: `baseline-browser-mapping` data > 2 mois
+
+### Perimetre / limites
+
+- Aucun changement de schema distant Supabase.
+- Aucune commande d'ecriture remote executee.
+- Aucun ajout de secret sensible dans le repo.
+- Aucun changement de logique metier applicative.
+- Aucun changement F2+.
+
+## 2026-02-16 - Correctif securite npm `supabase/tar`
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/package.json`:
+  - ajout de l'override npm:
+    - `supabase -> tar@7.5.9`
+- Regeneration du lockfile:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/package-lock.json`
+- Mise a jour gouvernance roadmap:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/ROADMAP.md` (`F0.4`)
+
+### Verifications executees
+
+- Stabilisation npm:
+  - `chown -R $(id -u):$(id -g) ~/.npm`: OK
+  - `npm config get cache`: OK (`/Users/bastienchristlen/.npm`)
+  - `npm ping`: OK (`PONG`)
+- Baseline vulnerabilites:
+  - `npm ls supabase tar`: OK (`supabase@2.65.10 -> tar@7.5.2`)
+  - `npm audit`: KO attendu (`2 high` sur `tar <= 7.5.6`)
+- Apres correctif:
+  - `npm install`: OK (`changed 1 package`)
+  - `npm ls supabase tar`: OK (`tar@7.5.9 overridden`)
+  - `npm audit`: OK (`found 0 vulnerabilities`)
+- Smoke test Supabase CLI:
+  - `npx supabase --version`: OK (`2.65.10`)
+  - `npx supabase --help`: OK
+  - `npx supabase status`: OK (stack locale active)
+- Gates techniques:
+  - `npm run lint`: OK
+  - `npm run typecheck`: OK
+  - `npm run build`: OK
+
+### Perimetre / limites
+
+- Aucun changement de logique applicative.
+- Aucun changement de schema DB (local/remote).
+- Aucune ecriture distante Supabase.
