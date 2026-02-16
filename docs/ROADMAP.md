@@ -90,13 +90,18 @@ Definition of done:
 
 ### F1.2 - Ajouter un seed minimal executable
 
-Statut: `A FAIRE`
+Statut: `FAIT`
 Objectif: avoir un reset local cohérent.
-Livrables:
-- `supabase/seed.sql`
-- jeu minimal coherent avec flux Appro/Ventes/Stock
+Livrables realises:
+- `supabase/seed.sql` cree (seed SQL minimal executable)
+- reactivation du seed local dans `supabase/config.toml` (`[db.seed].enabled = true`)
+- jeu minimal coherent avec flux Appro/Ventes/Stock:
+  - 1 set + BOM multi-pieces
+  - 1 lot confirme + mouvements `PURCHASE/IN`
+  - 1 vente `CONFIRMED` + 1 ligne + details `sale_item_pieces`
+  - mouvements `SALE/OUT` coherents relies a la ligne de vente
 Definition of done:
-- reset DB local executable sans erreur
+- `npx supabase db reset --local` execute sans erreur (baseline + seed)
 
 ### F1.3 - Bloquer le stock negatif au niveau DB
 

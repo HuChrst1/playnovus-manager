@@ -213,3 +213,67 @@ Statut: `FAIT`
 
 - Aucun changement de logique metier applicative.
 - Aucun changement destructif applique au schema distant.
+
+## 2026-02-15 - F1.2 Ajouter un seed minimal executable
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Creation de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/supabase/seed.sql`:
+  - seed minimal deterministe et executable via reset local
+  - insertion d'un set (`sets_catalog`) et BOM multi-pieces (`sets_bom`)
+  - insertion d'un lot `confirmed` (`lots`) + lignes `inventory` coherentes
+  - insertion des mouvements `PURCHASE/IN` dans `stock_movements`
+  - insertion d'une vente `CONFIRMED` (`sales`) + ligne `sale_items` de type `SET`
+  - insertion du detail `sale_item_pieces`
+  - insertion des mouvements `SALE/OUT` relies au `sale_item_id`
+  - aucune insertion directe dans `stock_balance` (alimente par trigger)
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/supabase/config.toml`:
+  - `[db.seed].enabled = true`
+  - `sql_paths = ["./seed.sql"]` conserve
+- Mise a jour documentation F1.2:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/ROADMAP.md` (`F1.2` passe a `FAIT`)
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/HISTORIQUE.md` (cette entree)
+
+### Verifications executees
+
+- Pre-check local:
+  - `npx supabase --version`: OK (`2.65.10`)
+  - `docker info --format '{{.ServerVersion}}'`: OK (`29.2.0`)
+  - `npx supabase status`: OK (stack locale detectee en cours d'execution)
+- Validation Supabase locale:
+  - `npx supabase start`: OK (stack deja active)
+  - `npx supabase db reset --local`: OK (baseline + seed appliques sans erreur)
+- Verification SQL post-seed (DB locale):
+  - objets cles presents:
+    - `stock_per_piece`: present
+    - `stock_journal`: present
+    - `piece_movements`: present
+    - `set_with_completion`: present
+    - `reset_sales_id_sequence()`: presente
+  - comptages seed:
+    - `lots=1`
+    - `stock_movements=4`
+    - `sales=1`
+    - `sale_items=1`
+    - `sale_item_pieces=2`
+    - `sets_catalog=1`
+    - `sets_bom=2`
+  - integrite:
+    - `stock_balance.quantity < 0`: `0` ligne
+    - vues non vides:
+      - `stock_per_piece=2` lignes
+      - `stock_journal=4` lignes
+      - `set_with_completion=1` ligne
+- Qualite projet:
+  - `npm ci`: OK
+  - `npm run lint`: OK
+  - `npm run typecheck`: OK
+  - `npm run build`: OK
+
+### Perimetre / limites
+
+- Aucun changement de schema distant Supabase.
+- Aucune commande destructive remote executee.
+- Aucune modification de logique metier applicative (hors ajout seed SQL et config locale associee).
