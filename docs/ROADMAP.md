@@ -105,13 +105,15 @@ Definition of done:
 
 ### F1.3 - Bloquer le stock negatif au niveau DB
 
-Statut: `A FAIRE`
+Statut: `FAIT`
 Objectif: interdire toute ecriture menant a stock < 0.
-Livrables:
-- contrainte/trigger SQL anti-stock negatif
-- message d'erreur explicite
+Livrables realises:
+- migration incrementale `supabase/migrations/20260216134316_f1_3_block_negative_stock.sql`
+- contrainte `ck_stock_balance_qty_nonneg` sur `public.stock_balance`
+- trigger/fonctions SQL anti-stock negatif avec message explicite
+- contrainte `ck_stock_movements_lot_required_inout` pour imposer `lot_id` sur `IN/OUT`
 Definition of done:
-- une sortie invalide est rejetee par la DB
+- une sortie invalide est rejetee par la DB avec message explicite
 
 ### F1.4 - Anti-doublons de mouvements + indexes perf
 

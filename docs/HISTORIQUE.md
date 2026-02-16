@@ -277,3 +277,63 @@ Statut: `FAIT`
 - Aucun changement de schema distant Supabase.
 - Aucune commande destructive remote executee.
 - Aucune modification de logique metier applicative (hors ajout seed SQL et config locale associee).
+
+## 2026-02-16 - F1.3 Bloquer le stock negatif au niveau DB
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Creation de la migration incrementale:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/supabase/migrations/20260216134316_f1_3_block_negative_stock.sql`
+- Ajouts DB dans la migration:
+  - fail-fast pre-migration si donnees invalides (`stock_balance.quantity < 0` ou `stock_movements IN/OUT` sans `lot_id`)
+  - contrainte `ck_stock_balance_qty_nonneg` sur `public.stock_balance` (`quantity >= 0`)
+  - fonction helper `public.apply_stock_balance_delta(piece_ref, lot_id, delta)` avec rejet explicite des resultats negatifs
+  - remplacement de `public.apply_stock_balance_from_movements()` pour appliquer les deltas sans insert intermediaire negatif
+  - fonction/trigger `public.reject_negative_stock_balance()` + `trg_reject_negative_stock_balance` sur `public.stock_balance`
+  - contrainte `ck_stock_movements_lot_required_inout` sur `public.stock_movements`
+  - grants explicites pour les nouvelles fonctions (`anon`, `authenticated`, `service_role`)
+- Mise a jour documentation F1.3:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/ROADMAP.md`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/DECISIONS.md`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/HISTORIQUE.md` (cette entree)
+
+### Verifications executees
+
+- Pre-check local:
+  - `npx supabase --version`: OK (`2.65.10`)
+  - `docker info --format '{{.ServerVersion}}'`: OK (`29.2.0`)
+  - `npx supabase status`: OK (stack locale active)
+- Validation rejouabilite locale:
+  - `npx supabase start`: OK (stack deja active)
+  - `npx supabase db reset --local`: OK (baseline + F1.3 + seed F1.2)
+- Verification SQL post-migration (DB locale):
+  - inventaire contraintes/fonctions/triggers F1.3: OK
+    - `ck_stock_balance_qty_nonneg`: presente
+    - `ck_stock_movements_lot_required_inout`: presente
+    - `trg_reject_negative_stock_balance`: present
+    - `apply_stock_balance_delta`, `apply_stock_balance_from_movements`, `reject_negative_stock_balance`: presentes
+  - test echec sortie invalide: OK (rejet DB explicite)
+    - message: `Stock negatif interdit (...) Mouvement refuse.`
+  - test succes sortie valide: OK (`BEGIN`, `INSERT 0 1`, `ROLLBACK`)
+  - test lot obligatoire pour `IN/OUT`: OK (viol de `ck_stock_movements_lot_required_inout` quand `lot_id` est `NULL`)
+  - integrite:
+    - `stock_balance.quantity < 0`: `0` ligne
+    - traces de tests (`source_id=F1_3_FAIL_TEST`, `F1_3_SUCCESS_TEST`): `0` ligne
+  - vues operationnelles:
+    - `stock_per_piece`: lisible
+    - `stock_journal`: lisible
+    - `piece_movements`: lisible
+- Qualite projet:
+  - `npm ci`: OK
+  - `npm run lint`: OK
+  - `npm run typecheck`: OK
+  - `npm run build`: OK
+
+### Perimetre / limites
+
+- Aucun changement de schema distant Supabase.
+- Aucune commande d'ecriture remote executee.
+- Aucun ajout de secret sensible dans le repo.
+- Aucun changement F1.4+ (pas d'anti-doublon, pas d'index perf additionnels).

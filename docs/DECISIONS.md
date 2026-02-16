@@ -1,7 +1,7 @@
 # Journal des décisions
 
 Date de mise à jour initiale: 2026-02-12
-Derniere mise a jour: 2026-02-15
+Derniere mise a jour: 2026-02-16
 
 ## Décisions prises
 
@@ -126,6 +126,18 @@ Derniere mise a jour: 2026-02-15
   - le schema est versionne et rejouable localement depuis le repo
   - la valeur de verite schema devient la baseline migration
   - `db.seed.enabled` est desactive temporairement pour eviter les resets casses en F1.1
+
+### D-013 - Mouvements IN/OUT obligatoirement relies a un lot (F1.3)
+
+- Statut: validee
+- Constat:
+  - le garde-fou anti-stock negatif est porte par `stock_balance` alimente depuis `stock_movements`
+  - des mouvements `IN/OUT` avec `lot_id` nul pouvaient contourner ce garde-fou
+  - la logique FIFO et les couts unitaires reussissent uniquement avec un rattachement lot explicite
+- Impact:
+  - contrainte DB `ck_stock_movements_lot_required_inout` pour imposer `lot_id` sur `IN/OUT`
+  - tout rejet de stock negatif remonte un message SQL explicite
+  - compatibilite conservee avec le modele ledger (`stock_movements` source de verite, `stock_balance` derive)
 
 ## Hypothèses / décisions en attente
 
