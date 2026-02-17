@@ -184,6 +184,10 @@ Livrables realises:
 Definition of done:
 - coherence stock/historique verifiee sur transitions `draft/confirmed`
 - suppression lot confirme possible sans suppression en cascade des ventes
+- revalidation merge-readiness completee en local (checks SQL + gates `lint/typecheck/build` verts)
+- ecart remote observe en lecture seule sur le snapshot `pre_f2_0_public.sql` (objets F1.3/F1.4/F1.5 absents), sans ecriture distante
+- cleanup remote des lots de test F2.0 realise en passe controlee (suppression ciblee uniquement)
+- script de validation reproductible local disponible: `npm run test:f2.0` (scenarios F2.0 + checks F1.3/F1.4/F1.5)
 
 ### F2.1 - Garde-fou serveur lot vide non confirmable
 

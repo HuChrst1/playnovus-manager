@@ -8,6 +8,7 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
+    "test:f2.0": "node scripts/f2_0_validate_local.mjs",
     "test": "npm run test:unit && npm run test:e2e",
     "test:unit": "node -e \"console.log('[TODO][F0.1] Aucun framework de test unitaire configure.');\"",
     "test:e2e": "node -e \"console.log('[TODO][F0.1] Aucun framework de test e2e configure.');\""

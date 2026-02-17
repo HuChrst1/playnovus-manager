@@ -528,3 +528,107 @@ Statut: `FAIT`
 - Aucun changement de logique applicative.
 - Aucun changement de schema DB (local/remote).
 - Aucune ecriture distante Supabase.
+
+## 2026-02-16 - F2.0 Revalidation merge-readiness (suppression lot confirme + sync statut/stock)
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Revalidation complete du perimetre F2.0 sans changement de code metier:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/approvisionnement/action.ts`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/approvisionnement/DeleteLotButton.tsx`
+- Verification documentaire F2.0:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/ROADMAP.md`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/DECISIONS.md`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/HISTORIQUE.md`
+- Mise a jour roadmap F2.0 avec precision de revalidation locale et signalement de l'ecart remote en lecture seule.
+
+### Verifications executees
+
+- Pre-check local:
+  - `npx supabase --version`: OK (`2.65.10`)
+  - `docker info --format '{{.ServerVersion}}'`: OK (`29.2.0`)
+  - `npx supabase status`: OK (stack locale active)
+- Baseline locale:
+  - `npx supabase db reset --local`: OK (baseline + F1.3 + F1.4 + F1.5 + seed)
+- Lecture remote strictement read-only:
+  - `npx supabase link --project-ref <PROJECT_REF> --password \"$SUPABASE_DB_PASSWORD\"`: OK
+  - `npx supabase db dump --linked --schema public --file /Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/supabase/_snapshots/pre_f2_0_public.sql --password \"$SUPABASE_DB_PASSWORD\"`: OK
+- Verification SQL locale post-reset:
+  - `stock_balance.quantity < 0`: `0`
+  - `healthcheck_business_anomalies_v1`: `0` anomalie
+  - vues lisibles:
+    - `stock_per_piece`: `2` lignes
+    - `stock_journal`: `4` lignes
+    - `piece_movements`: `4` lignes
+  - coherence lots confirmes (`inventory` vs `PURCHASE/IN`): OK
+  - regression guards:
+    - F1.3 anti-stock negatif: OK (test negatif rejete)
+    - F1.4 anti-doublon: OK (test doublon rejete)
+- Validation fonctionnelle F2.0 automatisee en local (harness server actions, build local env isole):
+  - S1 suppression lot `draft` non utilise: OK
+  - S2 suppression lot `confirmed` non utilise + retrait `PURCHASE`: OK
+  - S3 suppression lot utilise: KO attendu (`reason=LOT_USED_BY_SALES`): OK
+  - S4 transition `draft -> confirmed` (recreation `PURCHASE`): OK
+  - S5 transition `confirmed -> draft` sans ventes: OK
+  - S6 transition `confirmed -> draft` avec ventes: KO attendu (`reason=LOT_USED_BY_SALES`): OK
+- Gates techniques:
+  - `npm ci`: OK
+  - `npm run lint`: OK
+  - `npm run typecheck`: OK
+  - `npm run build`: OK
+
+### Perimetre / limites
+
+- Aucun changement de logique metier F2.0 (implementation deja conforme).
+- Aucun changement SQL/migration (scope F2.0 respecte).
+- Aucun changement destructif distant.
+- Ecart remote constate en lecture seule:
+  - le dump `pre_f2_0_public.sql` ne contient pas les objets F1.3/F1.4/F1.5 attendus (`ck_stock_balance_qty_nonneg`, `ck_stock_movements_lot_required_inout`, `ck_stock_movements_source_id_required_core`, `ux_stock_movements_no_duplicate_core`, `idx_stock_movements_source_id_direction`, `trg_reject_negative_stock_balance`, `healthcheck_business_anomalies_v1`)
+  - traitement de cet alignement remote explicitement hors scope F2.0 (politique: `Proceed + report`).
+
+## 2026-02-17 - F2.0 hardening: cleanup remote test lots + script reproductible
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Nettoyage remote controle des lots de test F2.0 crees pendant les validations:
+  - cibles: `lot_code like 'F2T_%'` et `lot_code = 'TMP_X'`
+  - suppression effective: lots `14`, `15`, `17`
+  - verification post-cleanup: `remaining=[]`
+- Ajout d'un script local reproductible:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/scripts/f2_0_validate_local.mjs`
+  - commande npm: `npm run test:f2.0`
+  - objectif: executer automatiquement les scenarios F2.0 sans dependre d'un harness ad hoc.
+- MAJ npm scripts:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/package.json` -> `test:f2.0`
+
+### Verifications executees
+
+- Remote cleanup (ecriture distante explicite demandee):
+  - dry-run securite: verification `sales_mov=0`, `sale_item_pieces=0`, `non_purchase_mov=0` sur chaque lot cible
+  - suppression ciblee en sequence:
+    - delete `stock_movements` (`PURCHASE` via `source_id` puis `lot_id`)
+    - delete `inventory` par `lot_id`
+    - delete `lots` par `id`
+  - resultat final: plus aucun lot cible (`remaining=[]`)
+- Script `npm run test:f2.0` (run vert):
+  - S1 suppression lot `draft` non utilise: OK
+  - S2 suppression lot `confirmed` non utilise + retrait `PURCHASE`: OK
+  - S3 suppression lot utilise: KO attendu `LOT_USED_BY_SALES`: OK
+  - S4 `draft -> confirmed` cree `PURCHASE`: OK
+  - S5 `confirmed -> draft` sans ventes retire `PURCHASE`: OK
+  - S6 `confirmed -> draft` avec ventes bloque `LOT_USED_BY_SALES`: OK
+  - F1.3 anti-stock negatif actif: OK
+  - F1.4 anti-doublon actif: OK
+  - `stock_balance.quantity < 0`: OK
+  - vues `stock_per_piece` / `stock_journal` / `piece_movements`: OK
+  - `healthcheck_business_anomalies_v1 = 0`: OK
+
+### Perimetre / limites
+
+- Aucun changement de logique metier F2.0.
+- Aucun ajout de migration SQL.
+- Le drift schema remote F1.3/F1.4/F1.5 constate en lecture seule reste a traiter hors de cette entree.
