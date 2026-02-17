@@ -1,7 +1,7 @@
 # Journal des décisions
 
 Date de mise à jour initiale: 2026-02-12
-Derniere mise a jour: 2026-02-16
+Derniere mise a jour: 2026-02-17
 
 ## Décisions prises
 
@@ -165,6 +165,34 @@ Derniere mise a jour: 2026-02-16
   - `anomaly_code`/`anomaly_family` imposes comme cles machine de tri et suivi
   - strategie `fail-open` explicite: aucun trigger/contrainte bloquante supplementaire introduit en F1.5
   - compatibilite preservee avec le modele ledger existant (`stock_movements` source de verite, `stock_balance` derive)
+
+### D-016 - LotID auto attribue cote serveur a la creation
+
+- Statut: validee
+- Constat:
+  - la creation de lot demandait une saisie manuelle de `lot_code` cote UI
+  - ce champ est une convention interne qui doit rester sequentielle et simple (`LOT_N`)
+  - la contrainte DB `lots_lot_code_key` impose deja l'unicite
+- Impact:
+  - `lot_code` est genere cote serveur a la creation, au format `LOT_<N>`
+  - regle de progression retenue: `max+1` global sur les codes conformes `LOT_N`
+  - `LOT_0` reste reserve au lot initial (la generation standard commence a `LOT_1`)
+  - en cas de collision concurrente, retry serveur avant retour d'erreur explicite
+  - edition manuelle ulterieure de `lot_code` conservee dans la modale d'edition
+
+### D-017 - Renumerotation automatique des LOT_n apres suppression + protection de LOT_0
+
+- Statut: validee
+- Constat:
+  - apres suppression d'un lot intermediaire, la numerotation visuelle pouvait laisser des trous (`LOT_1`, `LOT_3`, ...)
+  - `LOT_0` represente le lot initial de reference et ne doit pas etre supprimable
+  - des codes personnalises peuvent exister et ne doivent pas etre reecrits automatiquement
+- Impact:
+  - suppression de `LOT_0` interdite cote serveur avec message explicite
+  - apres suppression d'un `LOT_n`, tous les codes standards `LOT_k` avec `k > n` sont renumerotes en `LOT_{k-1}`
+  - la renumerotation cible uniquement les codes conformes `^LOT_(\\d+)$`
+  - les codes personnalises restent inchanges
+  - les regles metier existantes (blocage ventes liees, garde-fous stock) restent prioritaires
 
 ## Hypothèses / décisions en attente
 

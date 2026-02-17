@@ -2,6 +2,7 @@ import { supabase } from "@/lib/supabase";
 import { NewLotDialog } from "./NewLotDialog";
 import { DeleteLotButton } from "./DeleteLotButton";
 import { EditLotDialog, LotForEdit } from "./EditLotDialog";
+import { ClickableRow } from "./ClickableRow";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { ApproStatCardWithDialog } from "@/components/dashboard/StatCardWithDialog";
@@ -329,15 +330,10 @@ export default async function ApprovisionnementPage({
                   };
 
                   return (
-                    <tr key={lot.id} className="app-table-row">
-                      {/* LotID = lien vers la page de détail */}
+                    <ClickableRow key={lot.id} href={`/approvisionnement/${lot.id}`}>
+                      {/* LotID */}
                       <td className="px-4 py-3 font-mono text-xs">
-                        <Link
-                          href={`/approvisionnement/${lot.id}`}
-                          className="underline-offset-2 hover:underline text-slate-900"
-                        >
-                          {displayCode}
-                        </Link>
+                        {displayCode}
                       </td>
 
                       <td className="px-4 py-3">
@@ -386,8 +382,11 @@ export default async function ApprovisionnementPage({
                         </span>
                       </td>
 
-                      <td className="px-4 py-3 text-right">
-                        <div className="inline-flex items-center gap-1.5">
+                      <td className="px-4 py-3 text-right" data-row-action="true">
+                        <div
+                          className="inline-flex items-center gap-1.5"
+                          data-row-action="true"
+                        >
                           <EditLotDialog lot={lotForEdit} />
                           <DeleteLotButton
                             lotId={lot.id}
@@ -397,7 +396,7 @@ export default async function ApprovisionnementPage({
                           />
                         </div>
                       </td>
-                    </tr>
+                    </ClickableRow>
                   );
                 })
               )}

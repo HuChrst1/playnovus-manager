@@ -12,7 +12,6 @@ export type CreateLotInput = {
   purchaseDate: string;          // YYYY-MM-DD
   label?: string;
   supplier?: string;
-  lotCode?: string;
   totalCost: number;
   totalPieces?: number;
   status?: "draft" | "confirmed";
@@ -23,15 +22,19 @@ type NormalizedLot = {
   purchaseDate: string;
   label: string | null;
   supplier: string | null;
-  lotCode: string | null;
   totalCost: number;
   totalPieces: number;
   status: "draft" | "confirmed";
   notes: string | null;
 };
 
+const LOT_CODE_PREFIX = "LOT_";
+const LOT_CODE_REGEX = /^LOT_(\d+)$/;
+const LOT_CODE_INSERT_RETRY_MAX = 3;
+
 type LotActionReason =
   | "LOT_NOT_FOUND"
+  | "LOT_INITIAL_PROTECTED"
   | "LOT_USED_BY_SALES"
   | "DELETE_FAILED"
   | "UPDATE_FAILED";
@@ -46,6 +49,7 @@ type LotActionFailure = {
 
 type LotActionSuccess = {
   success: true;
+  warning?: string;
 };
 
 export type UpdateLotResult = LotActionSuccess | LotActionFailure;
@@ -58,25 +62,190 @@ type LotSalesUsage = {
   error?: string;
 };
 
-// Fonction interne utilisée par les deux variantes
-async function insertLot(normalized: NormalizedLot) {
+type NextLotCodeResult =
+  | {
+      success: true;
+      lotCode: string;
+    }
+  | {
+      success: false;
+      error: string;
+    };
+
+type RenumberLotsResult =
+  | {
+      success: true;
+    }
+  | {
+      success: false;
+      error: string;
+    };
+
+const extractLotSequence = (lotCode: string | null): number | null => {
+  if (!lotCode) {
+    return null;
+  }
+
+  const match = lotCode.trim().match(LOT_CODE_REGEX);
+  if (!match) {
+    return null;
+  }
+
+  const sequence = Number(match[1]);
+  if (!Number.isInteger(sequence) || sequence < 0) {
+    return null;
+  }
+
+  return sequence;
+};
+
+const isLotCodeUniqueViolation = (error: {
+  code?: string;
+  message?: string;
+}) => {
+  if (error.code === "23505") {
+    return true;
+  }
+
+  return (error.message ?? "").includes("lots_lot_code_key");
+};
+
+async function computeNextLotCode(): Promise<NextLotCodeResult> {
   const { data, error } = await supabase
     .from("lots")
-    .insert({
-      lot_code: normalized.lotCode,
-      label: normalized.label,
-      supplier: normalized.supplier,
-      purchase_date: normalized.purchaseDate,
-      total_cost: normalized.totalCost,
-      total_pieces: normalized.totalPieces,
-      status: normalized.status,
-      notes: normalized.notes,
-    })
-    .select("id")
-    .single();
+    .select("lot_code")
+    .like("lot_code", `${LOT_CODE_PREFIX}%`);
 
   if (error) {
+    console.error("computeNextLotCode - erreur lecture lots:", error);
+    return {
+      success: false,
+      error:
+        "Impossible de calculer le prochain identifiant de lot. Merci de réessayer.",
+    };
+  }
+
+  let maxSequence = 0;
+  for (const row of data ?? []) {
+    const parsedSequence = extractLotSequence(row.lot_code ?? null);
+    if (parsedSequence !== null && parsedSequence > maxSequence) {
+      maxSequence = parsedSequence;
+    }
+  }
+
+  const nextSequence = Math.max(maxSequence + 1, 1);
+  return {
+    success: true,
+    lotCode: `${LOT_CODE_PREFIX}${nextSequence}`,
+  };
+}
+
+async function renumberLotsAfterDeletion(
+  deletedSequence: number
+): Promise<RenumberLotsResult> {
+  const { data, error } = await supabase
+    .from("lots")
+    .select("id, lot_code");
+
+  if (error) {
+    console.error(
+      "renumberLotsAfterDeletion - erreur lecture des lots:",
+      error
+    );
+    return {
+      success: false,
+      error:
+        "Le lot a été supprimé, mais impossible de renuméroter automatiquement les LotID.",
+    };
+  }
+
+  const renumberTargets = (data ?? [])
+    .map((lot) => ({
+      id: lot.id,
+      currentSequence: extractLotSequence(lot.lot_code ?? null),
+    }))
+    .filter(
+      (lot): lot is { id: number; currentSequence: number } =>
+        lot.currentSequence !== null && lot.currentSequence > deletedSequence
+    )
+    .sort((a, b) => a.currentSequence - b.currentSequence);
+
+  for (const target of renumberTargets) {
+    const nextCode = `${LOT_CODE_PREFIX}${target.currentSequence - 1}`;
+    const { error: updateError } = await supabase
+      .from("lots")
+      .update({ lot_code: nextCode })
+      .eq("id", target.id);
+
+    if (updateError) {
+      console.error(
+        "renumberLotsAfterDeletion - erreur mise à jour lot_code:",
+        updateError
+      );
+      return {
+        success: false,
+        error:
+          "Le lot a été supprimé, mais la renumérotation automatique des LotID a échoué.",
+      };
+    }
+  }
+
+  return { success: true };
+}
+
+// Fonction interne utilisée par les deux variantes
+async function insertLot(normalized: NormalizedLot) {
+  for (
+    let attempt = 1;
+    attempt <= LOT_CODE_INSERT_RETRY_MAX;
+    attempt += 1
+  ) {
+    const nextLotCodeResult = await computeNextLotCode();
+    if (!nextLotCodeResult.success) {
+      return {
+        success: false as const,
+        error: nextLotCodeResult.error,
+      };
+    }
+
+    const { data, error } = await supabase
+      .from("lots")
+      .insert({
+        lot_code: nextLotCodeResult.lotCode,
+        label: normalized.label,
+        supplier: normalized.supplier,
+        purchase_date: normalized.purchaseDate,
+        total_cost: normalized.totalCost,
+        total_pieces: normalized.totalPieces,
+        status: normalized.status,
+        notes: normalized.notes,
+      })
+      .select("id")
+      .single();
+
+    if (!error) {
+      // on rafraîchit la page /approvisionnement
+      revalidatePath("/approvisionnement");
+
+      return {
+        success: true as const,
+        lotId: data?.id ?? null,
+      };
+    }
+
+    if (attempt < LOT_CODE_INSERT_RETRY_MAX && isLotCodeUniqueViolation(error)) {
+      continue;
+    }
+
     console.error("createLot error:", error);
+    if (isLotCodeUniqueViolation(error)) {
+      return {
+        success: false as const,
+        error:
+          "Impossible de générer un identifiant de lot unique. Merci de réessayer.",
+      };
+    }
+
     return {
       success: false as const,
       error:
@@ -85,12 +254,10 @@ async function insertLot(normalized: NormalizedLot) {
     };
   }
 
-  // on rafraîchit la page /approvisionnement
-  revalidatePath("/approvisionnement");
-
   return {
-    success: true as const,
-    lotId: data?.id ?? null,
+    success: false as const,
+    error:
+      "Impossible de générer un identifiant de lot unique. Merci de réessayer.",
   };
 }
 
@@ -103,7 +270,6 @@ export async function createLot(formData: FormData) {
     (formData.get("purchase_date") as string | null) ?? "";
   const label = (formData.get("label") as string | null) ?? "";
   const supplier = (formData.get("supplier") as string | null) ?? "";
-  const lotCode = (formData.get("lot_code") as string | null) ?? "";
   const totalCostRaw =
     (formData.get("total_cost") as string | null) ?? "";
   const statusRaw = (formData.get("status") as string | null) ?? "draft";
@@ -151,7 +317,6 @@ export async function createLot(formData: FormData) {
     purchaseDate,
     label: label || null,
     supplier: supplier || null,
-    lotCode: lotCode || null,
     totalCost,
     totalPieces,
     status,
@@ -185,7 +350,6 @@ export async function createLotFromDialog(input: CreateLotInput) {
     purchaseDate: input.purchaseDate,
     label: input.label?.trim() || null,
     supplier: input.supplier?.trim() || null,
-    lotCode: input.lotCode?.trim() || null,
     totalCost: input.totalCost,
     totalPieces,
     status,
@@ -646,6 +810,17 @@ export async function deleteLot(lotId: number): Promise<DeleteLotResult> {
     };
   }
 
+  if ((lotRow.lot_code ?? "").trim() === "LOT_0") {
+    return {
+      success: false,
+      error:
+        "Le lot initial LOT_0 est protégé et ne peut pas être supprimé.",
+      reason: "LOT_INITIAL_PROTECTED",
+    };
+  }
+
+  const deletedLotSequence = extractLotSequence(lotRow.lot_code ?? null);
+
   const salesUsage = await getLotSalesUsage(lotId);
   if (salesUsage.error) {
     return {
@@ -711,12 +886,20 @@ export async function deleteLot(lotId: number): Promise<DeleteLotResult> {
     };
   }
 
+  let warning: string | undefined;
+  if (deletedLotSequence !== null && deletedLotSequence > 0) {
+    const renumberResult = await renumberLotsAfterDeletion(deletedLotSequence);
+    if (!renumberResult.success) {
+      warning = renumberResult.error;
+    }
+  }
+
   revalidatePath("/approvisionnement");
   revalidatePath(`/approvisionnement/${lotId}`);
   revalidatePath("/stock");
   revalidatePath("/historique-stock");
 
-  return { success: true };
+  return { success: true, warning };
 }
 
 // ... tout le reste de action.ts au-dessus ...
@@ -924,10 +1107,10 @@ export async function deleteInventoryLine(lotId: number, lineId: number) {
     };
   }
 
-  // Vérifie que le lot est toujours en brouillon
+  // Vérifie que le lot est toujours en brouillon + récupère total_cost
   const { data: lotRow, error: lotError } = await supabase
     .from("lots")
-    .select("status")
+    .select("status, total_cost")
     .eq("id", lotId)
     .single();
 
@@ -942,6 +1125,15 @@ export async function deleteInventoryLine(lotId: number, lineId: number) {
     return {
       success: false,
       error: "Ce lot est confirmé : tu ne peux plus modifier les lignes.",
+    };
+  }
+
+  const totalCostNumber = Number(lotRow.total_cost ?? 0);
+  if (!Number.isFinite(totalCostNumber) || totalCostNumber < 0) {
+    return {
+      success: false,
+      error:
+        "Le coût total du lot est invalide. Vérifie la valeur dans la fiche du lot.",
     };
   }
 
@@ -960,6 +1152,67 @@ export async function deleteInventoryLine(lotId: number, lineId: number) {
     };
   }
 
+  // Recalcul de la quantité totale du lot après suppression
+  const { data: allLines, error: linesError } = await supabase
+    .from("inventory")
+    .select("id, quantity")
+    .eq("lot_id", lotId);
+
+  if (linesError) {
+    console.error(
+      "deleteInventoryLine - erreur lors du recalcul des quantités du lot:",
+      linesError
+    );
+    revalidatePath("/approvisionnement");
+    revalidatePath(`/approvisionnement/${lotId}`);
+    return {
+      success: true,
+      warning:
+        "Ligne supprimée, mais impossible de recalculer le nombre de pièces / coût unitaire du lot.",
+    };
+  }
+
+  const totalQuantityForLot =
+    allLines?.reduce((sum, currentLine) => sum + (currentLine.quantity ?? 0), 0) ?? 0;
+
+  const { error: lotUpdateError } = await supabase
+    .from("lots")
+    .update({ total_pieces: totalQuantityForLot })
+    .eq("id", lotId);
+
+  if (lotUpdateError) {
+    console.error(
+      "deleteInventoryLine - erreur lors de la mise à jour de total_pieces:",
+      lotUpdateError
+    );
+  }
+
+  if (totalQuantityForLot > 0 && totalCostNumber > 0) {
+    const unitCostForLot = totalCostNumber / totalQuantityForLot;
+
+    if (Number.isFinite(unitCostForLot) && unitCostForLot >= 0) {
+      const { error: unitUpdateError } = await supabase
+        .from("inventory")
+        .update({ unit_cost: unitCostForLot })
+        .eq("lot_id", lotId);
+
+      if (unitUpdateError) {
+        console.error(
+          "deleteInventoryLine - erreur lors de la mise à jour de unit_cost:",
+          unitUpdateError
+        );
+        revalidatePath("/approvisionnement");
+        revalidatePath(`/approvisionnement/${lotId}`);
+        return {
+          success: true,
+          warning:
+            "Ligne supprimée, mais impossible de mettre à jour le coût unitaire des pièces du lot.",
+        };
+      }
+    }
+  }
+
+  revalidatePath("/approvisionnement");
   revalidatePath(`/approvisionnement/${lotId}`);
 
   return { success: true as const };

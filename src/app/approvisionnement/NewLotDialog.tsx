@@ -37,7 +37,6 @@ export function NewLotDialog() {
     const purchaseDate = (fd.get("purchase_date") as string) ?? "";
     const label = (fd.get("label") as string) ?? "";
     const supplier = (fd.get("supplier") as string) ?? "";
-    const lotCode = (fd.get("lot_code") as string) ?? "";
     const totalCostRaw = (fd.get("total_cost") as string) ?? "";
     const notes = (fd.get("notes") as string) ?? "";
 
@@ -51,7 +50,6 @@ export function NewLotDialog() {
           purchaseDate,
           label: label || undefined,
           supplier: supplier || undefined,
-          lotCode: lotCode || undefined,
           totalCost,
           notes: notes || undefined,
         });
@@ -92,6 +90,7 @@ export function NewLotDialog() {
           <DialogDescription className="text-sm text-muted-foreground">
             Crée un lot d&apos;approvisionnement. Tu pourras ensuite
             renseigner le détail des pièces pour ce lot.
+            Le LotID est attribué automatiquement.
             Le lot est créé en brouillon. Tu pourras le confirmer après
             avoir renseigné les pièces.
           </DialogDescription>
@@ -132,18 +131,8 @@ export function NewLotDialog() {
             </div>
           </div>
 
-          {/* Ligne 2 : LotID / coût total / nb pièces */}
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <div className="space-y-2">
-              <Label htmlFor="lot_code">LotID (optionnel)</Label>
-              <Input
-                id="lot_code"
-                name="lot_code"
-                placeholder="ex : LOT_0, LOT_1…"
-                className="rounded-full"
-              />
-            </div>
-
+          {/* Ligne 2 : coût total */}
+          <div className="grid grid-cols-1 gap-4">
             <div className="space-y-2">
               <Label htmlFor="total_cost">Coût total du lot (€)</Label>
               <Input

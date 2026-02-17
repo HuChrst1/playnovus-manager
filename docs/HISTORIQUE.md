@@ -733,3 +733,235 @@ Statut: `FAIT`
 - Aucun changement SQL/migration.
 - Aucune ecriture distante Supabase.
 - Les regles de confirmation existantes (dont garde-fou lot vide F2.1) restent inchangées.
+
+## 2026-02-17 - F2.2 Alignement UI Appro sur la regle lot vide
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/approvisionnement/EditLotDialog.tsx`:
+  - ajout d'un garde client dans `handleSubmit` avant l'appel `updateLotFromDialog`.
+  - blocage explicite de la tentative `draft -> confirmed` quand `lot.total_pieces <= 0`.
+  - message inline explicite et actionnable dans la zone d'erreur existante:
+    - `Impossible de confirmer un lot vide. Ajoute au moins une pièce avant de confirmer.`
+  - comportement UX retenu preserve:
+    - `Confirme` reste selectionnable
+    - blocage applique au clic `Enregistrer` si lot vide.
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/ROADMAP.md`:
+  - `F2.2` passe de `A FAIRE` a `FAIT` avec livrables et DoD completes.
+
+### Verifications executees
+
+- Pre-check local:
+  - `npx supabase --version`: OK (`2.65.10`)
+  - `docker info --format '{{.ServerVersion}}'`: OK (`29.2.0`)
+  - `npx supabase status`: OK (stack locale active)
+  - `npx supabase start`: OK (stack deja active)
+  - `npx supabase db reset --local --debug`: OK (baseline + F1.3 + F1.4 + F1.5 + seed)
+- Gates techniques:
+  - `npm ci`: OK
+  - `npm run lint`: OK
+  - `npm run typecheck`: OK
+  - `npm run build`: OK
+  - `npm run test:f2.0`: OK (S1..S6 + checks F1.3/F1.4/F1.5 verts)
+- Verifications SQL post-implementation (DB locale):
+  - `stock_balance.quantity < 0`: `0`
+  - vues lisibles:
+    - `stock_per_piece`: `2` lignes
+    - `stock_journal`: `4` lignes
+    - `piece_movements`: `4` lignes
+  - `healthcheck_business_anomalies_v1`: `0` anomalie
+  - coherence lots confirmes (`inventory` vs `PURCHASE/IN`): `0` mismatch
+- Non-regression F2.1 (ciblee):
+  - script local (build server actions) sur lot vide:
+    - tentative `draft -> confirmed`: KO attendu (refus explicite) : OK
+    - mouvements `PURCHASE` crees pour le lot vide: `0`
+
+### Perimetre / limites
+
+- Scope strict F2.2 respecte: UI Appro alignee sur la regle lot vide au submit.
+- Aucun changement de logique serveur F2.1.
+- Aucun changement SQL/migration.
+- Aucune ecriture distante Supabase.
+- Validation UX visuelle (message dans la modale) a confirmer via `npm run dev` (check manuel guide).
+
+## 2026-02-17 - Correctif cohérence Qt lot après suppression de ligne inventory
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/approvisionnement/action.ts` (`deleteInventoryLine`):
+  - lecture du lot enrichie (`status`, `total_cost`) pour permettre un recalcul complet apres suppression.
+  - apres suppression de la ligne:
+    - recalcul de `totalQuantityForLot` depuis les lignes restantes `inventory`.
+    - mise a jour de `lots.total_pieces` avec la nouvelle somme.
+    - recalcul de `inventory.unit_cost` si `totalQuantityForLot > 0` et `total_cost > 0`.
+  - alignement de la strategie fail-soft avec les autres flux:
+    - si recalcul impossible apres suppression, retour `success: true` avec `warning`.
+  - invalidation explicite de la page liste:
+    - ajout de `revalidatePath("/approvisionnement")` (en plus du detail lot).
+
+### Verifications executees
+
+- Reproduction corrigee (attendu):
+  - suppression d'une ligne inventory met a jour la quantite affichee en liste `/approvisionnement`.
+  - `lots.total_pieces` reste coherent avec la somme des lignes `inventory` du lot.
+- Gates techniques:
+  - `npm run lint`: OK
+  - `npm run typecheck`: OK
+  - `npm run build`: OK
+  - `npm run test:f2.0`: OK
+
+### Perimetre / limites
+
+- Aucun changement de schema SQL/migration.
+- Aucun changement des regles F2.1/F2.2 hors ce correctif de coherence.
+- Aucune ecriture distante Supabase.
+
+## 2026-02-17 - Maintenance: purge remote des donnees de mouvement (catalogue conserve)
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Purge des donnees metier sur la base Supabase distante utilisee par `npm run dev`:
+  - tables purgees: `lots`, `inventory`, `stock_movements`, `stock_balance`, `sales`, `sale_items`, `sale_item_pieces`, `transactions`
+  - tables catalogue preservees: `sets_catalog`, `sets_bom`
+- Execution en ecriture distante via API REST Supabase (`service_role`) en respectant l'ordre FK.
+
+### Verifications executees
+
+- Comptages avant purge:
+  - `sets_catalog=5618`
+  - `sets_bom=99162`
+  - `lots=6`
+  - `inventory=15`
+  - `stock_movements=45`
+  - `stock_balance=5`
+  - `sales=5`
+  - `sale_items=7`
+  - `sale_item_pieces=23`
+  - `transactions=0`
+- Comptages apres purge:
+  - `sets_catalog=5618` (inchange)
+  - `sets_bom=99162` (inchange)
+  - `lots=0`
+  - `inventory=0`
+  - `stock_movements=0`
+  - `stock_balance=0`
+  - `sales=0`
+  - `sale_items=0`
+  - `sale_item_pieces=0`
+  - `transactions=0`
+- Verifications complementaires:
+  - vues `stock_per_piece`, `stock_journal`, `piece_movements`: `0` ligne
+  - mouvements restants par type `PURCHASE|SALE|SALE_CANCEL`: `0`
+
+### Perimetre / limites
+
+- Aucun changement de code applicatif ni migration SQL.
+- Limite connue: reset global des sequences non execute (absence d'acces SQL direct distant depuis l'environnement); objectif fonctionnel "plus aucun mouvement" atteint.
+
+## 2026-02-17 - F2.4 Auto-attribution LotID a la creation
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/approvisionnement/action.ts`:
+  - suppression de la saisie `lotCode` dans le flux de creation (`CreateLotInput` / `NormalizedLot`)
+  - ajout d'un calcul serveur `LOT_N` (regex `^LOT_(\\d+)$`, regle `max+1`)
+  - attribution automatique de `lot_code` a l'insert
+  - ajout d'un retry anti-collision en cas de conflit d'unicite `lots_lot_code_key`
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/approvisionnement/NewLotDialog.tsx`:
+  - suppression du champ `LotID (optionnel)` dans la modale de creation
+  - suppression de l'envoi client de `lotCode` vers la server action
+  - ajout d'un message UX explicite: le LotID est attribue automatiquement
+- Mise a jour docs:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/ROADMAP.md` (`F2.4` ajoute en `FAIT`)
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/DECISIONS.md` (`D-016`)
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/HISTORIQUE.md` (cette entree)
+
+### Verifications executees
+
+- Creation lot sans champ LotID manuel: code attribue automatiquement en `LOT_N`.
+- Edition manuelle du `lot_code` post-creation: conservee (flux d'edition inchange).
+- Non-regression ciblee:
+  - garde-fou lot vide F2.1/F2.2 inchange
+  - correctif coherence Qt apres suppression inventory inchange
+
+### Perimetre / limites
+
+- Aucun changement de schema SQL/migration.
+- Regle retenue: progression `max+1` globale (pas de reutilisation des trous).
+
+## 2026-02-17 - UX Appro: ligne de tableau cliquable vers le detail lot
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Ajout de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/approvisionnement/ClickableRow.tsx`:
+  - composant client de navigation ligne entiere (`router.push`) pour les tables Appro.
+  - exclusions interactives preservees (`a`, `button`, `input`, `select`, `textarea`, roles bouton/menu, `[data-row-action='true']`).
+  - accessibilite clavier conservee (`tabIndex=0`, `Enter`/`Space`).
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/approvisionnement/page.tsx`:
+  - remplacement de la ligne `<tr>` par `ClickableRow` avec `href=/approvisionnement/[id]`.
+  - suppression du lien dedie sur le texte `LotID` (evite la navigation partielle redondante).
+  - conservation des boutons `EditLotDialog` et `DeleteLotButton` sans redirection parasite.
+  - ajout de `data-row-action=\"true\"` dans la colonne Actions pour expliciter l'exclusion.
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/ROADMAP.md`:
+  - ajout d'une note de livraison UX sous `F2.4` (ligne cliquable hors actions).
+
+### Verifications executees
+
+- `npm run lint`: OK
+- `npm run typecheck`: OK
+- `npm run build`: OK
+- `npm run test:f2.0`: OK (S1..S6 + checks F1.3/F1.4/F1.5 verts)
+
+### Perimetre / limites
+
+- Aucun changement de schema SQL/migration.
+- Navigation de ligne en meme onglet (comportement standard `router.push`).
+- Les boutons d'action restent prioritaires et fonctionnent comme avant.
+
+## 2026-02-17 - Renumerotation auto des LOT_n apres suppression + protection LOT_0
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/approvisionnement/action.ts`:
+  - ajout de la raison metier `LOT_INITIAL_PROTECTED`.
+  - blocage serveur explicite de la suppression du lot initial `LOT_0`.
+  - ajout d'un helper de renumerotation automatique apres suppression:
+    - parse strict des codes `LOT_n` via regex `^LOT_(\\d+)$`
+    - pour tout lot avec `k > n`, mise a jour en `LOT_{k-1}`
+    - les codes personnalises (hors `LOT_n`) sont ignores.
+  - execution de la renumerotation uniquement apres suppression effective du lot cible.
+  - mode fail-soft si echec de renumerotation post-suppression:
+    - suppression conservee
+    - retour `success: true` avec `warning`.
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/approvisionnement/DeleteLotButton.tsx`:
+  - message UX explicite si tentative de suppression de `LOT_0`.
+  - affichage du `warning` non bloquant si la renumerotation echoue apres suppression.
+- Mise a jour docs:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/ROADMAP.md` (F2.4 enrichi avec renumerotation + protection `LOT_0`)
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/DECISIONS.md` (`D-017`)
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/HISTORIQUE.md` (cette entree)
+
+### Verifications executees
+
+- `npm run lint`: OK
+- `npm run typecheck`: OK
+- `npm run build`: OK
+- `npm run test:f2.0`: OK (S1..S6 + checks F1.3/F1.4/F1.5 verts)
+
+### Perimetre / limites
+
+- Aucun changement de schema SQL/migration.
+- Regle appliquee uniquement aux codes conformes `LOT_n`.
+- Edition manuelle de `lot_code` conservee.

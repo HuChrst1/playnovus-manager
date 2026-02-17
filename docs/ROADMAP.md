@@ -209,13 +209,27 @@ Definition of done:
 
 ### F2.2 - Alignement UI Appro sur la regle lot vide
 
-Statut: `A FAIRE`
-Objectif: prevenir l'utilisateur avant soumission.
+Statut: `FAIT`
+Objectif: aligner l'UI Appro avec la regle lot vide via un blocage explicite a la soumission.
 Fichiers cibles:
+- `src/app/approvisionnement/EditLotDialog.tsx`
 - `src/app/approvisionnement/[id]/page.tsx`
-- dialogs associes Appro
+- `src/app/approvisionnement/page.tsx`
+Livrables realises:
+- garde client ajoute dans `EditLotDialog` avant appel serveur:
+  - tentative `draft -> confirmed` bloquee si `lot.total_pieces <= 0`
+- message UI inline explicite et actionnable:
+  - `Impossible de confirmer un lot vide. Ajoute au moins une piece avant de confirmer.`
+- comportement UX retenu preserve:
+  - option `Confirme` selectionnable
+  - blocage applique au clic `Enregistrer` quand lot vide
+- confirmation d'un lot non vide conservee
+- garde-fou serveur F2.1 conserve en filet de securite (contournement UI toujours refuse)
 Definition of done:
-- bouton/action de confirmation desactive ou bloque avec message clair
+- lot vide: confirmation bloquee en UI avec message clair
+- lot non vide: confirmation UI toujours possible
+- aucun mouvement `PURCHASE` cree quand la confirmation d'un lot vide est refusee
+- non-regression F2.0 + F1.3/F1.4/F1.5 confirmee
 
 ### F2.3 - Confirmation lot atomique fonctionnelle
 
@@ -226,6 +240,32 @@ Livrables:
 - gestion d'erreur explicite en cas d'echec mouvement
 Definition of done:
 - aucun etat intermediaire incoherent observe
+
+### F2.4 - Auto-attribution LotID a la creation
+
+Statut: `FAIT`
+Objectif: supprimer la saisie manuelle du LotID a la creation et attribuer automatiquement `LOT_N`.
+Fichiers cibles:
+- `src/app/approvisionnement/action.ts`
+- `src/app/approvisionnement/NewLotDialog.tsx`
+Livrables realises:
+- generation serveur du prochain LotID au format `LOT_N` via regle `max+1` sur les codes existants
+- suppression de la saisie `LotID` dans la modale `Nouveau lot`
+- gestion defensive des collisions d'unicite (`lots_lot_code_key`) avec retry
+- edition manuelle de `lot_code` conservee dans l'ecran d'edition de lot
+- table `/approvisionnement` rendue cliquable sur toute la ligne (hors elements d'action interactifs)
+- suppression de `LOT_0` explicitement interdite (lot initial protege)
+- renumerotation automatique des codes `LOT_n` apres suppression d'un lot:
+  - pour tout `k > n`, `LOT_k` devient `LOT_{k-1}`
+  - les codes personnalises (hors format `LOT_n`) sont ignores
+Definition of done:
+- creation d'un nouveau lot sans champ LotID manuel
+- attribution automatique incrementale (`LOT_1`, `LOT_2`, ...)
+- navigation vers `/approvisionnement/[id]` possible via clic sur n'importe quelle cellule de la ligne
+- suppression de `LOT_0` refusee avec message explicite
+- suppression de `LOT_n` declenche un decalage automatique des `LOT_k` superieurs
+- aucun changement SQL/migration
+- non-regression des regles F2.0/F2.1/F2.2
 
 ## Phase 3 - Ventes/Commandes + KPIs + contrat data unique
 

@@ -18,6 +18,8 @@ import { Loader2, Pencil } from "lucide-react";
 import { updateLotFromDialog } from "./action";
 
 type LotStatus = "draft" | "confirmed";
+const EMPTY_LOT_CONFIRMATION_ERROR =
+  "Impossible de confirmer un lot vide. Ajoute au moins une pièce avant de confirmer.";
 
 export type LotForEdit = {
   id: number;
@@ -67,6 +69,17 @@ export function EditLotDialog({ lot, variant = "table" }: EditLotDialogProps) {
     const status: LotStatus = statusRaw === "confirmed" ? "confirmed" : "draft";
 
     setError(null);
+
+    const currentTotalPieces = Number(lot.total_pieces ?? 0);
+    const isConfirmingEmptyDraftLot =
+      lot.status === "draft" &&
+      status === "confirmed" &&
+      (!Number.isFinite(currentTotalPieces) || currentTotalPieces <= 0);
+
+    if (isConfirmingEmptyDraftLot) {
+      setError(EMPTY_LOT_CONFIRMATION_ERROR);
+      return;
+    }
 
     startTransition(async () => {
       const result = await updateLotFromDialog(lot.id, {

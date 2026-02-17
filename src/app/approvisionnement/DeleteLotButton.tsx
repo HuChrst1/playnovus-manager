@@ -51,13 +51,25 @@ export function DeleteLotButton({
               ? `\n\nVentes liées détectées: #${result.linkedSaleIds.join(", #")}.\nAnnule/supprime d'abord ces ventes.`
               : "\n\nAnnule/supprime d'abord les ventes liées à ce lot."
             : "";
+        const lotInitialHint =
+          result.reason === "LOT_INITIAL_PROTECTED"
+            ? "\n\nLe lot initial LOT_0 est protégé et ne peut pas être supprimé."
+            : "";
 
         window.alert(
           "Impossible de supprimer ce lot pour le moment.\n\n" +
             (result.error || "") +
-            linkedSalesHint
+            linkedSalesHint +
+            lotInitialHint
         );
         return;
+      }
+
+      if (result.warning) {
+        window.alert(
+          "Le lot a été supprimé, mais une action complémentaire a échoué.\n\n" +
+            result.warning
+        );
       }
 
       // On recharge simplement la page pour rafraîchir la liste
