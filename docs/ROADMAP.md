@@ -191,12 +191,21 @@ Definition of done:
 
 ### F2.1 - Garde-fou serveur lot vide non confirmable
 
-Statut: `A FAIRE`
-Objectif: impossible de confirmer un lot a `total_pieces = 0`.
+Statut: `FAIT`
+Objectif: impossible de confirmer un lot a `total_pieces = 0` et creation de lot forcee en `draft`.
 Fichiers cibles:
 - `src/app/approvisionnement/action.ts`
+Livrables realises:
+- blocage serveur sur la transition `draft -> confirmed` si `lots.total_pieces <= 0`
+- message explicite et actionnable: `Impossible de confirmer un lot vide. Ajoute au moins une piece avant de confirmer.`
+- refus applique avant toute tentative de creation de mouvements `PURCHASE`
+- creation directe d'un lot `confirmed` refusee cote serveur avec message explicite
+- UI `Nouveau lot` alignee en mode draft-first (creation en brouillon uniquement)
 Definition of done:
 - la server action refuse explicitement la confirmation d'un lot vide
+- aucun mouvement `PURCHASE` cree quand la confirmation est refusee
+- confirmation d'un lot non vide conservee
+- creation d'un lot forcee en `draft` (pas de creation directe `confirmed`)
 
 ### F2.2 - Alignement UI Appro sur la regle lot vide
 

@@ -5,6 +5,8 @@ import { revalidatePath } from "next/cache";
 import type { TablesUpdate } from "@/types/supabase";
 
 type LotStatus = "draft" | "confirmed";
+const DIRECT_CONFIRMED_CREATE_ERROR =
+  "La création directe d'un lot confirmé n'est pas autorisée. Crée d'abord le lot en brouillon.";
 
 export type CreateLotInput = {
   purchaseDate: string;          // YYYY-MM-DD
@@ -133,11 +135,17 @@ export async function createLot(formData: FormData) {
     };
   }
 
+  if (statusRaw === "confirmed") {
+    return {
+      success: false as const,
+      error: DIRECT_CONFIRMED_CREATE_ERROR,
+    };
+  }
+
   // Nb pièces : toujours 0 à la création, recalculé ensuite via inventory
   const totalPieces = 0;
 
-  const status: "draft" | "confirmed" =
-    statusRaw === "confirmed" ? "confirmed" : "draft";
+  const status = "draft" as const;
 
   return insertLot({
     purchaseDate,
@@ -164,11 +172,14 @@ export async function createLotFromDialog(input: CreateLotInput) {
     throw new Error("Le coût total du lot doit être supérieur à 0.");
   }
 
+  if (input.status === "confirmed") {
+    throw new Error(DIRECT_CONFIRMED_CREATE_ERROR);
+  }
+
   // Nb pièces : toujours 0 à la création, recalculé ensuite via inventory
   const totalPieces = 0;
 
-  const status: "draft" | "confirmed" =
-    input.status === "confirmed" ? "confirmed" : "draft";
+  const status = "draft" as const;
 
   return insertLot({
     purchaseDate: input.purchaseDate,
@@ -405,7 +416,7 @@ export async function updateLotFromDialog(
   // 1) On récupère le statut actuel pour détecter les transitions
   const { data: existingLot, error: fetchError } = await supabase
     .from("lots")
-    .select("status")
+    .select("status, total_pieces")
     .eq("id", lotId)
     .maybeSingle();
 
@@ -430,6 +441,7 @@ export async function updateLotFromDialog(
   }
 
   const previousStatus = (existingLot.status as LotStatus) ?? "draft";
+  const currentTotalPieces = Number(existingLot.total_pieces ?? 0);
 
   const updatePayload: TablesUpdate<"lots"> = {
     purchase_date: args.purchaseDate,
@@ -469,6 +481,15 @@ export async function updateLotFromDialog(
 
   // 3) draft -> confirmed: recréer les mouvements d'achat puis passer le lot en confirmed.
   if (previousStatus === "draft" && nextStatus === "confirmed") {
+    if (!Number.isFinite(currentTotalPieces) || currentTotalPieces <= 0) {
+      return {
+        success: false,
+        error:
+          "Impossible de confirmer un lot vide. Ajoute au moins une pièce avant de confirmer.",
+        reason: "UPDATE_FAILED",
+      };
+    }
+
     const movementResult = await createPurchaseMovementsForLot(lotId);
     if (!movementResult.success) {
       return {

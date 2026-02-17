@@ -17,8 +17,6 @@ import { Label } from "@/components/ui/label";
 import { Loader2, Plus } from "lucide-react";
 import { createLotFromDialog } from "./action";
 
-type LotStatus = "draft" | "confirmed";
-
 const getErrorMessage = (error: unknown) => {
   if (error instanceof Error && error.message) {
     return error.message;
@@ -41,13 +39,9 @@ export function NewLotDialog() {
     const supplier = (fd.get("supplier") as string) ?? "";
     const lotCode = (fd.get("lot_code") as string) ?? "";
     const totalCostRaw = (fd.get("total_cost") as string) ?? "";
-const notes = (fd.get("notes") as string) ?? "";
-const statusRaw = (fd.get("status") as string) ?? "draft";
+    const notes = (fd.get("notes") as string) ?? "";
 
-const totalCost = Number(totalCostRaw.toString().replace(",", "."));
-
-    const status: LotStatus =
-      statusRaw === "confirmed" ? "confirmed" : "draft";
+    const totalCost = Number(totalCostRaw.toString().replace(",", "."));
 
     setError(null);
 
@@ -59,7 +53,6 @@ const totalCost = Number(totalCostRaw.toString().replace(",", "."));
           supplier: supplier || undefined,
           lotCode: lotCode || undefined,
           totalCost,
-          status,
           notes: notes || undefined,
         });
 
@@ -99,6 +92,8 @@ const totalCost = Number(totalCostRaw.toString().replace(",", "."));
           <DialogDescription className="text-sm text-muted-foreground">
             Crée un lot d&apos;approvisionnement. Tu pourras ensuite
             renseigner le détail des pièces pour ce lot.
+            Le lot est créé en brouillon. Tu pourras le confirmer après
+            avoir renseigné les pièces.
           </DialogDescription>
         </DialogHeader>
 
@@ -162,25 +157,8 @@ const totalCost = Number(totalCostRaw.toString().replace(",", "."));
             </div>
           </div>
 
-          {/* Ligne 3 : statut + notes */}
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-[190px_1fr]">
-            <div className="space-y-2">
-              <Label htmlFor="status">Statut</Label>
-              <select
-                id="status"
-                name="status"
-                defaultValue="draft"
-                className="h-10 w-full rounded-full border border-slate-200 bg-white px-3 text-sm shadow-sm"
-              >
-                <option value="draft">
-                  Brouillon (ne compte pas encore dans le stock)
-                </option>
-                <option value="confirmed">
-                  Confirmé (intégré au stock actuel)
-                </option>
-              </select>
-            </div>
-
+          {/* Ligne 3 : notes */}
+          <div className="grid grid-cols-1">
             <div className="space-y-2">
               <Label htmlFor="notes">Notes (optionnel)</Label>
               <Input

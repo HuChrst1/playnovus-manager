@@ -632,3 +632,104 @@ Statut: `FAIT`
 - Aucun changement de logique metier F2.0.
 - Aucun ajout de migration SQL.
 - Le drift schema remote F1.3/F1.4/F1.5 constate en lecture seule reste a traiter hors de cette entree.
+
+## 2026-02-17 - F2.1 Garde-fou serveur lot vide non confirmable
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/approvisionnement/action.ts`:
+  - `updateLotFromDialog` lit maintenant `status` et `total_pieces` du lot avant transition.
+  - ajout d'un refus explicite sur `draft -> confirmed` si `total_pieces <= 0`.
+  - message de refus: `Impossible de confirmer un lot vide. Ajoute au moins une piece avant de confirmer.`
+  - le refus intervient avant toute creation de mouvements `PURCHASE`.
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/ROADMAP.md`:
+  - `F2.1` passe de `A FAIRE` a `FAIT` avec livrables et DoD completes.
+
+### Verifications executees
+
+- Pre-check local:
+  - `npx supabase --version`: OK (`2.65.10`)
+  - `docker info --format '{{.ServerVersion}}'`: OK (`29.2.0`)
+  - `npx supabase status`: OK (stack locale active)
+- Reset local reproductible:
+  - `npx supabase start`: OK (stack deja active)
+  - `npx supabase db reset --local`: OK (baseline + F1.3 + F1.4 + F1.5 + seed)
+- Gates techniques:
+  - `npm ci`: OK
+  - `npm run lint`: OK
+  - `npm run typecheck`: OK
+  - `npm run build`: OK
+- Validation fonctionnelle F2.1 (harness server action local, build local-only):
+  - S1 creation lot `draft` vide: OK
+  - S2 confirmation lot vide (`draft -> confirmed`): KO attendu avec message explicite: OK
+  - S3 apres refus lot vide: aucun `PURCHASE` cree: OK
+  - S4 confirmation lot non vide: OK, mouvements `PURCHASE/IN` coherents avec `inventory`
+- Verifications SQL post-implementation:
+  - `stock_balance.quantity < 0`: `0`
+  - vues `stock_per_piece`, `stock_journal`, `piece_movements`: lisibles
+  - `healthcheck_business_anomalies_v1`: `0` anomalie
+  - coherence lots confirmes (`inventory` vs `PURCHASE/IN`): OK
+- Non-regression F2.0 + F1.3/F1.4/F1.5:
+  - `npm run test:f2.0`: OK (S1..S6 + checks SQL verts)
+
+### Perimetre / limites
+
+- Scope strict F2.1 respecte: blocage serveur `draft -> confirmed` pour lot vide.
+- Aucun changement SQL/migration.
+- Aucune ecriture distante Supabase.
+- Aucun traitement F2.2+ dans cette livraison.
+
+## 2026-02-17 - Draft-first: creation de lot forcee en brouillon
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/approvisionnement/action.ts`:
+  - creation directe d'un lot `confirmed` explicitement refusee dans `createLot(formData)`.
+  - creation directe d'un lot `confirmed` explicitement refusee dans `createLotFromDialog(input)`.
+  - insertion creation forcee en `status='draft'` sur les deux chemins serveur.
+  - message serveur unique: `La création directe d'un lot confirmé n'est pas autorisée. Crée d'abord le lot en brouillon.`
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/approvisionnement/NewLotDialog.tsx`:
+  - suppression du select `Statut` a la creation (plus d'option `confirmed`).
+  - creation alignee en brouillon uniquement.
+  - ajout d'un guidage UX explicite: confirmation possible apres saisie des pieces.
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/ROADMAP.md`:
+  - ajout explicite de la regle draft-first et du refus de creation directe `confirmed` dans F2.1.
+
+### Verifications executees
+
+- Pre-check local:
+  - `npx supabase --version`: OK (`2.65.10`)
+  - `docker info --format '{{.ServerVersion}}'`: OK (`29.2.0`)
+  - `npx supabase status`: OK (stack locale active)
+  - `npx supabase start`: OK (stack deja active)
+  - `npx supabase db reset --local`: OK (baseline + F1.3 + F1.4 + F1.5 + seed)
+- Gates techniques:
+  - `npm ci`: OK
+  - `npm run lint`: OK
+  - `npm run typecheck`: OK
+  - `npm run build`: OK
+- Validation fonctionnelle draft-first (harness local):
+  - S1 creation via chemin `createLotFromDialog` => lot cree en `draft`: OK
+  - S2 tentative creation `confirmed` via `createLotFromDialog` => refus explicite: OK
+  - S3 tentative creation `confirmed` via `createLot(formData)`:
+    - verification source explicite (guard + message + statut force `draft`): OK
+    - note: `createLot` n'est pas exposee dans le manifest des server actions de la page approvisionnement
+  - S3bis apres refus de creation `confirmed` => aucun lot cree: OK
+  - S4 creation brouillon + ajout de pieces + confirmation => flux nominal conserve: OK
+- Checks SQL post-run:
+  - `stock_balance.quantity < 0`: `0`
+  - vues `stock_per_piece`, `stock_journal`, `piece_movements`: lisibles
+  - `healthcheck_business_anomalies_v1`: `0` anomalie
+  - coherence lots confirmes (`inventory` vs `PURCHASE/IN`): OK
+- Non-regression:
+  - `npm run test:f2.0`: OK (S1..S6 + checks F1.3/F1.4/F1.5 verts)
+
+### Perimetre / limites
+
+- Aucun changement SQL/migration.
+- Aucune ecriture distante Supabase.
+- Les regles de confirmation existantes (dont garde-fou lot vide F2.1) restent inchangées.
