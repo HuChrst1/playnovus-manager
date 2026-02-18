@@ -1,7 +1,7 @@
 # Journal des décisions
 
 Date de mise à jour initiale: 2026-02-12
-Derniere mise a jour: 2026-02-17
+Derniere mise a jour: 2026-02-18
 
 ## Décisions prises
 
@@ -193,6 +193,54 @@ Derniere mise a jour: 2026-02-17
   - la renumerotation cible uniquement les codes conformes `^LOT_(\\d+)$`
   - les codes personnalises restent inchanges
   - les regles metier existantes (blocage ventes liees, garde-fous stock) restent prioritaires
+
+### D-018 - Confirmation lot atomique fonctionnelle par compensation verifiee
+
+- Statut: validee
+- Constat:
+  - la confirmation `draft -> confirmed` etait executee en plusieurs etapes sans transaction DB unique
+  - un echec intermediaire pouvait laisser un risque d'etat partiel (mouvements prepares puis echec statut)
+  - un lot devait rester non confirmable s'il n'avait pas de lignes inventory valides au moment de confirmer
+- Impact:
+  - confirmation basee sur un snapshot inventory valide (quantites strictement positives)
+  - refus explicite de confirmation si snapshot vide/invalide (`LOT_CONFIRMATION_INCONSISTENT`)
+  - transition de statut protegee par garde de conflit (`status` attendu `draft`)
+  - rollback de confirmation avec verification explicite de restauration (`LOT_CONFIRMATION_ROLLBACK_FAILED` si non verifiable)
+  - message utilisateur actionnable en cas de conflit (`LOT_CONFIRMATION_CONFLICT` => recharger et reessayer)
+
+### D-019 - Hardening Supabase compatible sans auth applicative
+
+- Statut: validee
+- Constat:
+  - le linter Supabase signalait:
+    - vues en posture definer (`security_definer_view`)
+    - RLS desactive sur des tables exposees (`rls_disabled_in_public`)
+  - l'application n'a pas encore de flux auth utilisateur generalise
+  - une correction stricte orientee auth aurait risque une regression immediate
+- Impact:
+  - activation de RLS sur les tables publiques cibles avec policies de compatibilite (`anon/authenticated`) pour conserver le comportement actuel
+  - bascule des vues ciblees en `security_invoker=true` pour appliquer les permissions de l'appelant
+  - reduction des grants:
+    - vues ciblees: `SELECT` uniquement pour `anon/authenticated`
+    - tables ciblees: CRUD explicite pour `anon/authenticated`
+  - aucun changement des droits `service_role` dans cette iteration
+  - trajectoire retenue:
+    - phase actuelle: linter clean sans regression
+    - phase ulterieure: durcissement auth strict (policies par utilisateur/role metier)
+
+### D-020 - Sortie a 0 vulnerabilite npm par migration ESLint vers Biome
+
+- Statut: validee
+- Constat:
+  - `npm audit` remontait 10 vulnerabilites moderees via la chaine lint (`eslint` -> `@eslint/eslintrc` -> `ajv@6`)
+  - la correction proposee par npm (`npm audit fix --force`) entrainait un downgrade cassant
+  - l'objectif produit etait `0 vulnerabilite` globale (prod + dev)
+- Impact:
+  - retrait de `eslint` et `eslint-config-next` du projet
+  - adoption de `@biomejs/biome` comme moteur lint bloqueur
+  - ajout d'un garde-fou specifique `<img>` pour maintenir le minimum de protection Next sans plugin ESLint
+  - maintien des gates qualite (`lint`, `typecheck`, `build`, `test:f2.0`) sans modification de logique metier
+  - verrouillage d'une trajectoire simple de maintenance supply-chain (moins de dependances lint transitive critiques)
 
 ## Hypothèses / décisions en attente
 

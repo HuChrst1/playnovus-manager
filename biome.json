@@ -1,0 +1,45 @@
+{
+  "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
+  "files": {
+    "ignoreUnknown": true,
+    "ignore": [
+      ".next/**",
+      "out/**",
+      "build/**",
+      "next-env.d.ts",
+      "node_modules/**"
+    ]
+  },
+  "formatter": {
+    "enabled": false
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": false,
+      "correctness": {
+        "recommended": true,
+        "noUnnecessaryContinue": "off",
+        "useExhaustiveDependencies": "off"
+      },
+      "suspicious": {
+        "recommended": true,
+        "noArrayIndexKey": "off",
+        "noAssignInExpressions": "off",
+        "noImplicitAnyLet": "off"
+      },
+      "style": {
+        "recommended": false
+      },
+      "complexity": {
+        "recommended": false
+      },
+      "a11y": {
+        "recommended": false
+      },
+      "nursery": {
+        "recommended": false
+      }
+    }
+  }
+}

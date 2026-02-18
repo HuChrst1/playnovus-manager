@@ -86,6 +86,32 @@ Definition of done:
 - `npm ls supabase tar` montre `tar` patche sous `supabase`
 - `npm audit` ne remonte plus de high sur `tar`
 
+### F0.5 - Audit npm prod + mitigation dev-only lint chain
+
+Statut: `FAIT`
+Objectif: garantir `0` vulnerabilite npm globale (prod + dev) sans `npm audit fix --force`.
+Livrables realises:
+- scripts npm ajoutes:
+  - `audit:prod`: `npm audit --omit=dev --audit-level=moderate`
+  - `audit:deps`: `npm ls ajv @eslint/eslintrc eslint || true`
+- migration outillage lint:
+  - suppression de `eslint` et `eslint-config-next` des devDependencies
+  - ajout de `@biomejs/biome`
+  - remplacement du script `lint` par:
+    - `lint:biome` (`biome lint .`)
+    - `lint:next-img-guard` (`node scripts/check_no_img_element.mjs`)
+- ajout de `biome.json` (profil bloqueur limite au perimetre fiabilite, sans reformat global)
+- suppression de `eslint.config.mjs`
+- ajout d'un garde-fou Next minimal sur `<img>`:
+  - seules les 3 occurrences legacy catalogue sont autorisees
+  - toute nouvelle occurrence hors allowlist fait echouer `npm run lint`
+- lockfile regenere avec disparition de la chaine `eslint -> @eslint/eslintrc -> ajv`
+Definition of done:
+- `npm audit` vert (`0 vulnerabilities`)
+- `npm run audit:prod` vert
+- `npm run audit:deps` ne montre plus `eslint/@eslint/eslintrc/ajv`
+- `npm run lint`, `npm run typecheck`, `npm run build`, `npm run test:f2.0` verts
+
 ## Phase 1 - DB versionnee et garde-fous
 
 Statut global: `FAIT`
@@ -166,6 +192,49 @@ Livrables realises:
 Definition of done:
 - healthcheck disponible, documente, et rejouable via `npx supabase db reset --local`
 
+### F1.6 - Hardening securite Supabase (RLS + views invoker + grants)
+
+Statut: `FAIT`
+Objectif: corriger les alertes Supabase `security_definer_view` et `rls_disabled_in_public` sans regression fonctionnelle.
+Livrables realises:
+- migration incrementale:
+  - `supabase/migrations/20260218201000_f1_6_security_rls_views.sql`
+- vues basculees en `security_invoker=true`:
+  - `set_completion`, `stock_per_piece`, `sold_pieces_journal`, `piece_movements`, `set_with_completion`, `sale_item_movements`, `stock_journal`
+- RLS active sur tables exposees:
+  - `lots`, `inventory`, `sets_bom`, `sets_catalog`, `transactions`, `stock_balance`, `sale_items`, `sales`, `stock_movements`, `sale_item_pieces`
+- policies de compatibilite creees (`FOR ALL TO anon, authenticated USING (true) WITH CHECK (true)`) pour conserver les flux actuels sans auth applicative
+- nettoyage des privileges cible:
+  - vues: `anon/authenticated` en lecture seule (`SELECT`)
+  - tables: `anon/authenticated` en CRUD (`SELECT, INSERT, UPDATE, DELETE`)
+  - `service_role` non modifie
+Definition of done:
+- `npx supabase db reset --local` vert avec migration F1.6
+- `relrowsecurity = true` sur les 10 tables cibles
+- `security_invoker=true` present sur les 7 vues cibles
+- grants conformes (vues en `SELECT`, tables en CRUD) pour `anon/authenticated`
+- non-regression `lint/typecheck/build/test:f2.0` confirmee
+
+### F1.7 - Follow-up securite: healthcheck invoker + search_path functions
+
+Statut: `FAIT`
+Objectif: supprimer l'erreur Supabase restante (`security_definer_view`) et les warnings `function_search_path_mutable` sans regression UX.
+Livrables realises:
+- migration incrementale:
+  - `supabase/migrations/20260218224500_f1_7_security_followup_healthcheck_functions.sql`
+- vue healthcheck basculee en `security_invoker=true`:
+  - `healthcheck_business_anomalies_v1`
+- `search_path` fige sur fonctions ciblees:
+  - `reset_sales_id_sequence()`
+  - `apply_stock_balance_from_movements()`
+  - `apply_stock_balance_delta(text, bigint, bigint)`
+  - `reject_negative_stock_balance()`
+- policies RLS de compatibilite F1.6 conservees (warnings `rls_policy_always_true` assumes temporairement pour eviter toute regression des flux `anon`)
+Definition of done:
+- plus d'erreur `security_definer_view` sur `healthcheck_business_anomalies_v1`
+- plus de warning `function_search_path_mutable` sur les 4 fonctions ciblees
+- non-regression `lint/typecheck/build/test:f2.0` confirmee
+
 ## Phase 2 - Verrouillage Approvisionnement et Stock
 
 Statut global: `EN COURS`
@@ -233,13 +302,26 @@ Definition of done:
 
 ### F2.3 - Confirmation lot atomique fonctionnelle
 
-Statut: `A FAIRE`
+Statut: `FAIT`
 Objectif: pas de lot `confirmed` sans mouvements `IN` effectifs.
-Livrables:
-- sequence robuste de confirmation (status + ecritures stock)
-- gestion d'erreur explicite en cas d'echec mouvement
+Livrables realises:
+- confirmation `draft -> confirmed` durcie cote serveur avec snapshot inventory au moment de la confirmation
+- refus explicite si inventory du lot est vide/invalide, meme en cas de `lots.total_pieces` incoherent
+- garde de conflit sur transition de statut (`update ... where id=? and status='draft'`) avec message de rechargement
+- compensation verifiee en cas d'echec intermediaire:
+  - restauration des mouvements `PURCHASE`
+  - restauration du lot en `draft`
+  - verification post-rollback
+- verification post-condition de confirmation:
+  - lot confirme
+  - `sum(inventory.quantity)` == `sum(PURCHASE/IN)` pour le lot
+- enrichissement des raisons metier retournees (`LOT_CONFIRMATION_CONFLICT`, `LOT_CONFIRMATION_INCONSISTENT`, `LOT_CONFIRMATION_ROLLBACK_FAILED`)
+- extension du script `npm run test:f2.0` avec scenarios F2.3 et non-regressions F2.4
 Definition of done:
 - aucun etat intermediaire incoherent observe
+- lot `confirmed` sans `PURCHASE/IN` coherent non observable en validation locale
+- echec intermediaire de confirmation restaure un etat coherent (draft + absence de `PURCHASE`)
+- non-regression F2.0/F2.1/F2.2/F2.4 + F1.3/F1.4/F1.5 confirmee en local
 
 ### F2.4 - Auto-attribution LotID a la creation
 

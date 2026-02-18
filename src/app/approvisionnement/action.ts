@@ -36,6 +36,9 @@ type LotActionReason =
   | "LOT_NOT_FOUND"
   | "LOT_INITIAL_PROTECTED"
   | "LOT_USED_BY_SALES"
+  | "LOT_CONFIRMATION_CONFLICT"
+  | "LOT_CONFIRMATION_INCONSISTENT"
+  | "LOT_CONFIRMATION_ROLLBACK_FAILED"
   | "DELETE_FAILED"
   | "UPDATE_FAILED";
 
@@ -61,6 +64,32 @@ type LotSalesUsage = {
   linkedSalesCount: number;
   error?: string;
 };
+
+type LotInventoryMovementLine = {
+  pieceRef: string;
+  quantity: number;
+  unitCost: number | null;
+};
+
+type LotInventorySnapshotResult =
+  | {
+      success: true;
+      lines: LotInventoryMovementLine[];
+      totalQuantity: number;
+    }
+  | {
+      success: false;
+      error: string;
+    };
+
+type LotMovementResult =
+  | {
+      success: true;
+    }
+  | {
+      success: false;
+      error: string;
+    };
 
 type NextLotCodeResult =
   | {
@@ -357,13 +386,13 @@ export async function createLotFromDialog(input: CreateLotInput) {
   });
 }
 
-// Helper interne : crée des mouvements IN pour toutes les lignes d'un lot
-async function createStockMovementsForLot(lotId: number) {
+async function readInventorySnapshotForLot(
+  lotId: number
+): Promise<LotInventorySnapshotResult> {
   if (!lotId || Number.isNaN(lotId)) {
     return { success: false, error: "Lot invalide pour les mouvements." };
   }
 
-  // 1) On récupère toutes les lignes d'inventaire du lot
   const { data: lines, error: linesError } = await supabase
     .from("inventory")
     .select("piece_ref, quantity, unit_cost")
@@ -380,56 +409,137 @@ async function createStockMovementsForLot(lotId: number) {
     };
   }
 
-  const movementsPayload =
-    (lines ?? [])
-      .filter((line) => {
-        const qty = Number(line.quantity ?? 0);
-        return line.piece_ref && qty > 0;
-      })
-      .map((line) => ({
-        piece_ref: line.piece_ref as string,
-        lot_id: lotId,
-        direction: "IN" as const,
-        quantity: Number(line.quantity ?? 0),
-        unit_cost:
-          line.unit_cost !== null && line.unit_cost !== undefined
-            ? Number(line.unit_cost)
-            : null,
-        source_type: "PURCHASE",
-        source_id: String(lotId),
-        comment: null as string | null,
-      }));
+  const normalizedLines: LotInventoryMovementLine[] = [];
+  let totalQuantity = 0;
+  for (const rawLine of lines ?? []) {
+    const pieceRef = (rawLine.piece_ref ?? "").trim();
+    const quantity = Number(rawLine.quantity ?? 0);
+    if (!pieceRef || !Number.isFinite(quantity) || quantity <= 0) {
+      continue;
+    }
 
-  // Aucun mouvement à créer → pas d'erreur
-  if (!movementsPayload.length) {
-    return { success: true };
+    const rawUnitCost = rawLine.unit_cost;
+    const parsedUnitCost =
+      rawUnitCost !== null && rawUnitCost !== undefined
+        ? Number(rawUnitCost)
+        : null;
+    const unitCost =
+      parsedUnitCost !== null && Number.isFinite(parsedUnitCost)
+        ? parsedUnitCost
+        : null;
+
+    normalizedLines.push({
+      pieceRef,
+      quantity,
+      unitCost,
+    });
+    totalQuantity += quantity;
   }
 
-  // 2) On insère tous les mouvements d'un coup
+  return {
+    success: true,
+    lines: normalizedLines,
+    totalQuantity,
+  };
+}
+
+function buildPurchaseMovementsPayload(
+  lotId: number,
+  inventoryLines: LotInventoryMovementLine[]
+) {
+  return inventoryLines.map((line) => ({
+    piece_ref: line.pieceRef,
+    lot_id: lotId,
+    direction: "IN" as const,
+    quantity: line.quantity,
+    unit_cost: line.unitCost,
+    source_type: "PURCHASE",
+    source_id: String(lotId),
+    comment: null as string | null,
+  }));
+}
+
+async function insertPurchaseMovements(
+  movementsPayload: ReturnType<typeof buildPurchaseMovementsPayload>
+): Promise<LotMovementResult> {
+  if (!movementsPayload.length) {
+    return { success: true as const };
+  }
+
   const { error: insertError } = await supabase
     .from("stock_movements")
     .insert(movementsPayload);
 
   if (insertError) {
     console.error(
-      "createStockMovementsForLot - erreur lors de l'insertion des mouvements:",
+      "insertPurchaseMovements - erreur lors de l'insertion des mouvements:",
       insertError
     );
     return {
-      success: false,
+      success: false as const,
       error:
         "Impossible d'enregistrer les mouvements de stock pour ce lot. " +
         insertError.message,
     };
   }
 
-  // On anticipe le futur : ces mouvements serviront au /stock
   revalidatePath("/stock");
-
-  return { success: true };
+  return { success: true as const };
 }
 
-async function deletePurchaseMovementsForLot(lotId: number) {
+async function sumPurchaseInQuantityForLot(lotId: number) {
+  const { data, error } = await supabase
+    .from("stock_movements")
+    .select("quantity")
+    .eq("source_type", "PURCHASE")
+    .eq("direction", "IN")
+    .eq("lot_id", lotId);
+
+  if (error) {
+    console.error("sumPurchaseInQuantityForLot - query error:", error);
+    return {
+      success: false as const,
+      error:
+        "Impossible de vérifier la cohérence des mouvements d'achat pour ce lot.",
+    };
+  }
+
+  const quantity = (data ?? []).reduce(
+    (sum, row) => sum + Number(row.quantity ?? 0),
+    0
+  );
+
+  return { success: true as const, quantity };
+}
+
+async function createStockMovementsForLotFromSnapshot(
+  lotId: number,
+  inventoryLines: LotInventoryMovementLine[]
+): Promise<LotMovementResult> {
+  const movementsPayload = buildPurchaseMovementsPayload(lotId, inventoryLines);
+  return insertPurchaseMovements(movementsPayload);
+}
+
+// Helper interne : crée des mouvements IN pour toutes les lignes d'un lot
+async function createStockMovementsForLot(
+  lotId: number
+): Promise<LotMovementResult> {
+  const snapshotResult = await readInventorySnapshotForLot(lotId);
+  if (!snapshotResult.success) {
+    return { success: false, error: snapshotResult.error };
+  }
+
+  // Aucun mouvement à créer → pas d'erreur
+  if (!snapshotResult.lines.length) {
+    return { success: true };
+  }
+
+  return createStockMovementsForLotFromSnapshot(lotId, snapshotResult.lines);
+}
+
+async function deletePurchaseMovementsForLot(
+  lotId: number
+): Promise<LotMovementResult> {
   if (!lotId || Number.isNaN(lotId)) {
     return { success: false as const, error: "Lot invalide pour suppression des mouvements." };
   }
@@ -471,11 +581,19 @@ async function deletePurchaseMovementsForLot(lotId: number) {
   return { success: true as const };
 }
 
-async function createPurchaseMovementsForLot(lotId: number) {
+async function createPurchaseMovementsForLot(
+  lotId: number,
+  inventoryLines?: LotInventoryMovementLine[]
+): Promise<LotMovementResult> {
   const cleanup = await deletePurchaseMovementsForLot(lotId);
   if (!cleanup.success) {
     return cleanup;
   }
+
+  if (inventoryLines) {
+    return createStockMovementsForLotFromSnapshot(lotId, inventoryLines);
+  }
+
   return createStockMovementsForLot(lotId);
 }
 
@@ -580,7 +698,9 @@ export async function updateLotFromDialog(
   // 1) On récupère le statut actuel pour détecter les transitions
   const { data: existingLot, error: fetchError } = await supabase
     .from("lots")
-    .select("status, total_pieces")
+    .select(
+      "status, total_pieces, purchase_date, label, supplier, lot_code, total_cost, notes"
+    )
     .eq("id", lotId)
     .maybeSingle();
 
@@ -606,6 +726,22 @@ export async function updateLotFromDialog(
 
   const previousStatus = (existingLot.status as LotStatus) ?? "draft";
   const currentTotalPieces = Number(existingLot.total_pieces ?? 0);
+  const previousTotalCostRaw = Number(existingLot.total_cost ?? 0);
+  const previousTotalCost =
+    Number.isFinite(previousTotalCostRaw) && previousTotalCostRaw >= 0
+      ? previousTotalCostRaw
+      : 0;
+
+  const rollbackLotPayload: TablesUpdate<"lots"> = {
+    purchase_date: existingLot.purchase_date,
+    label: existingLot.label ?? null,
+    supplier: existingLot.supplier ?? null,
+    lot_code: existingLot.lot_code ?? null,
+    total_cost: previousTotalCost,
+    status: previousStatus,
+    notes: existingLot.notes ?? null,
+    total_pieces: Number.isFinite(currentTotalPieces) ? currentTotalPieces : 0,
+  };
 
   const updatePayload: TablesUpdate<"lots"> = {
     purchase_date: args.purchaseDate,
@@ -654,7 +790,32 @@ export async function updateLotFromDialog(
       };
     }
 
-    const movementResult = await createPurchaseMovementsForLot(lotId);
+    const inventorySnapshot = await readInventorySnapshotForLot(lotId);
+    if (!inventorySnapshot.success) {
+      return {
+        success: false,
+        error: inventorySnapshot.error,
+        reason: "UPDATE_FAILED",
+      };
+    }
+
+    if (
+      !Number.isFinite(inventorySnapshot.totalQuantity) ||
+      inventorySnapshot.totalQuantity <= 0 ||
+      inventorySnapshot.lines.length === 0
+    ) {
+      return {
+        success: false,
+        error:
+          "Impossible de confirmer ce lot car aucune ligne d'inventaire valide n'a été trouvée. Recharge la page, ajoute au moins une pièce puis réessaie.",
+        reason: "LOT_CONFIRMATION_INCONSISTENT",
+      };
+    }
+
+    const movementResult = await createPurchaseMovementsForLot(
+      lotId,
+      inventorySnapshot.lines
+    );
     if (!movementResult.success) {
       return {
         success: false,
@@ -665,23 +826,133 @@ export async function updateLotFromDialog(
       };
     }
 
-    const { error: updateError } = await supabase
+    const purchaseCheckBeforeUpdate = await sumPurchaseInQuantityForLot(lotId);
+    if (
+      !purchaseCheckBeforeUpdate.success ||
+      purchaseCheckBeforeUpdate.quantity !== inventorySnapshot.totalQuantity
+    ) {
+      const cleanupAfterCheck = await deletePurchaseMovementsForLot(lotId);
+      if (!cleanupAfterCheck.success) {
+        return {
+          success: false,
+          error:
+            "La confirmation a échoué et la restauration automatique des mouvements n'a pas abouti. Recharge la page puis vérifie le lot avant de réessayer.",
+          reason: "LOT_CONFIRMATION_ROLLBACK_FAILED",
+        };
+      }
+
+      return {
+        success: false,
+        error:
+          "Impossible de confirmer ce lot car les mouvements d'achat préparés sont incohérents. Recharge la page puis réessaie.",
+        reason: "LOT_CONFIRMATION_INCONSISTENT",
+      };
+    }
+
+    const { data: updatedLot, error: updateError } = await supabase
       .from("lots")
-      .update(updatePayload)
-      .eq("id", lotId);
+      .update({
+        ...updatePayload,
+        total_pieces: inventorySnapshot.totalQuantity,
+      })
+      .eq("id", lotId)
+      .eq("status", "draft")
+      .select("id, status")
+      .maybeSingle();
 
     if (updateError) {
       console.error("updateLotFromDialog - error after createPurchaseMovementsForLot:", updateError);
-      // rollback best-effort vers draft
-      const rollbackResult = await deletePurchaseMovementsForLot(lotId);
-      if (!rollbackResult.success) {
-        console.error("updateLotFromDialog - rollback failed (delete PURCHASE):", rollbackResult.error);
+      const rollbackMovements = await deletePurchaseMovementsForLot(lotId);
+      const rollbackLot = await supabase
+        .from("lots")
+        .update(rollbackLotPayload)
+        .eq("id", lotId);
+      if (!rollbackMovements.success || rollbackLot.error) {
+        console.error(
+          "updateLotFromDialog - rollback failed after update error:",
+          {
+            rollbackMovements,
+            rollbackLotError: rollbackLot.error,
+          }
+        );
+        return {
+          success: false,
+          error:
+            "La confirmation a échoué et le lot n'a pas pu être restauré automatiquement. Recharge la page puis vérifie le lot avant de réessayer.",
+          reason: "LOT_CONFIRMATION_ROLLBACK_FAILED",
+        };
       }
       return {
         success: false,
         error:
-          "Impossible de confirmer le lot après préparation des mouvements de stock.",
-        reason: "UPDATE_FAILED",
+          "Impossible de confirmer le lot après préparation des mouvements de stock. Le lot est resté en brouillon.",
+        reason: "LOT_CONFIRMATION_INCONSISTENT",
+      };
+    }
+
+    if (!updatedLot) {
+      const { data: latestLotStatusRow, error: latestLotStatusError } =
+        await supabase
+          .from("lots")
+          .select("status")
+          .eq("id", lotId)
+          .maybeSingle();
+
+      if (!latestLotStatusError && latestLotStatusRow?.status === "draft") {
+        await deletePurchaseMovementsForLot(lotId);
+      }
+
+      return {
+        success: false,
+        error:
+          "Le lot a été modifié en parallèle pendant la confirmation. Recharge la page puis réessaie.",
+        reason: "LOT_CONFIRMATION_CONFLICT",
+      };
+    }
+
+    const inventoryAfterConfirm = await readInventorySnapshotForLot(lotId);
+    const purchaseAfterConfirm = await sumPurchaseInQuantityForLot(lotId);
+    const postConditionOk =
+      inventoryAfterConfirm.success &&
+      purchaseAfterConfirm.success &&
+      inventoryAfterConfirm.totalQuantity > 0 &&
+      purchaseAfterConfirm.quantity === inventoryAfterConfirm.totalQuantity;
+
+    if (!postConditionOk) {
+      const rollbackMovements = await deletePurchaseMovementsForLot(lotId);
+      const rollbackLot = await supabase
+        .from("lots")
+        .update(rollbackLotPayload)
+        .eq("id", lotId);
+      const purchaseAfterRollback = await sumPurchaseInQuantityForLot(lotId);
+      const rollbackVerified =
+        rollbackMovements.success &&
+        !rollbackLot.error &&
+        purchaseAfterRollback.success &&
+        purchaseAfterRollback.quantity === 0;
+
+      if (!rollbackVerified) {
+        console.error(
+          "updateLotFromDialog - rollback verification failed after post-check:",
+          {
+            rollbackMovements,
+            rollbackLotError: rollbackLot.error,
+            purchaseAfterRollback,
+          }
+        );
+        return {
+          success: false,
+          error:
+            "La confirmation a échoué et la restauration automatique n'a pas pu être vérifiée. Recharge la page puis vérifie le lot avant de réessayer.",
+          reason: "LOT_CONFIRMATION_ROLLBACK_FAILED",
+        };
+      }
+
+      return {
+        success: false,
+        error:
+          "La confirmation a été annulée car une incohérence a été détectée entre inventaire et mouvements d'achat. Recharge la page puis réessaie.",
+        reason: "LOT_CONFIRMATION_INCONSISTENT",
       };
     }
 

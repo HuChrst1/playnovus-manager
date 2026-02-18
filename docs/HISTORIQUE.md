@@ -965,3 +965,220 @@ Statut: `FAIT`
 - Aucun changement de schema SQL/migration.
 - Regle appliquee uniquement aux codes conformes `LOT_n`.
 - Edition manuelle de `lot_code` conservee.
+
+## 2026-02-18 - F2.3 Confirmation lot atomique fonctionnelle + extension validation locale
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/approvisionnement/action.ts`:
+  - durcissement de `updateLotFromDialog` pour le flux `draft -> confirmed` avec snapshot inventory au moment de confirmer.
+  - refus explicite si inventory vide/invalide, meme si `lots.total_pieces` est incoherent.
+  - recreation des mouvements `PURCHASE/IN` depuis snapshot puis verification de coherence avant changement de statut.
+  - garde de conflit sur transition (`update ... where id = ? and status = 'draft'`) avec retour metier explicite.
+  - verification post-condition de confirmation:
+    - lot en `confirmed`
+    - `sum(inventory.quantity)` == `sum(stock_movements PURCHASE/IN)` pour le lot.
+  - compensation verifiee en cas d'echec intermediaire (retour en `draft` + nettoyage PURCHASE + verification).
+  - ajout de raisons metier explicites:
+    - `LOT_CONFIRMATION_CONFLICT`
+    - `LOT_CONFIRMATION_INCONSISTENT`
+    - `LOT_CONFIRMATION_ROLLBACK_FAILED`
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/scripts/f2_0_validate_local.mjs`:
+  - ajout des scenarios F2.3:
+    - S7 confirmation nominale coherente
+    - S8 echec intermediaire simule sans etat partiel persistant
+    - S9 lot incoherent refuse sans `PURCHASE`
+    - S10 contournement UI (lot vide) bloque cote serveur
+  - ajout non-regression F2.4:
+    - S11 protection `LOT_0`
+    - S12 renumerotation `LOT_n` apres suppression
+  - ajout d'un check global de coherence des lots confirmes (`inventory == PURCHASE/IN`, aucun lot sans PURCHASE).
+- Mise a jour docs:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/ROADMAP.md`: F2.3 passe a `FAIT` avec livrables/DoD realises.
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/DECISIONS.md`: ajout `D-018`.
+
+### Verifications executees
+
+- Pre-check environnement local:
+  - `npx supabase --version`: OK (`2.65.10`)
+  - `docker info --format '{{.ServerVersion}}'`: OK (`29.2.0`)
+  - `npx supabase status`: OK
+  - `npx supabase start`: OK
+  - `npx supabase db reset --local`: OK
+- Gates techniques:
+  - `npm ci`: OK
+  - `npm run lint`: OK
+  - `npm run typecheck`: OK
+  - `npm run build`: OK
+  - `npm run test:f2.0`: OK (incluant scenarios F2.3 S7..S10 et non-regressions S11..S12)
+- Verification audit npm:
+  - `npm audit`: KO (reseau indisponible: `ENOTFOUND registry.npmjs.org`)
+  - `npm audit fix`: KO (meme cause reseau)
+  - limite explicite: remediation automatique des vulnerabilites npm non finalisable sans acces registre npm.
+
+### Perimetre / limites
+
+- Aucun changement de schema SQL/migration.
+- Aucune ecriture distante Supabase.
+- Livraison F2.3 validee en local avec compensation fonctionnelle et checks de coherence lot/mouvements.
+
+## 2026-02-18 - F1.6 Hardening securite Supabase + audit npm prod/dev mitigation
+
+Statut: `FAIT` (DB) / `EN COURS` (audit npm live)
+
+### Changements realises
+
+- Ajout de migration SQL:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/supabase/migrations/20260218201000_f1_6_security_rls_views.sql`
+  - contenu:
+    - `ALTER VIEW ... SET (security_invoker = true)` sur:
+      - `set_completion`
+      - `stock_per_piece`
+      - `sold_pieces_journal`
+      - `piece_movements`
+      - `set_with_completion`
+      - `sale_item_movements`
+      - `stock_journal`
+    - `ENABLE ROW LEVEL SECURITY` sur:
+      - `lots`, `inventory`, `sets_bom`, `sets_catalog`, `transactions`
+      - `stock_balance`, `sale_items`, `sales`, `stock_movements`, `sale_item_pieces`
+    - policies de compatibilite (`FOR ALL TO anon, authenticated USING (true) WITH CHECK (true)`) sur les 10 tables cibles
+    - nettoyage grants:
+      - vues cibles: `anon/authenticated` en `SELECT` uniquement
+      - tables cibles: `anon/authenticated` en `SELECT, INSERT, UPDATE, DELETE`
+      - `service_role` inchange
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/package.json`:
+  - ajout script `audit:prod`
+  - ajout script `audit:deps`
+- Mise a jour docs:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/ROADMAP.md` (`F0.5`, `F1.6`)
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/DECISIONS.md` (`D-019`)
+
+### Verifications executees
+
+- DB locale / migration:
+  - `npx supabase start`: OK
+  - `npx supabase db reset --local --debug`: OK (incluant migration `20260218201000_f1_6_security_rls_views.sql`)
+- Verifications SQL post-reset (DB locale):
+  - RLS active (`relrowsecurity = true`) sur les 10 tables cibles: OK
+  - `security_invoker=true` sur les 7 vues cibles: OK
+  - policies compat presentes (`anon/authenticated`, `cmd=ALL`) sur les 10 tables: OK
+  - privileges:
+    - vues cibles: `SELECT` uniquement pour `anon/authenticated`: OK
+    - tables cibles: `DELETE, INSERT, SELECT, UPDATE` pour `anon/authenticated`: OK
+- Non-regression applicative:
+  - `npm run lint`: OK
+  - `npm run typecheck`: OK
+  - `npm run build`: OK
+  - `npm run test:f2.0`: OK
+- Audit npm:
+  - `npm run audit:deps`: OK (arbre dependances affiche)
+  - `npm run audit:prod`: KO environnement (`ENOTFOUND registry.npmjs.org`)
+  - tentative d'update non-cassante lint lancee sans `--force`, non finalisable dans cet environnement a cause de l'acces registre npm
+
+### Perimetre / limites
+
+- Aucune ecriture distante Supabase.
+- Aucun changement de logique metier applicative.
+- Objectif `0 vulnerabilite prod` non verifiable live dans cet environnement (DNS npm indisponible); rerun requis sur terminal connecte au registre npm.
+
+## 2026-02-18 - Migration lint ESLint -> Biome pour sortie npm audit a 0
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/package.json`:
+  - suppression de `eslint` et `eslint-config-next`
+  - ajout de `@biomejs/biome`
+  - remplacement du script `lint`:
+    - `lint:biome` -> `biome lint .`
+    - `lint:next-img-guard` -> `node scripts/check_no_img_element.mjs`
+  - script `audit:deps` rendu informatif (`npm ls ajv @eslint/eslintrc eslint || true`)
+- Ajout de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/biome.json`:
+  - ignore fichiers alignes avec l'existant (`.next`, `out`, `build`, `next-env.d.ts`, `node_modules`)
+  - formatter desactive (pas de reformat global)
+  - lint bloqueur configure sur un socle fiabilite avec exclusions ciblees pour eviter un refacto massif
+- Ajout de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/scripts/check_no_img_element.mjs`:
+  - scan de `src/` a la recherche de nouvelles occurrences `<img>`
+  - allowlist stricte des 3 occurrences legacy:
+    - `src/components/catalogue/set-image.tsx`
+    - `src/app/catalogue/page.tsx`
+    - `src/components/catalogue/edit-photo-button.tsx`
+  - echec explicite du lint si nouvelle occurrence hors allowlist
+- Suppression de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/eslint.config.mjs`.
+- Regeneration lockfile via `npm install`:
+  - disparition de la chaine `eslint -> @eslint/eslintrc -> ajv`.
+
+### Verifications executees
+
+- Audit dependances:
+  - `npm ls ajv @eslint/eslintrc eslint`: `(empty)` (chaine retiree)
+  - `npm audit`: `found 0 vulnerabilities`
+  - `npm audit --omit=dev --audit-level=moderate`: `found 0 vulnerabilities`
+- Gates techniques:
+  - `npm ci`: OK (`found 0 vulnerabilities`)
+  - `npm run lint`: OK (Biome + guard `<img>`)
+  - `npm run typecheck`: OK
+  - `npm run build`: OK
+  - `npm run test:f2.0`: OK (non-regression F2.0/F2.3/F2.4 + F1.3/F1.4/F1.5)
+
+### Perimetre / limites
+
+- Aucun changement de logique metier applicative.
+- Aucun changement SQL/migration dans cette livraison.
+- Le garde-fou Next est volontairement minimal sur `<img>` (controle cible, pas remplacement complet des regles ESLint Next historiques).
+
+## 2026-02-18 - F1.7 Follow-up securite Supabase (healthcheck invoker + search_path functions)
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Ajout de migration SQL:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/supabase/migrations/20260218224500_f1_7_security_followup_healthcheck_functions.sql`
+  - contenu:
+    - `ALTER VIEW public.healthcheck_business_anomalies_v1 SET (security_invoker = true)`
+    - `ALTER FUNCTION ... SET search_path = pg_catalog, public, pg_temp` sur:
+      - `public.reset_sales_id_sequence()`
+      - `public.apply_stock_balance_from_movements()`
+      - `public.apply_stock_balance_delta(text, bigint, bigint)`
+      - `public.reject_negative_stock_balance()`
+- Mise a jour de:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/ROADMAP.md` (ajout `F1.7`)
+- Aucun changement des policies RLS de compatibilite F1.6 (warnings `rls_policy_always_true` conserves volontairement pour eviter toute regression UX des flux `anon`).
+
+### Verifications executees
+
+- Validation locale:
+  - `npx supabase start`: OK
+  - `npx supabase db reset --local`: OK (incluant migration `20260218224500_f1_7_security_followup_healthcheck_functions.sql`)
+  - SQL local:
+    - `healthcheck_business_anomalies_v1` avec `security_invoker=true`: OK
+    - `search_path` fige sur les 4 fonctions ciblees: OK
+    - policies `p_*_compat_all` presentes: OK
+    - lecture `healthcheck_business_anomalies_v1`: OK
+    - RPC `reset_sales_id_sequence`: OK
+- Deploiement distant:
+  - `npx supabase db push --db-url <remote> --dry-run --yes`: OK (migration F1.7 detectee)
+  - `npx supabase db push --db-url <remote> --yes`: OK (migration F1.7 appliquee)
+  - SQL remote:
+    - `security_invoker=true` sur `healthcheck_business_anomalies_v1`: OK
+    - `search_path` fige sur les 4 fonctions ciblees: OK
+- Linter remote:
+  - `npx supabase db lint --db-url <remote> --schema public`: plus d'erreur `security_definer_view` sur `healthcheck_business_anomalies_v1`
+  - plus de warning `function_search_path_mutable` sur les 4 fonctions ciblees
+  - warnings `rls_policy_always_true` restants attendus (acceptes dans cette phase)
+- Gates techniques:
+  - `npm run lint`: OK
+  - `npm run typecheck`: OK
+  - `npm run build`: OK
+  - `npm run test:f2.0`: OK
+
+### Perimetre / limites
+
+- Aucun changement d'API frontend/backend.
+- Aucun durcissement RLS supplementaire dans cette iteration (intentionnel pour non-regression produit).
+- Le traitement des warnings `rls_policy_always_true` est reporte a une phase dediee de durcissement auth/policies.
