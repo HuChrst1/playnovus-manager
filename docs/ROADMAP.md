@@ -351,11 +351,11 @@ Definition of done:
 
 ## Phase 3 - Ventes/Commandes + KPIs + contrat data unique
 
-Statut global: `A FAIRE`
+Statut global: `EN COURS`
 
 ### F3.1 - Contrat query standardise pour `/ventes`
 
-Statut: `A FAIRE`
+Statut: `FAIT`
 Objectif: un seul contrat d'entree pour liste + KPIs.
 Parametres:
 - `period=total|90|30|7`
@@ -365,6 +365,18 @@ Parametres:
 - `sort`
 - `dir`
 - `page`
+Livrables realises:
+- parsing/normalisation canonique dans `src/app/ventes/page.tsx`
+- fallback strict sur toutes valeurs invalides:
+  - `period=30`, `include_cancelled=true`, `sort=paid_at`, `dir=desc`, `page=1`
+  - `channel` vide supprime, `sale_type` invalide ignore
+- redirection automatique vers URL canonique (`/ventes?...`) et suppression des cles legacy `stats_window_*`
+- conservation des filtres actifs dans tri/pagination via `baseQuery` transmis a `SalesTable`
+- application du contrat:
+  - table: `include_cancelled`, `channel`, `sale_type`, `sort`, `dir`, `page`
+  - KPIs: `period` + `channel` + `sale_type`, exclusion stricte `CANCELLED`
+- card KPI alignees sur un parametre unique `period` (plus de `stats_window_*`)
+- `src/lib/sales.ts` aligne sur `sale_type` (compat legacy `type` conservee)
 Definition of done:
 - contrat documente et utilise par la page
 

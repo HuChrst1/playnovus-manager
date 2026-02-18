@@ -172,7 +172,12 @@ export type SalesListParams = {
   from?: string; // ISO date/time
   to?: string; // ISO date/time
   channel?: string;
-  status?: string; // ex: "CONFIRMED"
+  status?: string; // ex: "CONFIRMED" ou "CANCELLED"
+  sale_type?: "SET" | "PIECE";
+  /**
+   * Compat legacy temporaire.
+   * Preferer `sale_type` pour coller au contrat query /ventes.
+   */
   type?: "SET" | "PIECE";
   limit?: number;
   offset?: number;
@@ -228,7 +233,8 @@ const toNumber = (v: unknown, fallback = 0) => {
  * Liste paginée des ventes pour la table "commandes".
  * - 1 seul appel PostgREST : sales + embed sale_items
  * - Agrégation côté JS (robuste + simple à maintenir)
- * - Exclut CANCELLED par défaut
+ * - Inclut CONFIRMED + CANCELLED par défaut (pas de filtre statut implicite)
+ * - Le filtrage explicite du statut est piloté par `params.status`
  */
 export async function listSalesForTable(
   client: SupabaseClient<Database>,
@@ -237,24 +243,23 @@ export async function listSalesForTable(
   const limit = Math.min(Math.max(params.limit ?? 50, 1), 200);
   const offset = Math.max(params.offset ?? 0, 0);
   const sortRaw = (params.sort ?? "paid_at").toString();
-const dir: "asc" | "desc" = params.dir === "asc" ? "asc" : "desc";
+  const dir: "asc" | "desc" = params.dir === "asc" ? "asc" : "desc";
 
-const allowed = new Set([
-  "sale_id",
-  "paid_at",
-  "sales_channel",
-  "sale_type",
-  "status",
-  "net_seller_amount",
-  "total_cost_amount",
-  "total_margin_amount",
-]);
+  const allowed = new Set([
+    "sale_id",
+    "paid_at",
+    "sales_channel",
+    "sale_type",
+    "status",
+    "net_seller_amount",
+    "total_cost_amount",
+    "total_margin_amount",
+  ]);
 
-const sortKey = allowed.has(sortRaw) ? sortRaw : "paid_at";
+  const sortKey = allowed.has(sortRaw) ? sortRaw : "paid_at";
 
-// mapping UI -> DB
-const primaryDbCol =
-  sortKey === "sale_id" ? "id" : sortKey;
+  // mapping UI -> DB
+  const primaryDbCol = sortKey === "sale_id" ? "id" : sortKey;
 
   let q = client
     .from("sales")
@@ -278,26 +283,27 @@ const primaryDbCol =
       { count: "exact" }
     );
 
-  // ✅ On inclut CONFIRMED + CANCELLED par défaut (pas de filtre)
-  // ✅ Si tu veux filtrer, tu passes params.status explicitement
+  // Inclus par defaut tous les statuts.
+  // Le caller peut forcer un statut cible via params.status.
   if (params.status) q = q.eq("status", params.status);
 
   if (params.channel) q = q.eq("sales_channel", params.channel);
   if (params.from) q = q.gte("paid_at", params.from);
   if (params.to) q = q.lte("paid_at", params.to);
-  if (params.type) q = q.eq("sale_type", params.type);
+  const saleTypeFilter = params.sale_type ?? params.type;
+  if (saleTypeFilter) q = q.eq("sale_type", saleTypeFilter);
 
   // IMPORTANT: on garde .returns() à la toute fin, sinon TS perd .eq/.gte/... selon les versions
   let q2 = q.order(primaryDbCol, {
     ascending: dir === "asc",
     nullsFirst: dir === "asc",
   });
-  
+
   // tie-breaker stable (sauf si on trie déjà par id)
   if (primaryDbCol !== "id") {
     q2 = q2.order("id", { ascending: false });
   }
-  
+
   const { data, error, count } = await q2
     .range(offset, offset + limit - 1)
     .returns<SalesWithItems[]>();
@@ -335,30 +341,29 @@ const primaryDbCol =
     const saleTypeFromDb =
       s.sale_type === "SET" || s.sale_type === "PIECE" ? s.sale_type : null;
 
-      const paid_at = typeof s.paid_at === "string" ? s.paid_at : "";
-      const sales_channel = typeof s.sales_channel === "string" ? s.sales_channel : "";
+    const paid_at = typeof s.paid_at === "string" ? s.paid_at : "";
+    const sales_channel =
+      typeof s.sales_channel === "string" ? s.sales_channel : "";
 
     const statusSafe =
       s.status === "CONFIRMED" || s.status === "CANCELLED"
         ? s.status
         : "CONFIRMED";
 
-        return {
-          sale_id: s.id,
-          paid_at,
-          sales_channel,
-          sale_type: saleTypeFromDb ?? derivedType,
-          status: statusSafe,
-          net_seller_amount: net,
-        
-          total_cost_amount: cost,
-          total_margin_amount: margin,
-          margin_rate: marginRate,
-        
-          sets_count,
-          pieces_lines_count,
-          pieces_qty_total,
-        };
+    return {
+      sale_id: s.id,
+      paid_at,
+      sales_channel,
+      sale_type: saleTypeFromDb ?? derivedType,
+      status: statusSafe,
+      net_seller_amount: net,
+      total_cost_amount: cost,
+      total_margin_amount: margin,
+      margin_rate: marginRate,
+      sets_count,
+      pieces_lines_count,
+      pieces_qty_total,
+    };
   });
 
   return { rows, total: count ?? null };

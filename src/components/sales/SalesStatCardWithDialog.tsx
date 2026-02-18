@@ -1,14 +1,16 @@
 "use client";
 
-import { useEffect, useState, useTransition, FormEvent } from "react";
+import { useEffect, useState, useTransition, type FormEvent } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
-  ArrowUpRight,
   ArrowDownRight,
+  ArrowUpRight,
   ChevronDown,
   SlidersHorizontal,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+export type SalesStatsPeriod = "total" | "90" | "30" | "7";
 
 export type SalesStatCardWithDialogProps = {
   id: "net" | "margin" | "rate" | "sets" | "pieces";
@@ -16,8 +18,7 @@ export type SalesStatCardWithDialogProps = {
   mainValue: string;
   trendPercent: number | null;
   color: "indigo" | "orange" | "amber" | "emerald";
-  /** Fenêtre actuellement appliquée côté serveur (en jours) */
-  windowDays: number;
+  period: SalesStatsPeriod;
 };
 
 const headerBgByColor: Record<SalesStatCardWithDialogProps["color"], string> = {
@@ -27,38 +28,36 @@ const headerBgByColor: Record<SalesStatCardWithDialogProps["color"], string> = {
   emerald: "#FDCFFA",
 };
 
-const windowParamKeyById: Record<SalesStatCardWithDialogProps["id"], string> = {
-  net: "stats_window_net",
-  margin: "stats_window_margin",
-  rate: "stats_window_rate",
-  sets: "stats_window_sets",
-  pieces: "stats_window_pieces",
-};
-
-const WINDOW_OPTIONS = [
-  { value: 7, label: "7 derniers jours" },
-  { value: 30, label: "30 derniers jours" },
-  { value: 90, label: "90 derniers jours" },
-  { value: 365, label: "365 derniers jours" },
+const PERIOD_OPTIONS: Array<{ value: SalesStatsPeriod; label: string }> = [
+  { value: "total", label: "Total (depuis toujours)" },
+  { value: "90", label: "90 derniers jours" },
+  { value: "30", label: "30 derniers jours" },
+  { value: "7", label: "7 derniers jours" },
 ];
 
+const shortPeriodLabel: Record<SalesStatsPeriod, string> = {
+  total: "Total",
+  "90": "90 j",
+  "30": "30 j",
+  "7": "7 j",
+};
+
 export function SalesStatCardWithDialog(props: SalesStatCardWithDialogProps) {
-  const { id, title, mainValue, trendPercent, color, windowDays } = props;
+  const { title, mainValue, trendPercent, color, period } = props;
 
   const [expanded, setExpanded] = useState(false);
-  const [tempWindow, setTempWindow] = useState<number>(windowDays);
+  const [tempPeriod, setTempPeriod] = useState<SalesStatsPeriod>(period);
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
-    setTempWindow(windowDays);
-  }, [windowDays]);
+    setTempPeriod(period);
+  }, [period]);
 
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
   const headerBgHex = headerBgByColor[color];
-  const paramKey = windowParamKeyById[id];
 
   const hasTrend = trendPercent !== null;
   const isPositive = (trendPercent ?? 0) >= 0;
@@ -67,11 +66,7 @@ export function SalesStatCardWithDialog(props: SalesStatCardWithDialogProps) {
   const percentLabel =
     trendPercent === null
       ? "—"
-      : `${isPositive ? "+" : "-"}${absPercent
-          .toFixed(1)
-          .replace(".", ",")}%`;
-
-  const shortWindowLabel = `${windowDays} j`;
+      : `${isPositive ? "+" : "-"}${absPercent.toFixed(1).replace(".", ",")}%`;
 
   const TrendIcon = isPositive ? ArrowUpRight : ArrowDownRight;
 
@@ -81,9 +76,9 @@ export function SalesStatCardWithDialog(props: SalesStatCardWithDialogProps) {
       : "bg-red-100 text-red-700"
     : "bg-slate-100 text-slate-500";
 
-  const handleApply = (nextWindow: number) => {
+  const handleApply = (nextPeriod: SalesStatsPeriod) => {
     const params = new URLSearchParams(searchParams.toString());
-    params.set(paramKey, String(nextWindow));
+    params.set("period", nextPeriod);
 
     startTransition(() => {
       router.push(`${pathname}?${params.toString()}`, { scroll: false });
@@ -92,7 +87,7 @@ export function SalesStatCardWithDialog(props: SalesStatCardWithDialogProps) {
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
-    handleApply(tempWindow);
+    handleApply(tempPeriod);
     setExpanded(false);
   };
 
@@ -104,7 +99,6 @@ export function SalesStatCardWithDialog(props: SalesStatCardWithDialogProps) {
       )}
       onClick={() => setExpanded((prev) => !prev)}
     >
-      {/* Bandeau coloré + titre */}
       <div
         className="h-12 w-full flex items-center px-5 rounded-t-3xl"
         style={{ backgroundColor: headerBgHex }}
@@ -114,14 +108,12 @@ export function SalesStatCardWithDialog(props: SalesStatCardWithDialogProps) {
         </p>
       </div>
 
-      {/* Contenu principal */}
       <div className="px-5 pt-3 pb-4 bg-white rounded-b-3xl">
         <div className="flex items-center justify-between gap-3 min-w-0">
           <span className="text-3xl font-semibold text-slate-900 leading-none min-w-0 whitespace-nowrap">
             {mainValue}
           </span>
 
-          {/* Pastille tendance + bouton fenêtre (même taille que les pastilles) */}
           <div className="flex flex-col items-end gap-1 shrink-0 max-w-[48%]">
             <span
               className={cn(
@@ -145,13 +137,12 @@ export function SalesStatCardWithDialog(props: SalesStatCardWithDialogProps) {
               }}
             >
               <SlidersHorizontal className="h-3 w-3" />
-              <span className="truncate max-w-[140px]">{shortWindowLabel}</span>
+              <span className="truncate max-w-[140px]">{shortPeriodLabel[period]}</span>
             </button>
           </div>
         </div>
       </div>
 
-      {/* Panneau options (plus lisible quand ouvert) */}
       <div
         className={cn(
           "overflow-hidden transition-[max-height,opacity,margin-top] duration-400 ease-[cubic-bezier(0.22,0.61,0.36,1)]",
@@ -161,26 +152,23 @@ export function SalesStatCardWithDialog(props: SalesStatCardWithDialogProps) {
       >
         <div className="px-5 pb-5">
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 shadow-[0_8px_18px_rgba(15,23,42,0.08)]">
-            <form
-              className="flex flex-col gap-3"
-              onSubmit={onSubmit}
-            >
+            <form className="flex flex-col gap-3" onSubmit={onSubmit}>
               <div className="flex-1">
                 <p className="mb-2 text-[11px] font-medium text-slate-600">
                   Période d&apos;analyse (valeur principale)
                 </p>
 
                 <label className="mb-1 block text-[11px] text-slate-500">
-                  Taille de la fenêtre
+                  Fenêtre commune des KPIs
                 </label>
 
                 <div className="relative">
                   <select
                     className="h-10 w-full appearance-none rounded-full border border-slate-200 bg-white px-3 pr-9 text-xs text-slate-700 shadow-[0_8px_18px_rgba(15,23,42,0.08)] focus:outline-none focus:ring-2 focus:ring-slate-900/5"
-                    value={tempWindow}
-                    onChange={(e) => setTempWindow(Number(e.target.value))}
+                    value={tempPeriod}
+                    onChange={(e) => setTempPeriod(e.target.value as SalesStatsPeriod)}
                   >
-                    {WINDOW_OPTIONS.map((opt) => (
+                    {PERIOD_OPTIONS.map((opt) => (
                       <option key={opt.value} value={opt.value}>
                         {opt.label}
                       </option>
@@ -188,7 +176,6 @@ export function SalesStatCardWithDialog(props: SalesStatCardWithDialogProps) {
                   </select>
                   <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-3 w-3 -translate-y-1/2 text-slate-400" />
                 </div>
-
               </div>
 
               <div className="flex gap-2">
@@ -196,7 +183,7 @@ export function SalesStatCardWithDialog(props: SalesStatCardWithDialogProps) {
                   type="button"
                   className="flex-1 h-10 rounded-full border border-slate-200 bg-white px-4 text-[11px] font-medium text-slate-700 shadow-[0_4px_12px_rgba(15,23,42,0.06)] hover:bg-slate-50 transition-colors"
                   onClick={() => {
-                    setTempWindow(windowDays);
+                    setTempPeriod(period);
                     setExpanded(false);
                   }}
                 >
@@ -207,7 +194,7 @@ export function SalesStatCardWithDialog(props: SalesStatCardWithDialogProps) {
                   disabled={isPending}
                   className="flex-1 h-10 rounded-full bg-slate-900 px-4 text-[11px] font-medium text-white shadow-[0_8px_22px_rgba(15,23,42,0.35)] hover:bg-slate-800 transition-colors disabled:opacity-60"
                 >
-                  {isPending ? "…" : "Appliquer"}
+                  {isPending ? "..." : "Appliquer"}
                 </button>
               </div>
             </form>

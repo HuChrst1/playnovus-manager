@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { supabaseServer as supabase } from "@/lib/supabase-server";
 import { listSalesForTable } from "@/lib/sales";
 import { SalesTable } from "@/components/sales/SalesTable";
@@ -6,7 +7,6 @@ import { NewSaleDialog } from "@/components/sales/NewSaleDialog";
 
 export const dynamic = "force-dynamic";
 
-// Colonnes triables pour la liste des ventes
 type SortColumn =
   | "sale_id"
   | "paid_at"
@@ -17,22 +17,58 @@ type SortColumn =
   | "total_cost_amount"
   | "total_margin_amount";
 
-type SalesSearchParams = {
-  sort?: string;
-  dir?: string; // "asc" | "desc"
-  page?: string; // pagination (ex: "1", "2", ...)
+type SalesPeriod = "total" | "90" | "30" | "7";
+type SalesSortDir = "asc" | "desc";
+type SalesTypeFilter = "SET" | "PIECE";
 
-  // Fenêtres par card (même pattern qu'Appro : stats_window_<id>)
-  stats_window_net?: string;
-  stats_window_margin?: string;
-  stats_window_rate?: string;
-  stats_window_sets?: string;
-  stats_window_pieces?: string;
-};
+type RawSalesSearchParams = Record<string, string | string[] | undefined>;
 
 type SalesPageProps = {
-  searchParams?: Promise<SalesSearchParams>;
+  searchParams?: Promise<RawSalesSearchParams>;
 };
+
+type NormalizedSalesQuery = {
+  period: SalesPeriod;
+  includeCancelled: boolean;
+  channel: string | null;
+  saleType: SalesTypeFilter | null;
+  sort: SortColumn;
+  dir: SalesSortDir;
+  page: number;
+  canonicalQuery: string;
+  baseQuery: string;
+};
+
+type SaleForStats = {
+  paid_at: string | null;
+  net_seller_amount: number | string | null;
+  total_margin_amount: number | string | null;
+  sale_type: string | null;
+};
+
+const PAGE_SIZE = 50;
+const ALLOWED_SORT_COLUMNS: ReadonlySet<SortColumn> = new Set([
+  "sale_id",
+  "paid_at",
+  "sale_type",
+  "sales_channel",
+  "status",
+  "net_seller_amount",
+  "total_cost_amount",
+  "total_margin_amount",
+]);
+const ALLOWED_PERIODS: ReadonlySet<SalesPeriod> = new Set([
+  "total",
+  "90",
+  "30",
+  "7",
+]);
+
+const DEFAULT_PERIOD: SalesPeriod = "30";
+const DEFAULT_INCLUDE_CANCELLED = true;
+const DEFAULT_SORT: SortColumn = "paid_at";
+const DEFAULT_DIR: SalesSortDir = "desc";
+const DEFAULT_PAGE = 1;
 
 const euro = new Intl.NumberFormat("fr-FR", {
   style: "currency",
@@ -41,55 +77,124 @@ const euro = new Intl.NumberFormat("fr-FR", {
   maximumFractionDigits: 2,
 });
 
-function parseWindowParam(value: string | undefined, fallback: number): number {
-  const n = Number((value ?? "").toString());
-  if (!Number.isFinite(n) || n <= 0) return fallback;
-  return n;
+function getFirstParamValue(value: string | string[] | undefined): string | undefined {
+  if (Array.isArray(value)) return value[0];
+  return value;
+}
+
+function toIncomingSearchParams(raw: RawSalesSearchParams): URLSearchParams {
+  const params = new URLSearchParams();
+
+  for (const [key, value] of Object.entries(raw)) {
+    if (Array.isArray(value)) {
+      if (value.length > 0) params.set(key, value[0] ?? "");
+      continue;
+    }
+
+    if (typeof value === "string") {
+      params.set(key, value);
+    }
+  }
+
+  return params;
+}
+
+function normalizeSalesQuery(raw: RawSalesSearchParams): NormalizedSalesQuery {
+  const periodRaw = (getFirstParamValue(raw.period) ?? "")
+    .trim()
+    .toLowerCase() as SalesPeriod;
+  const period = ALLOWED_PERIODS.has(periodRaw) ? periodRaw : DEFAULT_PERIOD;
+
+  const includeCancelledRaw = (getFirstParamValue(raw.include_cancelled) ?? "")
+    .trim()
+    .toLowerCase();
+  const includeCancelled =
+    includeCancelledRaw === "true"
+      ? true
+      : includeCancelledRaw === "false"
+      ? false
+      : DEFAULT_INCLUDE_CANCELLED;
+
+  const channelRaw = (getFirstParamValue(raw.channel) ?? "").trim();
+  const channel = channelRaw.length > 0 ? channelRaw : null;
+
+  const saleTypeRaw = (getFirstParamValue(raw.sale_type) ?? "")
+    .trim()
+    .toUpperCase();
+  const saleType =
+    saleTypeRaw === "SET" || saleTypeRaw === "PIECE"
+      ? (saleTypeRaw as SalesTypeFilter)
+      : null;
+
+  const sortRaw = (getFirstParamValue(raw.sort) ?? "").trim() as SortColumn;
+  const sort = ALLOWED_SORT_COLUMNS.has(sortRaw) ? sortRaw : DEFAULT_SORT;
+
+  const dirRaw = (getFirstParamValue(raw.dir) ?? "").trim().toLowerCase();
+  const dir: SalesSortDir = dirRaw === "asc" ? "asc" : DEFAULT_DIR;
+
+  const pageRaw = (getFirstParamValue(raw.page) ?? "").trim();
+  const parsedPage = Number.parseInt(pageRaw, 10);
+  const page = Number.isFinite(parsedPage) && parsedPage >= 1 ? parsedPage : DEFAULT_PAGE;
+
+  const canonicalParams = new URLSearchParams();
+  canonicalParams.set("period", period);
+  canonicalParams.set("include_cancelled", includeCancelled ? "true" : "false");
+  if (channel) canonicalParams.set("channel", channel);
+  if (saleType) canonicalParams.set("sale_type", saleType);
+  canonicalParams.set("sort", sort);
+  canonicalParams.set("dir", dir);
+  canonicalParams.set("page", String(page));
+
+  const baseParams = new URLSearchParams();
+  baseParams.set("period", period);
+  baseParams.set("include_cancelled", includeCancelled ? "true" : "false");
+  if (channel) baseParams.set("channel", channel);
+  if (saleType) baseParams.set("sale_type", saleType);
+
+  return {
+    period,
+    includeCancelled,
+    channel,
+    saleType,
+    sort,
+    dir,
+    page,
+    canonicalQuery: canonicalParams.toString(),
+    baseQuery: baseParams.toString(),
+  };
+}
+
+function getPeriodDays(period: SalesPeriod): number | null {
+  if (period === "total") return null;
+  return Number.parseInt(period, 10);
+}
+
+function toNumber(v: unknown, fallback = 0): number {
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? n : fallback;
 }
 
 export default async function VentesPage({ searchParams }: SalesPageProps) {
   const resolvedSearchParams = searchParams ? await searchParams : {};
+  const normalized = normalizeSalesQuery(resolvedSearchParams);
 
-  const PAGE_SIZE = 50;
-
-  // ----------------------------
-  // Pagination / tri (table)
-  // ----------------------------
-  const pageRaw = (resolvedSearchParams.page ?? "1").toString();
-  const page = Math.max(1, Number.parseInt(pageRaw, 10) || 1);
-  const offset = (page - 1) * PAGE_SIZE;
-
-  const sortParamRaw = (resolvedSearchParams.sort ?? "paid_at").toString();
-  let dir = (resolvedSearchParams.dir ?? "desc").toString().toLowerCase();
-  if (dir !== "asc" && dir !== "desc") dir = "desc";
-
-  const ALLOWED_SORT_COLUMNS: SortColumn[] = [
-    "sale_id",
-    "paid_at",
-    "sale_type",
-    "sales_channel",
-    "status",
-    "net_seller_amount",
-    "total_cost_amount",
-    "total_margin_amount",
-  ];
-
-  let activeSortKey = sortParamRaw;
-  let dbSortColumn: SortColumn = "paid_at";
-
-  if ((ALLOWED_SORT_COLUMNS as readonly string[]).includes(sortParamRaw)) {
-    dbSortColumn = sortParamRaw as SortColumn;
-  } else {
-    activeSortKey = "paid_at";
-    dbSortColumn = "paid_at";
+  const incomingQuery = toIncomingSearchParams(resolvedSearchParams).toString();
+  if (incomingQuery !== normalized.canonicalQuery) {
+    redirect(`/ventes?${normalized.canonicalQuery}`);
   }
 
-  // 1) Charger la liste agrégée (1 ligne = 1 commande)
+  const offset = (normalized.page - 1) * PAGE_SIZE;
+
+  const statusFilter = normalized.includeCancelled ? undefined : "CONFIRMED";
+
   const { rows: rawRows, total } = await listSalesForTable(supabase, {
     limit: PAGE_SIZE,
     offset,
-    sort: dbSortColumn,
-    dir: dir === "asc" ? "asc" : "desc",
+    sort: normalized.sort,
+    dir: normalized.dir,
+    channel: normalized.channel ?? undefined,
+    sale_type: normalized.saleType ?? undefined,
+    status: statusFilter,
   });
 
   const totalCount = total ?? 0;
@@ -97,91 +202,51 @@ export default async function VentesPage({ searchParams }: SalesPageProps) {
   const pageFrom = totalCount === 0 ? 0 : offset + 1;
   const pageTo = Math.min(offset + PAGE_SIZE, totalCount);
 
-  // Pages à afficher (compacte avec "…") — même logique que /catalogue
-  let pageNumbers: (number | "dots")[] = [];
-
+  let pageNumbers: Array<number | "dots"> = [];
   if (totalPages <= 7) {
     pageNumbers = Array.from({ length: totalPages }, (_, i) => i + 1);
   } else {
     const siblings = 1;
-
-    const startPage = Math.max(2, page - siblings);
-    const endPage = Math.min(totalPages - 1, page + siblings);
+    const startPage = Math.max(2, normalized.page - siblings);
+    const endPage = Math.min(totalPages - 1, normalized.page + siblings);
 
     pageNumbers = [1];
-
     if (startPage > 2) pageNumbers.push("dots");
-
-    for (let p = startPage; p <= endPage; p++) pageNumbers.push(p);
-
+    for (let p = startPage; p <= endPage; p += 1) pageNumbers.push(p);
     if (endPage < totalPages - 1) pageNumbers.push("dots");
-
     pageNumbers.push(totalPages);
   }
 
-  // Rows déjà triées côté SQL (listSalesForTable) => pagination cohérente
-  const rows = rawRows;
-
-  // ----------------------------
-  // 3.6.3 — STATS CARDS
-  // - mainValue : dépend de la fenêtre par card (7/30/90)
-  // - trend (%) : TOUJOURS 30j vs 30j précédents (indépendant du filtre)
-  // - UNIQUEMENT ventes CONFIRMED
-  // - Date = paid_at
-  // ----------------------------
-
-  const windowNetDays = parseWindowParam(resolvedSearchParams.stats_window_net, 30);
-  const windowMarginDays = parseWindowParam(
-    resolvedSearchParams.stats_window_margin,
-    30
-  );
-  const windowRateDays = parseWindowParam(resolvedSearchParams.stats_window_rate, 30);
-  const windowSetsDays = parseWindowParam(resolvedSearchParams.stats_window_sets, 30);
-  const windowPiecesDays = parseWindowParam(
-    resolvedSearchParams.stats_window_pieces,
-    30
-  );
-
+  const now = new Date();
+  const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const MS_PER_DAY = 24 * 60 * 60 * 1000;
-  const today = new Date();
-  const todayMidnight = new Date(
-    today.getFullYear(),
-    today.getMonth(),
-    today.getDate()
-  );
 
-  // On limite la requête à ce qui est strictement nécessaire :
-  // max(window choisi, 60j pour trend 30j vs 30j).
-  const maxDaysNeeded = Math.max(
-    60,
-    windowNetDays,
-    windowMarginDays,
-    windowRateDays,
-    windowSetsDays,
-    windowPiecesDays
-  );
+  const periodDays = getPeriodDays(normalized.period);
+  const maxDaysNeeded = periodDays === null ? null : Math.max(60, periodDays);
 
-  const cutoff = new Date(todayMidnight.getTime() - maxDaysNeeded * MS_PER_DAY);
-
-  const { data: salesForStatsRaw, error: salesForStatsError } = await supabase
+  let salesForStatsQuery = supabase
     .from("sales")
-    .select("paid_at, net_seller_amount, total_margin_amount, sale_items(item_kind)")
-    .eq("status", "CONFIRMED")
-    .gte("paid_at", cutoff.toISOString());
+    .select("paid_at, net_seller_amount, total_margin_amount, sale_type")
+    .eq("status", "CONFIRMED");
 
-  if (salesForStatsError) {
-    console.error(
-      "VentesPage - erreur chargement stats cards:",
-      salesForStatsError
-    );
+  if (normalized.channel) {
+    salesForStatsQuery = salesForStatsQuery.eq("sales_channel", normalized.channel);
   }
 
-  type SaleForStats = {
-    paid_at: string | null;
-    net_seller_amount: number | string | null;
-    total_margin_amount: number | string | null;
-    sale_items?: { item_kind: "SET" | "PIECE" | string | null }[] | null;
-  };
+  if (normalized.saleType) {
+    salesForStatsQuery = salesForStatsQuery.eq("sale_type", normalized.saleType);
+  }
+
+  if (maxDaysNeeded !== null) {
+    const cutoff = new Date(todayMidnight.getTime() - maxDaysNeeded * MS_PER_DAY);
+    salesForStatsQuery = salesForStatsQuery.gte("paid_at", cutoff.toISOString());
+  }
+
+  const { data: salesForStatsRaw, error: salesForStatsError } = await salesForStatsQuery;
+
+  if (salesForStatsError) {
+    console.error("VentesPage - erreur chargement stats cards:", salesForStatsError);
+  }
 
   const salesForStats = (salesForStatsRaw ?? []) as SaleForStats[];
 
@@ -210,44 +275,33 @@ export default async function VentesPage({ searchParams }: SalesPageProps) {
     return ((current - previous) / base) * 100;
   };
 
-  const hasSet = (s: SaleForStats) =>
-    Array.isArray(s.sale_items) &&
-    s.sale_items.some((it) => it?.item_kind === "SET");
-
-  const hasPiece = (s: SaleForStats) =>
-    Array.isArray(s.sale_items) &&
-    s.sale_items.some((it) => it?.item_kind === "PIECE");
-
   const sumNet = (arr: SaleForStats[]) =>
-    arr.reduce((acc, s) => acc + Number(s.net_seller_amount ?? 0), 0);
+    arr.reduce((acc, s) => acc + toNumber(s.net_seller_amount, 0), 0);
 
   const sumMargin = (arr: SaleForStats[]) =>
-    arr.reduce((acc, s) => acc + Number(s.total_margin_amount ?? 0), 0);
+    arr.reduce((acc, s) => acc + toNumber(s.total_margin_amount, 0), 0);
 
-  const countWithSet = (arr: SaleForStats[]) => arr.filter(hasSet).length;
-  const countWithPiece = (arr: SaleForStats[]) => arr.filter(hasPiece).length;
+  const countSets = (arr: SaleForStats[]) =>
+    arr.filter((s) => s.sale_type === "SET").length;
 
-  const filterLastWindow = (days: number) =>
-    salesForStats.filter((s) => isInLastNDays(s.paid_at, days));
+  const countPieces = (arr: SaleForStats[]) =>
+    arr.filter((s) => s.sale_type === "PIECE").length;
 
-  // KPI affichés (dépendent de la fenêtre choisie)
-  const salesNetW = filterLastWindow(windowNetDays);
-  const salesMarginW = filterLastWindow(windowMarginDays);
-  const salesRateW = filterLastWindow(windowRateDays);
-  const salesSetsW = filterLastWindow(windowSetsDays);
-  const salesPiecesW = filterLastWindow(windowPiecesDays);
+  const salesInPeriod =
+    periodDays === null
+      ? salesForStats
+      : salesForStats.filter((s) => isInLastNDays(s.paid_at, periodDays));
 
-  const netWindowValue = sumNet(salesNetW);
-  const marginWindowValue = sumMargin(salesMarginW);
+  const netWindowValue = sumNet(salesInPeriod);
+  const marginWindowValue = sumMargin(salesInPeriod);
 
-  const rateNet = sumNet(salesRateW);
-  const rateMargin = sumMargin(salesRateW);
+  const rateNet = sumNet(salesInPeriod);
+  const rateMargin = sumMargin(salesInPeriod);
   const avgMarginRateWindowValue = rateNet > 0 ? rateMargin / rateNet : 0;
 
-  const setsWindowValue = countWithSet(salesSetsW);
-  const piecesWindowValue = countWithPiece(salesPiecesW);
+  const setsWindowValue = countSets(salesInPeriod);
+  const piecesWindowValue = countPieces(salesInPeriod);
 
-  // Trends TOUJOURS sur 30j vs 30j précédents
   const last30 = salesForStats.filter((s) => isInLastNDays(s.paid_at, 30));
   const prev30 = salesForStats.filter((s) => isInPrevNDays(s.paid_at, 30));
 
@@ -263,29 +317,35 @@ export default async function VentesPage({ searchParams }: SalesPageProps) {
   const ratePrev30 = ratePrev30Net > 0 ? ratePrev30Margin / ratePrev30Net : 0;
   const rateTrend = calcTrend(rateLast30, ratePrev30);
 
-  const setsTrend = calcTrend(countWithSet(last30), countWithSet(prev30));
-  const piecesTrend = calcTrend(countWithPiece(last30), countWithPiece(prev30));
+  const setsTrend = calcTrend(countSets(last30), countSets(prev30));
+  const piecesTrend = calcTrend(countPieces(last30), countPieces(prev30));
 
-  // Header (cohérent avec le total global) — 1 seule requête
-  // totalSalesCount = total (pagination) => toutes ventes (tous statuts)
-  // confirmedCount = count DB (CONFIRMED)
-  // cancelledCount = total - confirmed (hypothèse : statuts = CONFIRMED | CANCELLED)
-  const { count: confirmedCountRaw, error: confirmedCountErr } = await supabase
-    .from("sales")
-    .select("id", { count: "exact", head: true })
-    .eq("status", "CONFIRMED");
+  const countSalesByStatus = async (status: "CONFIRMED" | "CANCELLED") => {
+    let q = supabase.from("sales").select("id", { count: "exact", head: true });
 
-  if (confirmedCountErr) {
-    console.error("VentesPage - erreur count CONFIRMED:", confirmedCountErr);
-  }
+    if (normalized.channel) q = q.eq("sales_channel", normalized.channel);
+    if (normalized.saleType) q = q.eq("sale_type", normalized.saleType);
+
+    q = q.eq("status", status);
+
+    const { count, error } = await q;
+    if (error) {
+      console.error(`VentesPage - erreur count ${status}:`, error);
+      return 0;
+    }
+
+    return count ?? 0;
+  };
+
+  const [confirmedCount, cancelledCount] = await Promise.all([
+    countSalesByStatus("CONFIRMED"),
+    normalized.includeCancelled ? countSalesByStatus("CANCELLED") : Promise.resolve(0),
+  ]);
 
   const totalSalesCount = totalCount;
-  const confirmedCount = confirmedCountRaw ?? 0;
-  const cancelledCount = Math.max(0, totalSalesCount - confirmedCount);
 
   return (
     <main className="space-y-6">
-      {/* HEADER PAGE */}
       <div className="flex items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Ventes</h1>
@@ -310,7 +370,6 @@ export default async function VentesPage({ searchParams }: SalesPageProps) {
         <NewSaleDialog />
       </div>
 
-      {/* CARDS STATS — même UX que /approvisionnement */}
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5 items-start">
         <SalesStatCardWithDialog
           id="net"
@@ -318,7 +377,7 @@ export default async function VentesPage({ searchParams }: SalesPageProps) {
           mainValue={euro.format(netWindowValue)}
           trendPercent={netTrend}
           color="indigo"
-          windowDays={windowNetDays}
+          period={normalized.period}
         />
 
         <SalesStatCardWithDialog
@@ -327,7 +386,7 @@ export default async function VentesPage({ searchParams }: SalesPageProps) {
           mainValue={euro.format(marginWindowValue)}
           trendPercent={marginTrend}
           color="orange"
-          windowDays={windowMarginDays}
+          period={normalized.period}
         />
 
         <SalesStatCardWithDialog
@@ -338,7 +397,7 @@ export default async function VentesPage({ searchParams }: SalesPageProps) {
           }
           trendPercent={rateTrend}
           color="amber"
-          windowDays={windowRateDays}
+          period={normalized.period}
         />
 
         <SalesStatCardWithDialog
@@ -347,7 +406,7 @@ export default async function VentesPage({ searchParams }: SalesPageProps) {
           mainValue={setsWindowValue.toLocaleString("fr-FR")}
           trendPercent={setsTrend}
           color="emerald"
-          windowDays={windowSetsDays}
+          period={normalized.period}
         />
 
         <SalesStatCardWithDialog
@@ -356,18 +415,17 @@ export default async function VentesPage({ searchParams }: SalesPageProps) {
           mainValue={piecesWindowValue.toLocaleString("fr-FR")}
           trendPercent={piecesTrend}
           color="emerald"
-          windowDays={windowPiecesDays}
+          period={normalized.period}
         />
       </section>
 
-      {/* TABLE "COMMANDES" */}
       <SalesTable
-        rows={rows}
-        activeSortKey={activeSortKey}
-        sortDir={dir === "asc" ? "asc" : "desc"}
-        baseQuery=""
+        rows={rawRows}
+        activeSortKey={normalized.sort}
+        sortDir={normalized.dir}
+        baseQuery={normalized.baseQuery}
         pagination={{
-          currentPage: page,
+          currentPage: normalized.page,
           totalPages,
           pageNumbers,
           pageFrom,

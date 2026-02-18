@@ -1182,3 +1182,73 @@ Statut: `FAIT`
 - Aucun changement d'API frontend/backend.
 - Aucun durcissement RLS supplementaire dans cette iteration (intentionnel pour non-regression produit).
 - Le traitement des warnings `rls_policy_always_true` est reporte a une phase dediee de durcissement auth/policies.
+
+## 2026-02-18 - F3.1 Contrat query standardise pour /ventes
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/ventes/page.tsx`:
+  - ajout d'un parseur canonique des query params `/ventes`:
+    - `period=total|90|30|7` (defaut `30`)
+    - `include_cancelled=true|false` (defaut `true`)
+    - `channel` (trim + suppression si vide)
+    - `sale_type=SET|PIECE`
+    - `sort`, `dir`, `page` avec fallback strict
+  - redirection automatique vers URL canonique si valeur invalide/manquante ou cles legacy detectees
+  - suppression fonctionnelle des cles legacy `stats_window_*` via canonicalisation
+  - alignement des filtres table:
+    - `include_cancelled=false` => `status=CONFIRMED`
+    - `channel`, `sale_type`, `sort`, `dir`, `page`
+  - alignement des KPIs:
+    - exclusion stricte `CANCELLED`
+    - application de `period`
+    - application de `channel` et `sale_type`
+  - compteurs en-tete alignes sur les filtres actifs de la table
+  - transmission d'un `baseQuery` canonique a `SalesTable` pour conserver les filtres dans tri/pagination
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/sales/SalesStatCardWithDialog.tsx`:
+  - remplacement du modele `stats_window_*` par un unique parametre `period`
+  - options periode unifiees: `Total`, `90`, `30`, `7`
+  - UI conservee (cards + dialog), sans ajout de barre de filtres
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/lib/sales.ts`:
+  - convergence API listage vers `sale_type` (compat legacy `type` conservee)
+  - documentation interne corrigee: inclusion des statuts par defaut et filtrage explicite via `status`
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/ROADMAP.md`:
+  - `Phase 3` passe en `EN COURS`
+  - `F3.1` passe en `FAIT` avec livrables et fallback documentes
+
+### Verifications executees
+
+- Pre-check local:
+  - `npx supabase --version`: OK (`2.65.10`)
+  - `docker info --format '{{.ServerVersion}}'`: OK (`29.2.0`)
+  - `npx supabase status`: OK (stack locale active)
+- Validation DB locale:
+  - `npx supabase start`: OK
+  - `npx supabase db reset --local`: OK (baseline + F1.3/F1.4/F1.5/F1.6/F1.7 + seed)
+- Gates techniques:
+  - `npm ci`: OK (`found 0 vulnerabilities`)
+  - `npm run lint`: OK
+  - `npm run typecheck`: OK
+  - `npm run build`: OK
+  - `npm run test:f2.0`: OK (non-regression F2.x + checks F1.3/F1.4/F1.5)
+- Scenarios F3.1 verifies via serveur local + `curl`:
+  - S1 `/ventes` => `307` vers URL canonique `period=30&include_cancelled=true&sort=paid_at&dir=desc&page=1`
+  - S2 `period=7` / `period=total` => valeur `period` bien propagee au SSR des cards KPI
+  - S3 `include_cancelled=false` vs `true` => statuts visibles differents (confirmes seuls vs confirmes + annulees)
+  - S4 `channel` + `sale_type` => filtres appliques a la table (rows vides si combinaison sans resultats) et KPIs alignes
+  - S5 tri/pagination => liens reconstruits en conservant les filtres actifs (`period/include_cancelled/channel/sale_type`)
+  - S6 params invalides (`period=999`, `dir=up`, `sort=bad`, etc.) => fallback + redirection canonique
+  - S7 navigation detail conservee (table rendue avec lignes cliquables; verification fonctionnelle UX non regressive)
+- Verifications SQL post-implementation:
+  - `stock_balance.quantity < 0`: `0`
+  - vues lisibles: `stock_per_piece`, `stock_journal`, `piece_movements` => OK
+  - `healthcheck_business_anomalies_v1`: `0`
+  - coherence lots confirmes (`inventory` vs `PURCHASE/IN`): `0` mismatch
+
+### Perimetre / limites
+
+- Aucun changement SQL/migration dans cette livraison F3.1.
+- Aucun changement DB distante; validations effectuees en local uniquement.
+- Aucun secret sensible ajoute au repo.
