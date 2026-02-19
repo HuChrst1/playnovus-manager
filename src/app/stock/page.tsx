@@ -4,7 +4,7 @@ import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { History } from "lucide-react";
-import { DashboardStatCard } from "@/components/dashboard/DashboardStatCard";
+import { SalesStatCard } from "@/components/sales/SalesStatCard";
 
 export const dynamic = "force-dynamic";
 
@@ -234,34 +234,28 @@ export default async function StockPage({ searchParams }: StockPageProps) {
         </div>
       </div>
 
-        {/* CARDS DE TOTAUX STOCK */}
+      {/* CARDS DE TOTAUX STOCK */}
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        <DashboardStatCard
+        <SalesStatCard
           title="Pièces en stock"
           mainValue={stockStats.totalPieces.toLocaleString("fr-FR")}
-          trendPercent={null}
           color="indigo"
-          windowLabel="vs 30 derniers jours"
         />
 
-        <DashboardStatCard
+        <SalesStatCard
           title="Valeur totale stock"
           mainValue={euro.format(stockStats.totalValue)}
-          trendPercent={null}
           color="orange"
-          windowLabel="vs 30 derniers jours"
         />
 
-        <DashboardStatCard
+        <SalesStatCard
           title="Coût unitaire moyen"
           mainValue={
             stockStats.totalPieces > 0
               ? euro.format(stockStats.avgCostPerPiece)
               : "—"
           }
-          trendPercent={null}
           color="amber"
-          windowLabel="vs 30 derniers jours"
         />
       </section>
 

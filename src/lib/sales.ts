@@ -368,3 +368,343 @@ export async function listSalesForTable(
 
   return { rows, total: count ?? null };
 }
+
+// ------------------------------------------------------------
+// F3.2 DATA — Contrat unifie pour /ventes (liste + KPI + compteurs)
+// ------------------------------------------------------------
+
+export type SalesPageSortColumn =
+  | "sale_id"
+  | "paid_at"
+  | "sales_channel"
+  | "sale_type"
+  | "status"
+  | "net_seller_amount"
+  | "total_cost_amount"
+  | "total_margin_amount";
+
+export type SalesPageSortDir = "asc" | "desc";
+export type SalesPageSaleType = "SET" | "PIECE";
+
+export type SalesPageFilters = {
+  includeCancelled: boolean;
+  channel?: string | null;
+  saleType?: SalesPageSaleType | null;
+  sort: SalesPageSortColumn;
+  dir: SalesPageSortDir;
+  page: number;
+  pageSize?: number;
+  from?: string | null;
+  to?: string | null;
+};
+
+export type SalesPageTableData = {
+  rows: SalesListRow[];
+  currentPage: number;
+  totalPages: number;
+  pageNumbers: Array<number | "dots">;
+  pageFrom: number;
+  pageTo: number;
+  totalCount: number;
+  pageSize: number;
+};
+
+export type SalesPageKpis = {
+  netWindowValue: number;
+  marginWindowValue: number;
+  avgMarginRateWindowValue: number;
+  setsWindowValue: number;
+  piecesWindowValue: number;
+};
+
+export type SalesPageDeltas = {
+  netTrend: number | null;
+  marginTrend: number | null;
+  rateTrend: number | null;
+  setsTrend: number | null;
+  piecesTrend: number | null;
+};
+
+export type SalesPageHeaderCounts = {
+  totalSalesCount: number;
+  confirmedCount: number;
+  cancelledCount: number;
+};
+
+export type SalesPageData = {
+  table: SalesPageTableData;
+  kpis: SalesPageKpis;
+  deltas: SalesPageDeltas;
+  headerCounts: SalesPageHeaderCounts;
+};
+
+type SaleForStats = {
+  net_seller_amount: number | string | null;
+  total_margin_amount: number | string | null;
+  sale_type: string | null;
+};
+
+const DEFAULT_SALES_PAGE_SIZE = 50;
+const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
+const ALLOWED_SALES_SORT_COLUMNS: ReadonlySet<SalesPageSortColumn> = new Set([
+  "sale_id",
+  "paid_at",
+  "sale_type",
+  "sales_channel",
+  "status",
+  "net_seller_amount",
+  "total_cost_amount",
+  "total_margin_amount",
+]);
+
+type NormalizedDateRange = {
+  from: string | null;
+  to: string | null;
+};
+
+function normalizeSalesPageSize(value: number | undefined): number {
+  const n = Number(value ?? DEFAULT_SALES_PAGE_SIZE);
+  if (!Number.isFinite(n) || n < 1) return DEFAULT_SALES_PAGE_SIZE;
+  return Math.min(Math.floor(n), 200);
+}
+
+function normalizeSalesPage(value: number): number {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 1) return 1;
+  return Math.floor(n);
+}
+
+function normalizeSalesSort(value: string): SalesPageSortColumn {
+  if (ALLOWED_SALES_SORT_COLUMNS.has(value as SalesPageSortColumn)) {
+    return value as SalesPageSortColumn;
+  }
+  return "paid_at";
+}
+
+function normalizeSalesSortDir(value: string): SalesPageSortDir {
+  return value === "asc" ? "asc" : "desc";
+}
+
+function normalizeDateOnly(value: string | null | undefined): string | null {
+  const raw = (value ?? "").trim();
+  if (!raw) return null;
+  if (!DATE_ONLY_RE.test(raw)) return null;
+
+  const parsed = new Date(`${raw}T00:00:00.000Z`);
+  if (Number.isNaN(parsed.getTime())) return null;
+  if (parsed.toISOString().slice(0, 10) !== raw) return null;
+
+  return raw;
+}
+
+function normalizeDateRange(
+  fromInput: string | null | undefined,
+  toInput: string | null | undefined
+): NormalizedDateRange {
+  let from = normalizeDateOnly(fromInput);
+  let to = normalizeDateOnly(toInput);
+
+  if (from && to && from > to) {
+    const oldFrom = from;
+    from = to;
+    to = oldFrom;
+  }
+
+  return { from, to };
+}
+
+function toDateRangeIso(range: NormalizedDateRange): {
+  fromIso?: string;
+  toIso?: string;
+} {
+  return {
+    fromIso: range.from ? `${range.from}T00:00:00.000Z` : undefined,
+    toIso: range.to ? `${range.to}T23:59:59.999Z` : undefined,
+  };
+}
+
+function buildPageNumbers(
+  totalPages: number,
+  currentPage: number
+): Array<number | "dots"> {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, i) => i + 1);
+  }
+
+  const siblings = 1;
+  const startPage = Math.max(2, currentPage - siblings);
+  const endPage = Math.min(totalPages - 1, currentPage + siblings);
+
+  const pageNumbers: Array<number | "dots"> = [1];
+  if (startPage > 2) pageNumbers.push("dots");
+  for (let p = startPage; p <= endPage; p += 1) pageNumbers.push(p);
+  if (endPage < totalPages - 1) pageNumbers.push("dots");
+  pageNumbers.push(totalPages);
+
+  return pageNumbers;
+}
+
+function sumNet(arr: SaleForStats[]): number {
+  return arr.reduce((acc, s) => acc + toNumber(s.net_seller_amount, 0), 0);
+}
+
+function sumMargin(arr: SaleForStats[]): number {
+  return arr.reduce((acc, s) => acc + toNumber(s.total_margin_amount, 0), 0);
+}
+
+function countSets(arr: SaleForStats[]): number {
+  return arr.filter((s) => s.sale_type === "SET").length;
+}
+
+function countPieces(arr: SaleForStats[]): number {
+  return arr.filter((s) => s.sale_type === "PIECE").length;
+}
+
+export async function getSalesPageData(
+  filters: SalesPageFilters,
+  client: SupabaseClient<Database> = supabase
+): Promise<SalesPageData> {
+  const pageSize = normalizeSalesPageSize(filters.pageSize);
+  const currentPage = normalizeSalesPage(filters.page);
+  const sort = normalizeSalesSort(filters.sort);
+  const dir = normalizeSalesSortDir(filters.dir);
+  const channel = filters.channel ?? null;
+  const saleType = filters.saleType ?? null;
+  const includeCancelled = filters.includeCancelled;
+  const dateRange = normalizeDateRange(filters.from ?? null, filters.to ?? null);
+  const { fromIso, toIso } = toDateRangeIso(dateRange);
+
+  const offset = (currentPage - 1) * pageSize;
+  const statusFilter = includeCancelled ? undefined : "CONFIRMED";
+
+  let rows: SalesListRow[] = [];
+  let totalCount = 0;
+
+  try {
+    const list = await listSalesForTable(client, {
+      limit: pageSize,
+      offset,
+      sort,
+      dir,
+      channel: channel ?? undefined,
+      sale_type: saleType ?? undefined,
+      status: statusFilter,
+      from: fromIso,
+      to: toIso,
+    });
+
+    rows = list.rows;
+    totalCount = list.total ?? 0;
+  } catch (error) {
+    if (offset === 0) throw error;
+
+    let tableCountQuery = client
+      .from("sales")
+      .select("id", { count: "exact", head: true });
+
+    if (statusFilter) tableCountQuery = tableCountQuery.eq("status", statusFilter);
+    if (channel) tableCountQuery = tableCountQuery.eq("sales_channel", channel);
+    if (saleType) tableCountQuery = tableCountQuery.eq("sale_type", saleType);
+    if (fromIso) tableCountQuery = tableCountQuery.gte("paid_at", fromIso);
+    if (toIso) tableCountQuery = tableCountQuery.lte("paid_at", toIso);
+
+    const { count: tableCount, error: tableCountError } = await tableCountQuery;
+    if (tableCountError) throw error;
+
+    totalCount = tableCount ?? 0;
+    if (offset < totalCount) throw error;
+
+    rows = [];
+  }
+
+  const totalPages = totalCount > 0 ? Math.ceil(totalCount / pageSize) : 1;
+  const pageFrom = totalCount === 0 ? 0 : offset + 1;
+  const pageTo = Math.min(offset + pageSize, totalCount);
+  const pageNumbers = buildPageNumbers(totalPages, currentPage);
+
+  let salesForStatsQuery = client
+    .from("sales")
+    .select("net_seller_amount, total_margin_amount, sale_type");
+
+  if (statusFilter) salesForStatsQuery = salesForStatsQuery.eq("status", statusFilter);
+  if (channel) salesForStatsQuery = salesForStatsQuery.eq("sales_channel", channel);
+  if (saleType) salesForStatsQuery = salesForStatsQuery.eq("sale_type", saleType);
+  if (fromIso) salesForStatsQuery = salesForStatsQuery.gte("paid_at", fromIso);
+  if (toIso) salesForStatsQuery = salesForStatsQuery.lte("paid_at", toIso);
+
+  const { data: salesForStatsRaw, error: salesForStatsError } =
+    await salesForStatsQuery;
+
+  if (salesForStatsError) {
+    console.error(
+      "getSalesPageData - erreur chargement stats cards:",
+      salesForStatsError
+    );
+  }
+
+  const salesForStats = (salesForStatsRaw ?? []) as SaleForStats[];
+  const netWindowValue = sumNet(salesForStats);
+  const marginWindowValue = sumMargin(salesForStats);
+  const avgMarginRateWindowValue =
+    netWindowValue > 0 ? marginWindowValue / netWindowValue : 0;
+  const setsWindowValue = countSets(salesForStats);
+  const piecesWindowValue = countPieces(salesForStats);
+
+  const countSalesByStatus = async (status: "CONFIRMED" | "CANCELLED") => {
+    let q = client.from("sales").select("id", { count: "exact", head: true });
+
+    if (channel) q = q.eq("sales_channel", channel);
+    if (saleType) q = q.eq("sale_type", saleType);
+    if (fromIso) q = q.gte("paid_at", fromIso);
+    if (toIso) q = q.lte("paid_at", toIso);
+
+    q = q.eq("status", status);
+
+    const { count, error } = await q;
+    if (error) {
+      console.error(`getSalesPageData - erreur count ${status}:`, error);
+      return 0;
+    }
+
+    return count ?? 0;
+  };
+
+  const [confirmedCount, cancelledCount] = includeCancelled
+    ? await Promise.all([
+        countSalesByStatus("CONFIRMED"),
+        countSalesByStatus("CANCELLED"),
+      ])
+    : [totalCount, 0];
+
+  return {
+    table: {
+      rows,
+      currentPage,
+      totalPages,
+      pageNumbers,
+      pageFrom,
+      pageTo,
+      totalCount,
+      pageSize,
+    },
+    kpis: {
+      netWindowValue,
+      marginWindowValue,
+      avgMarginRateWindowValue,
+      setsWindowValue,
+      piecesWindowValue,
+    },
+    deltas: {
+      netTrend: null,
+      marginTrend: null,
+      rateTrend: null,
+      setsTrend: null,
+      piecesTrend: null,
+    },
+    headerCounts: {
+      totalSalesCount: totalCount,
+      confirmedCount,
+      cancelledCount,
+    },
+  };
+}

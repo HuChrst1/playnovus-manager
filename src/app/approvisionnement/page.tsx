@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { NewLotDialog } from "./NewLotDialog";
 import { DeleteLotButton } from "./DeleteLotButton";
@@ -5,7 +6,7 @@ import { EditLotDialog, LotForEdit } from "./EditLotDialog";
 import { ClickableRow } from "./ClickableRow";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { ApproStatCardWithDialog } from "@/components/dashboard/StatCardWithDialog";
+import { SalesStatCard } from "@/components/sales/SalesStatCard";
 
 export const dynamic = "force-dynamic";
 
@@ -13,10 +14,10 @@ type LotRow = {
   id: number;
   lot_code: string | null;
   label: string | null;
-  purchase_date: string; // renvoyé en string ISO par Supabase
+  purchase_date: string;
   supplier: string | null;
   total_pieces: number | null;
-  total_cost: number; // numeric => string côté JS
+  total_cost: number;
   status: string;
   notes: string | null;
 };
@@ -30,85 +31,211 @@ type SortColumn =
   | "total_cost"
   | "status";
 
-  type ApproSearchParams = {
-    sort?: string;
-    dir?: string; // "asc" | "desc"
-    stats_window_lots?: string;
-    stats_window_pieces?: string;
-    stats_window_cost?: string;
-    stats_window_avgcpp?: string;
-  };
+type RawApproSearchParams = Record<string, string | string[] | undefined>;
 
 type ApprovisionnementPageProps = {
-  searchParams?: Promise<ApproSearchParams>;
+  searchParams?: Promise<RawApproSearchParams>;
 };
+
+type NormalizedApproQuery = {
+  sort: SortColumn;
+  dir: "asc" | "desc";
+  from: string | null;
+  to: string | null;
+  canonicalQuery: string;
+  baseQuery: string;
+};
+
+type ApproStats = {
+  totalLotsConfirmed: number;
+  totalPiecesConfirmed: number;
+  totalCostConfirmed: number;
+  avgCostPerPiece: number;
+};
+
+const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
+const DEFAULT_SORT: SortColumn = "purchase_date";
+const DEFAULT_DIR: "asc" | "desc" = "desc";
+const ALLOWED_SORT_COLUMNS: ReadonlySet<SortColumn> = new Set([
+  "id",
+  "purchase_date",
+  "label",
+  "supplier",
+  "total_pieces",
+  "total_cost",
+  "status",
+]);
+
+function getFirstParamValue(value: string | string[] | undefined): string | undefined {
+  if (Array.isArray(value)) return value[0];
+  return value;
+}
+
+function toIncomingSearchParams(raw: RawApproSearchParams): URLSearchParams {
+  const params = new URLSearchParams();
+
+  for (const [key, value] of Object.entries(raw)) {
+    if (Array.isArray(value)) {
+      if (value.length > 0) params.set(key, value[0] ?? "");
+      continue;
+    }
+
+    if (typeof value === "string") {
+      params.set(key, value);
+    }
+  }
+
+  return params;
+}
+
+function normalizeDateOnly(value: string | null | undefined): string | null {
+  const raw = (value ?? "").trim();
+  if (!raw) return null;
+  if (!DATE_ONLY_RE.test(raw)) return null;
+
+  const parsed = new Date(`${raw}T00:00:00.000Z`);
+  if (Number.isNaN(parsed.getTime())) return null;
+  if (parsed.toISOString().slice(0, 10) !== raw) return null;
+
+  return raw;
+}
+
+function normalizeDateRange(
+  fromInput: string | null | undefined,
+  toInput: string | null | undefined
+): { from: string | null; to: string | null } {
+  let from = normalizeDateOnly(fromInput);
+  let to = normalizeDateOnly(toInput);
+
+  if (from && to && from > to) {
+    const oldFrom = from;
+    from = to;
+    to = oldFrom;
+  }
+
+  return { from, to };
+}
+
+function normalizeApproQuery(raw: RawApproSearchParams): NormalizedApproQuery {
+  const sortRaw = (getFirstParamValue(raw.sort) ?? "").trim() as SortColumn;
+  const sort = ALLOWED_SORT_COLUMNS.has(sortRaw) ? sortRaw : DEFAULT_SORT;
+
+  const dirRaw = (getFirstParamValue(raw.dir) ?? "").trim().toLowerCase();
+  const dir: "asc" | "desc" = dirRaw === "asc" ? "asc" : DEFAULT_DIR;
+
+  const { from, to } = normalizeDateRange(
+    getFirstParamValue(raw.from),
+    getFirstParamValue(raw.to)
+  );
+
+  const canonicalParams = new URLSearchParams();
+  canonicalParams.set("sort", sort);
+  canonicalParams.set("dir", dir);
+  if (from) canonicalParams.set("from", from);
+  if (to) canonicalParams.set("to", to);
+
+  const baseParams = new URLSearchParams();
+  baseParams.set("sort", sort);
+  baseParams.set("dir", dir);
+  if (from) baseParams.set("from", from);
+  if (to) baseParams.set("to", to);
+
+  return {
+    sort,
+    dir,
+    from,
+    to,
+    canonicalQuery: canonicalParams.toString(),
+    baseQuery: baseParams.toString(),
+  };
+}
+
+function computeApproStats(lots: LotRow[]): ApproStats {
+  const confirmedLots = lots.filter((lot) => lot.status === "confirmed");
+
+  let totalLotsConfirmed = 0;
+  let totalPiecesConfirmed = 0;
+  let totalCostConfirmed = 0;
+
+  for (const lot of confirmedLots) {
+    totalLotsConfirmed += 1;
+    totalPiecesConfirmed += lot.total_pieces ?? 0;
+    totalCostConfirmed += Number(lot.total_cost ?? 0);
+  }
+
+  const avgCostPerPiece =
+    totalPiecesConfirmed > 0 ? totalCostConfirmed / totalPiecesConfirmed : 0;
+
+  return {
+    totalLotsConfirmed,
+    totalPiecesConfirmed,
+    totalCostConfirmed,
+    avgCostPerPiece,
+  };
+}
 
 export default async function ApprovisionnementPage({
   searchParams,
 }: ApprovisionnementPageProps) {
   const resolvedSearchParams = searchParams ? await searchParams : {};
+  const normalized = normalizeApproQuery(resolvedSearchParams);
 
-    // Fenêtre de temps utilisée pour CHAQUE card (en jours)
-    const windowLotsDays = parseWindowParam(
-      resolvedSearchParams.stats_window_lots,
-      30
-    );
-    const windowPiecesDays = parseWindowParam(
-      resolvedSearchParams.stats_window_pieces,
-      30
-    );
-    const windowCostDays = parseWindowParam(
-      resolvedSearchParams.stats_window_cost,
-      30
-    );
-    const windowAvgCppDays = parseWindowParam(
-      resolvedSearchParams.stats_window_avgcpp,
-      30
-    );
-
-  const sortParamRaw = (resolvedSearchParams.sort ?? "purchase_date").toString();
-  let dir = (resolvedSearchParams.dir ?? "desc").toString().toLowerCase();
-  if (dir !== "asc" && dir !== "desc") dir = "desc";
-
-  const ALLOWED_SORT_COLUMNS: SortColumn[] = [
-    "id",
-    "purchase_date",
-    "label",
-    "supplier",
-    "total_pieces",
-    "total_cost",
-    "status",
-  ];
-
-  let dbSortColumn: SortColumn = "purchase_date";
-  let activeSortKey = sortParamRaw;
-
-  if (
-    (ALLOWED_SORT_COLUMNS as readonly string[]).includes(
-      sortParamRaw as SortColumn
-    )
-  ) {
-    dbSortColumn = sortParamRaw as SortColumn;
-  } else {
-    activeSortKey = "purchase_date";
-    dbSortColumn = "purchase_date";
+  const incomingQuery = toIncomingSearchParams(resolvedSearchParams).toString();
+  if (incomingQuery !== normalized.canonicalQuery) {
+    redirect(`/approvisionnement?${normalized.canonicalQuery}`);
   }
 
-  // 1) On charge les lots existants
-  const { data, error } = await supabase
+  const { count: lot0Count, error: lot0CheckError } = await supabase
+    .from("lots")
+    .select("id", { count: "exact", head: true })
+    .eq("lot_code", "LOT_0");
+
+  if (lot0CheckError) {
+    return (
+      <main className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Approvisionnements</h1>
+          <p className="text-sm text-muted-foreground">
+            Erreur lors de la vérification du lot initial : {lot0CheckError.message}
+          </p>
+        </div>
+      </main>
+    );
+  }
+
+  if ((lot0Count ?? 0) === 0) {
+    const today = new Date().toISOString().slice(0, 10);
+
+    await supabase.from("lots").insert({
+      lot_code: "LOT_0",
+      label: "Stock initial",
+      supplier: null,
+      purchase_date: today,
+      total_cost: 0,
+      total_pieces: 0,
+      status: "draft",
+      notes: "Lot 0 – Stock initial (créé automatiquement)",
+    });
+  }
+
+  let lotsQuery = supabase
     .from("lots")
     .select(
       "id, lot_code, label, purchase_date, supplier, total_pieces, total_cost, status, notes"
-    )
-    .order(dbSortColumn, { ascending: dir === "asc" });
+    );
+
+  if (normalized.from) lotsQuery = lotsQuery.gte("purchase_date", normalized.from);
+  if (normalized.to) lotsQuery = lotsQuery.lte("purchase_date", normalized.to);
+
+  const { data, error } = await lotsQuery.order(normalized.sort, {
+    ascending: normalized.dir === "asc",
+  });
 
   if (error) {
     return (
       <main className="space-y-6">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Approvisionnements
-          </h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Approvisionnements</h1>
           <p className="text-sm text-muted-foreground">
             Erreur lors du chargement des lots : {error.message}
           </p>
@@ -117,62 +244,14 @@ export default async function ApprovisionnementPage({
     );
   }
 
-  let lots = (data ?? []) as LotRow[];
-
-  // 2) Vérifier si un Lot 0 existe déjà (stock initial)
-  const hasLot0 = lots.some((lot) => lot.lot_code === "LOT_0");
-
-  // 3) Si aucun Lot 0, on en crée un automatiquement
-  if (!hasLot0) {
-    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-
-    const { data: created, error: createError } = await supabase
-      .from("lots")
-      .insert({
-        lot_code: "LOT_0",
-        label: "Stock initial",
-        supplier: null,
-        purchase_date: today,
-        total_cost: 0,
-        total_pieces: 0,
-        status: "draft",
-        notes: "Lot 0 – Stock initial (créé automatiquement)",
-      })
-      .select(
-        "id, lot_code, label, purchase_date, supplier, total_pieces, total_cost, status, notes"
-      )
-      .single();
-
-    if (!createError && created) {
-      // On le met en tête de liste
-      lots = [created as LotRow, ...lots];
-    }
-  }
-
-    
-      // On calcule les tendances pour chaque card avec sa propre fenêtre
-  const statsLots = computeApproStats(lots, { windowDays: windowLotsDays });
-  const statsPieces = computeApproStats(lots, { windowDays: windowPiecesDays });
-  const statsCost = computeApproStats(lots, { windowDays: windowCostDays });
-  const statsAvgCpp = computeApproStats(lots, { windowDays: windowAvgCppDays });
-
-  // Les totaux globaux ne dépendent pas de la fenêtre,
-  // on peut les lire depuis n'importe quelle structure.
-  const baseTotals = statsLots;
-
-  const baseParams = new URLSearchParams();
-  baseParams.set("sort", activeSortKey);
-  baseParams.set("dir", dir);
-  baseParams.set("stats_window_lots", String(windowLotsDays));
-  baseParams.set("stats_window_pieces", String(windowPiecesDays));
-  baseParams.set("stats_window_cost", String(windowCostDays));
-  baseParams.set("stats_window_avgcpp", String(windowAvgCppDays));
+  const lots = (data ?? []) as LotRow[];
+  const stats = computeApproStats(lots);
 
   const makeSortHref = (columnKey: string) => {
-    const params = new URLSearchParams(baseParams.toString());
+    const params = new URLSearchParams(normalized.baseQuery);
 
-    if (activeSortKey === columnKey) {
-      const nextDir = dir === "asc" ? "desc" : "asc";
+    if (normalized.sort === columnKey) {
+      const nextDir = normalized.dir === "asc" ? "desc" : "asc";
       params.set("sort", columnKey);
       params.set("dir", nextDir);
     } else {
@@ -189,15 +268,15 @@ export default async function ApprovisionnementPage({
     columnKey: string,
     align: "left" | "right" | "center" = "left"
   ) => {
-    const isActive = activeSortKey === columnKey;
-    const isAsc = dir === "asc";
+    const isActive = normalized.sort === columnKey;
+    const isAsc = normalized.dir === "asc";
 
     const alignClass =
       align === "right"
         ? "text-right"
         : align === "center"
-        ? "text-center"
-        : "text-left";
+          ? "text-center"
+          : "text-left";
 
     return (
       <th key={columnKey} className={cn("px-4 py-3 font-medium", alignClass)}>
@@ -209,74 +288,110 @@ export default async function ApprovisionnementPage({
           )}
         >
           <span>{label}</span>
-          <span className="text-[10px]">
-            {isActive ? (isAsc ? "▲" : "▼") : "⇅"}
-          </span>
+          <span className="text-[10px]">{isActive ? (isAsc ? "▲" : "▼") : "⇅"}</span>
         </Link>
       </th>
     );
   };
 
+  const resetDateParams = new URLSearchParams();
+  resetDateParams.set("sort", normalized.sort);
+  resetDateParams.set("dir", normalized.dir);
+  const resetDateHref = `/approvisionnement?${resetDateParams.toString()}`;
+
   return (
     <main className="space-y-6">
-      {/* HEADER PAGE */}
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Approvisionnements
-          </h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Approvisionnements</h1>
           <p className="text-sm text-muted-foreground">
             Gestion des lots d&apos;achat et du stock initial.
           </p>
         </div>
 
-        <NewLotDialog />
+        <div className="flex items-center gap-2">
+          <details className="group relative">
+            <summary className="list-none inline-flex h-9 cursor-pointer items-center rounded-full border border-slate-200 bg-white px-4 text-xs font-medium text-slate-700 shadow-[0_8px_20px_rgba(15,23,42,0.08)] transition-colors hover:bg-slate-50 [&::-webkit-details-marker]:hidden">
+              Filtrer
+            </summary>
+
+            <div className="absolute right-0 z-20 mt-2 w-80 rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_16px_40px_rgba(15,23,42,0.18)]">
+              <form method="GET" className="space-y-3">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-medium text-slate-500">Du</label>
+                    <input
+                      type="date"
+                      name="from"
+                      defaultValue={normalized.from ?? ""}
+                      className="h-9 w-full rounded-full border border-slate-200 bg-white px-3 text-xs shadow-sm outline-none focus:border-primary"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-medium text-slate-500">Au</label>
+                    <input
+                      type="date"
+                      name="to"
+                      defaultValue={normalized.to ?? ""}
+                      className="h-9 w-full rounded-full border border-slate-200 bg-white px-3 text-xs shadow-sm outline-none focus:border-primary"
+                    />
+                  </div>
+                </div>
+
+                <input type="hidden" name="sort" value={normalized.sort} />
+                <input type="hidden" name="dir" value={normalized.dir} />
+
+                <div className="flex items-center justify-end gap-2">
+                  <Link
+                    href={resetDateHref}
+                    className="inline-flex h-8 items-center rounded-full border border-slate-200 px-3 text-[11px] font-medium text-slate-600 hover:bg-slate-50"
+                  >
+                    Réinitialiser
+                  </Link>
+                  <button
+                    type="submit"
+                    className="inline-flex h-8 items-center rounded-full bg-slate-900 px-3 text-[11px] font-medium text-white hover:bg-slate-800"
+                  >
+                    Appliquer
+                  </button>
+                </div>
+              </form>
+            </div>
+          </details>
+
+          <NewLotDialog />
+        </div>
       </div>
 
-            {/* CARDS STATS APPRO (1 card = 1 fenêtre d'analyse) */}
-            <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 items-start">
-        <ApproStatCardWithDialog
-          id="lots"
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 items-start">
+        <SalesStatCard
           title="Lots confirmés"
-          mainValue={baseTotals.totalLotsConfirmed.toLocaleString("fr-FR")}
-          trendPercent={statsLots.lotsTrendPercent}
+          mainValue={stats.totalLotsConfirmed.toLocaleString("fr-FR")}
           color="indigo"
-          windowDays={windowLotsDays}
         />
 
-        <ApproStatCardWithDialog
-          id="pieces"
+        <SalesStatCard
           title="Nb pièces totales"
-          mainValue={baseTotals.totalPiecesConfirmed.toLocaleString("fr-FR")}
-          trendPercent={statsPieces.piecesTrendPercent}
+          mainValue={stats.totalPiecesConfirmed.toLocaleString("fr-FR")}
           color="orange"
-          windowDays={windowPiecesDays}
         />
 
-        <ApproStatCardWithDialog
-          id="cost"
+        <SalesStatCard
           title="Coût total"
-          mainValue={euro.format(baseTotals.totalCostConfirmed)}
-          trendPercent={statsCost.costTrendPercent}
+          mainValue={euro.format(stats.totalCostConfirmed)}
           color="amber"
-          windowDays={windowCostDays}
         />
 
-        <ApproStatCardWithDialog
-          id="avgcpp"
+        <SalesStatCard
           title="Coût / pièce moyen"
           mainValue={
-            baseTotals.totalPiecesConfirmed > 0
-              ? euro.format(baseTotals.avgCostPerPiece)
-              : "—"
+            stats.totalPiecesConfirmed > 0 ? euro.format(stats.avgCostPerPiece) : "—"
           }
-          trendPercent={statsAvgCpp.avgCppTrendPercent}
           color="emerald"
-          windowDays={windowAvgCppDays}
         />
       </section>
 
-      {/* TABLE DES LOTS */}
       <div className="app-card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
@@ -288,9 +403,7 @@ export default async function ApprovisionnementPage({
                 {renderSortableHeader("Fournisseur", "supplier", "left")}
                 {renderSortableHeader("Nb pièces", "total_pieces", "right")}
                 {renderSortableHeader("Coût total", "total_cost", "right")}
-                <th className="px-4 py-3 text-right font-medium">
-                  Coût / pièce
-                </th>
+                <th className="px-4 py-3 text-right font-medium">Coût / pièce</th>
                 {renderSortableHeader("Statut", "status", "center")}
                 <th className="px-4 py-3 text-right font-medium">Actions</th>
               </tr>
@@ -310,8 +423,7 @@ export default async function ApprovisionnementPage({
                 lots.map((lot) => {
                   const totalCostNumber = Number(lot.total_cost ?? 0);
                   const totalPieces = lot.total_pieces ?? 0;
-                  const costPerPiece =
-                    totalPieces > 0 ? totalCostNumber / totalPieces : 0;
+                  const costPerPiece = totalPieces > 0 ? totalCostNumber / totalPieces : 0;
 
                   const isInitialLot = lot.lot_code === "LOT_0";
                   const displayCode =
@@ -331,16 +443,10 @@ export default async function ApprovisionnementPage({
 
                   return (
                     <ClickableRow key={lot.id} href={`/approvisionnement/${lot.id}`}>
-                      {/* LotID */}
-                      <td className="px-4 py-3 font-mono text-xs">
-                        {displayCode}
-                      </td>
+                      <td className="px-4 py-3 font-mono text-xs">{displayCode}</td>
 
-                      <td className="px-4 py-3">
-                        {formatDate(lot.purchase_date)}
-                      </td>
+                      <td className="px-4 py-3">{formatDate(lot.purchase_date)}</td>
 
-                      {/* Libellé : on met en avant le Lot 0 */}
                       <td className="px-4 py-3 max-w-xs truncate">
                         {lot.label || (isInitialLot ? "Stock initial" : "—")}
                         {isInitialLot && (
@@ -350,22 +456,16 @@ export default async function ApprovisionnementPage({
                         )}
                       </td>
 
-                      <td className="px-4 py-3 max-w-xs truncate">
-                        {lot.supplier || "—"}
-                      </td>
+                      <td className="px-4 py-3 max-w-xs truncate">{lot.supplier || "—"}</td>
 
-                      <td className="px-4 py-3 text-right tabular-nums">
-                        {totalPieces}
-                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums">{totalPieces}</td>
 
                       <td className="px-4 py-3 text-right tabular-nums">
                         {euro.format(totalCostNumber)}
                       </td>
 
                       <td className="px-4 py-3 text-right tabular-nums">
-                        {totalPieces > 0
-                          ? euro.format(costPerPiece)
-                          : "—"}
+                        {totalPieces > 0 ? euro.format(costPerPiece) : "—"}
                       </td>
 
                       <td className="px-4 py-3 text-center">
@@ -376,17 +476,12 @@ export default async function ApprovisionnementPage({
                               : "inline-flex rounded-full bg-slate-100 px-3 py-1 text-[11px] font-medium text-slate-600"
                           }
                         >
-                          {lot.status === "confirmed"
-                            ? "Confirmé"
-                            : "Brouillon"}
+                          {lot.status === "confirmed" ? "Confirmé" : "Brouillon"}
                         </span>
                       </td>
 
                       <td className="px-4 py-3 text-right" data-row-action="true">
-                        <div
-                          className="inline-flex items-center gap-1.5"
-                          data-row-action="true"
-                        >
+                        <div className="inline-flex items-center gap-1.5" data-row-action="true">
                           <EditLotDialog lot={lotForEdit} />
                           <DeleteLotButton
                             lotId={lot.id}
@@ -406,145 +501,6 @@ export default async function ApprovisionnementPage({
       </div>
     </main>
   );
-}
-
-type ApproStats = {
-  // Totaux “toute période” (uniquement lots confirmés)
-  totalLotsConfirmed: number;
-  totalPiecesConfirmed: number;
-  totalCostConfirmed: number;
-  avgCostPerPiece: number;
-
-  // Fenêtre 30 derniers jours vs 30 jours précédents
-  lotsLast30Days: number;
-  lotsPrev30Days: number;
-  lotsTrendPercent: number | null;
-
-  piecesLast30Days: number;
-  piecesPrev30Days: number;
-  piecesTrendPercent: number | null;
-
-  costLast30Days: number;
-  costPrev30Days: number;
-  costTrendPercent: number | null;
-
-  avgCppLast30Days: number;
-  avgCppPrev30Days: number;
-  avgCppTrendPercent: number | null;
-};
-
-type ApproStatsDateConfig = {
-  /**
-   * Taille de la fenêtre mobile en jours pour calculer :
-   * - "N derniers jours"
-   * - et la période précédente de même taille.
-   * Par défaut : 30.
-   */
-  windowDays?: number;
-};
-
-function parseWindowParam(value: string | undefined, fallback: number): number {
-  const n = Number((value ?? "").toString());
-  if (!Number.isFinite(n) || n <= 0) return fallback;
-  return n;
-}
-
-function computeApproStats(
-  lots: LotRow[],
-  config?: ApproStatsDateConfig
-): ApproStats {
-  // On travaille uniquement sur les lots confirmés
-  const confirmedLots = lots.filter((lot) => lot.status === "confirmed");
-
-  const today = new Date();
-  const todayMidnight = new Date(
-    today.getFullYear(),
-    today.getMonth(),
-    today.getDate()
-  );
-  const MS_PER_DAY = 24 * 60 * 60 * 1000;
-
-  // Fenêtre configurable (par défaut 30 jours)
-  const windowDays = config?.windowDays ?? 30;
-
-  const windowAgo = new Date(todayMidnight.getTime() - windowDays * MS_PER_DAY);
-  const prevWindowAgo = new Date(
-    todayMidnight.getTime() - 2 * windowDays * MS_PER_DAY
-  );
-
-  let totalLotsConfirmed = 0;
-  let totalPiecesConfirmed = 0;
-  let totalCostConfirmed = 0;
-
-  let lotsLast30Days = 0;
-  let lotsPrev30Days = 0;
-
-  let piecesLast30Days = 0;
-  let piecesPrev30Days = 0;
-
-  let costLast30Days = 0;
-  let costPrev30Days = 0;
-
-  for (const lot of confirmedLots) {
-    const pieces = lot.total_pieces ?? 0;
-    const cost = Number(lot.total_cost ?? 0);
-
-    totalLotsConfirmed += 1;
-    totalPiecesConfirmed += pieces;
-    totalCostConfirmed += cost;
-
-    const d = new Date(lot.purchase_date);
-    if (Number.isNaN(d.getTime())) continue;
-
-    if (d >= windowAgo && d < todayMidnight) {
-      // Fenêtre : N derniers jours
-      lotsLast30Days += 1;
-      piecesLast30Days += pieces;
-      costLast30Days += cost;
-    } else if (d >= prevWindowAgo && d < windowAgo) {
-      // Fenêtre : les N jours juste avant
-      lotsPrev30Days += 1;
-      piecesPrev30Days += pieces;
-      costPrev30Days += cost;
-    }
-  }
-
-  const avgCostPerPiece =
-    totalPiecesConfirmed > 0 ? totalCostConfirmed / totalPiecesConfirmed : 0;
-
-  const avgCppLast30Days =
-    piecesLast30Days > 0 ? costLast30Days / piecesLast30Days : 0;
-  const avgCppPrev30Days =
-    piecesPrev30Days > 0 ? costPrev30Days / piecesPrev30Days : 0;
-
-  const calcTrend = (current: number, previous: number): number | null => {
-    if (current === 0 && previous === 0) return null;
-    const base = previous === 0 ? 1 : previous;
-    return ((current - previous) / base) * 100;
-  };
-
-  return {
-    totalLotsConfirmed,
-    totalPiecesConfirmed,
-    totalCostConfirmed,
-    avgCostPerPiece,
-
-    lotsLast30Days,
-    lotsPrev30Days,
-    lotsTrendPercent: calcTrend(lotsLast30Days, lotsPrev30Days),
-
-    piecesLast30Days,
-    piecesPrev30Days,
-    piecesTrendPercent: calcTrend(piecesLast30Days, piecesPrev30Days),
-
-    costLast30Days,
-    costPrev30Days,
-    costTrendPercent: calcTrend(costLast30Days, costPrev30Days),
-
-    avgCppLast30Days,
-    avgCppPrev30Days,
-    avgCppTrendPercent: calcTrend(avgCppLast30Days, avgCppPrev30Days),
-  };
 }
 
 function formatDate(value: string) {

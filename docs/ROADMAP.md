@@ -9,7 +9,7 @@ Perimetre: finaliser PlayNovus Manager avec fiabilite metier, coherence UX et qu
 - stock pilote uniquement par les entrees via Approvisionnement (lots confirmes)
 - stock pilote uniquement par les sorties via Ventes (FIFO)
 - annulations visibles par defaut dans Commandes (historique conserve)
-- KPIs business exclusifs des ventes `CANCELLED`
+- KPIs contextuels alignes strictement au perimetre du tableau filtre (strategie tableau-first)
 - entree "Nouvelle vente" via pop-up depuis `/ventes`
 - strategie DB: baseline initiale + migrations incrementales versionnees
 - niveau qualite: zero erreur bloquante
@@ -356,82 +356,120 @@ Statut global: `EN COURS`
 ### F3.1 - Contrat query standardise pour `/ventes`
 
 Statut: `FAIT`
-Objectif: un seul contrat d'entree pour liste + KPIs.
+Objectif: un contrat query canonique v2 unique pour liste + KPIs.
 Parametres:
-- `period=total|90|30|7`
 - `include_cancelled=true|false` (defaut `true`)
 - `channel`
 - `sale_type`
 - `sort`
 - `dir`
 - `page`
+- `from` (`YYYY-MM-DD`)
+- `to` (`YYYY-MM-DD`)
 Livrables realises:
 - parsing/normalisation canonique dans `src/app/ventes/page.tsx`
 - fallback strict sur toutes valeurs invalides:
-  - `period=30`, `include_cancelled=true`, `sort=paid_at`, `dir=desc`, `page=1`
+  - `include_cancelled=true`, `sort=paid_at`, `dir=desc`, `page=1`
   - `channel` vide supprime, `sale_type` invalide ignore
-- redirection automatique vers URL canonique (`/ventes?...`) et suppression des cles legacy `stats_window_*`
+- normalisation `from/to`:
+  - format strict `YYYY-MM-DD`
+  - dates invalides ignorees
+  - inversion automatique si `from > to`
+- redirection automatique vers URL canonique (`/ventes?...`) et suppression des cles legacy (`period`, `stats_window_*`)
 - conservation des filtres actifs dans tri/pagination via `baseQuery` transmis a `SalesTable`
 - application du contrat:
-  - table: `include_cancelled`, `channel`, `sale_type`, `sort`, `dir`, `page`
-  - KPIs: `period` + `channel` + `sale_type`, exclusion stricte `CANCELLED`
-- card KPI alignees sur un parametre unique `period` (plus de `stats_window_*`)
+  - table: `include_cancelled`, `channel`, `sale_type`, `sort`, `dir`, `page`, `from`, `to`
+  - KPIs: meme perimetre que le tableau (strategie tableau-first)
+- retrait de `period` du flux canonique actif (compat legacy via redirection)
 - `src/lib/sales.ts` aligne sur `sale_type` (compat legacy `type` conservee)
 Definition of done:
 - contrat documente et utilise par la page
 
 ### F3.2 - Creer `getSalesPageData(filters)` dans `src/lib/sales.ts`
 
-Statut: `A FAIRE`
-Objectif: centraliser liste commandes + KPIs + deltas.
-Livrables:
-- fonction unique data-access
-- structure de retour stable pour UI
+Statut: `FAIT`
+Objectif: centraliser les donnees `/ventes` (table + KPI + deltas + compteurs).
+Livrables realises:
+- ajout de `getSalesPageData(filters, client?)` dans `src/lib/sales.ts`
+- ajout d'un contrat data unique:
+  - `SalesPageFilters`
+  - `SalesPageData` (table + pagination + KPIs + deltas + compteurs en-tete)
+- centralisation dans la lib:
+  - listing table (tri/pagination/filtres existants, dont `from/to`)
+  - KPIs alignes au meme perimetre que le tableau filtre
+  - deltas comparatifs conserves pour compatibilite data
+  - compteurs `confirmed/cancelled` alignes au perimetre filtre
+- refactor de `src/app/ventes/page.tsx`:
+  - conservation du contrat query F3.1 (normalisation + redirection canonique + `baseQuery`)
+  - suppression de la logique KPI/dispersée dans la page
+  - consommation unique de `getSalesPageData(...)`
+- neutralisation des deltas en presentation UI (cards simplifiees)
+- fallback preserve:
+  - erreurs KPI/count => fallback visible (`0`/`—`) sans crash
+  - erreur listing => echec explicite
 Definition of done:
 - `src/app/ventes/page.tsx` ne fait plus de logique KPI dispersee
 
-### F3.3 - Aligner KPIs ventes sur la cible produit
+### F3.3 - Pivot KPI cards simplifiees + strategie tableau-first + filtre date compact
 
-Statut: `A FAIRE`
-Objectif: KPIs fiables et comparables.
-Livrables:
-- periodes rapides `Total/90/30/7`
-- delta vs periode precedente equivalente
-- exclusion stricte de `CANCELLED` des KPIs business
-- split KPI par type `SET` vs `PIECE` pour CA/marge
+Statut: `FAIT`
+Objectif: simplifier les cards KPI et aligner strictement KPI/table.
+Livrables realises:
+- cards KPI en mode minimal (`libelle + valeur`) sur `/ventes`, `/approvisionnement`, `/stock`
+- suppression des elements visuels d'evolution/periode dans les cards (tendance, vs N jours, boutons integres)
+- ajout du filtre date compact (`from/to`) sur `/ventes` et `/approvisionnement` (bouton + panneau)
+- suppression des anciens parametres actifs de fenetre KPI (`period`, `stats_window_*`) du flux canonique
+- KPIs calcules sur le meme perimetre que le tableau courant (global par defaut, sous-ensemble si filtre actif)
 Definition of done:
-- coherence KPI validee avec details commandes
+- coherence KPI/table validee sur le perimetre filtre
 
 ### F3.4 - Conserver l'historique annule dans la table Commandes
 
-Statut: `A FAIRE`
-Objectif: conserver la trace operationnelle.
-Livrables:
-- `CANCELLED` visible par defaut avec badge clair
-- option filtre `include_cancelled` active
+Statut: `EN COURS`
+Objectif: finaliser l'ergonomie du filtre de statut sur `/ventes`.
+Livrables realises:
+- base query et contrat `include_cancelled` actifs cote SSR
+- historique `CANCELLED` conserve dans la table selon les filtres actifs
+Reste a faire:
+- ajouter si besoin un controle UI de statut explicite (toggle/chip) pour piloter `include_cancelled` sans edition manuelle de l'URL
 Definition of done:
-- annulation visible en historique sans polluer KPIs
+- controle statut explicite finalise et non regressif
 
 ### F3.5 - Unifier l'entree Nouvelle vente (pop-up)
 
-Statut: `A FAIRE`
+Statut: `EN COURS`
 Objectif: un seul parcours UX.
-Livrables:
+Livrables realises:
 - `/ventes` ouvre la pop-up via action utilisateur
+Reste a faire:
 - `/ventes/nouvelle` redirige vers `/ventes?new=1`
 Definition of done:
 - plus de flux paralleles divergents
 
 ### F3.6 - Finaliser audit interne sans page globale pieces vendues
 
-Statut: `A FAIRE`
+Statut: `EN COURS`
 Objectif: conserver le choix produit "Commandes + drilldown".
-Livrables:
-- detail commande améliore (`/ventes/[id]`)
-- detail set vendu maintenu (`/ventes/[id]/[saleItemId]`)
-- suppression des restes d'UI pouvant reintroduire une liste globale non voulue
+Livrables realises:
+- drilldown commande disponible (`/ventes/[id]`)
+- drilldown item commande maintenu (`/ventes/[id]/[saleItemId]`)
+Reste a faire:
+- suppression des restes d'UI/composants pouvant reintroduire une liste globale non cible
 Definition of done:
 - audit complet possible depuis une commande
+
+### F3.7 - Nettoyage des composants KPI legacy non utilises
+
+Statut: `A FAIRE`
+Objectif: supprimer les composants KPI obsoletes apres le pivot tableau-first.
+Livrables:
+- retrait des composants legacy non utilises:
+  - `src/components/sales/SalesStatCardWithDialog.tsx`
+  - `src/components/dashboard/StatCardWithDialog.tsx`
+  - `src/components/approvisionnement/ApproStatsSection.tsx` et composants associes
+- verification qu'aucune route active ne depend encore des variantes legacy
+Definition of done:
+- plus aucun composant KPI legacy orphelin dans le flux actif
 
 ## Phase 4 - Dashboard complet branche aux vraies donnees
 
@@ -558,8 +596,8 @@ Definition of done:
 3. vente avec stock insuffisant est refusee sans mutation partielle
 4. vente de set incomplet applique exactement les `overrides`
 5. annulation vente restitue le stock et conserve la commande `CANCELLED`
-6. KPIs ventes excluent toujours `CANCELLED`
-7. dashboard et ventes affichent des chiffres coherents sur une meme periode
+6. KPIs ventes suivent strictement les filtres actifs du tableau (dont `include_cancelled`)
+7. dashboard et ventes affichent des chiffres coherents sur une meme plage de dates / meme contexte de filtres
 8. DB bloque toute tentative menant a stock negatif
 9. DB bloque les doublons de mouvements selon la contrainte d'unicite
 10. healthcheck DB retourne 0 anomalie avant validation finale
@@ -584,13 +622,14 @@ Definition of done:
 15. F3.4
 16. F3.5
 17. F3.6
-18. F4.1
-19. F4.2
-20. F4.3
-21. F5.1
-22. F5.2
-23. F5.3
-24. F6.1
-25. F6.2
-26. F6.3
-27. F6.4
+18. F3.7
+19. F4.1
+20. F4.2
+21. F4.3
+22. F5.1
+23. F5.2
+24. F5.3
+25. F6.1
+26. F6.2
+27. F6.3
+28. F6.4

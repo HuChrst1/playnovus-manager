@@ -86,6 +86,9 @@ type SortColumn =
   | "theme"
   | "completion_percent";
 
+const DEFAULT_SORT_KEY = "completion";
+const DEFAULT_DIR = "desc";
+
 // --------- Page ---------
 export default async function CataloguePage({
   searchParams,
@@ -101,9 +104,11 @@ export default async function CataloguePage({
   const themeFilter = (resolvedSearchParams.theme ?? "").toString().trim();
 
   // --------- Gestion du tri ---------
-  const sortParamRaw = (resolvedSearchParams.sort ?? "display_ref").toString();
-  let dir = (resolvedSearchParams.dir ?? "asc").toString().toLowerCase();
-  if (dir !== "asc" && dir !== "desc") dir = "asc";
+  const sortParamRaw = (
+    resolvedSearchParams.sort ?? DEFAULT_SORT_KEY
+  ).toString();
+  let dir = (resolvedSearchParams.dir ?? DEFAULT_DIR).toString().toLowerCase();
+  if (dir !== "asc" && dir !== "desc") dir = DEFAULT_DIR;
 
   const ALLOWED_SORT_COLUMNS: SortColumn[] = [
     "display_ref",
@@ -115,7 +120,7 @@ export default async function CataloguePage({
     "completion_percent",
   ];
 
-  let dbSortColumn: SortColumn = "display_ref"; // colonne utilisée par Supabase
+  let dbSortColumn: SortColumn = "completion_percent"; // colonne utilisée par Supabase
   let activeSortKey = sortParamRaw; // clé visible dans l'UI (& dans l'URL)
 
   if (sortParamRaw === "completion") {
@@ -129,8 +134,8 @@ export default async function CataloguePage({
   ) {
     dbSortColumn = sortParamRaw as SortColumn;
   } else {
-    activeSortKey = "display_ref";
-    dbSortColumn = "display_ref";
+    activeSortKey = DEFAULT_SORT_KEY;
+    dbSortColumn = "completion_percent";
   }
 
   const currentPage = pageParam ? Math.max(1, Number(pageParam) || 1) : 1;

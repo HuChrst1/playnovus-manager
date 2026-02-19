@@ -1,24 +1,19 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { supabaseServer as supabase } from "@/lib/supabase-server";
-import { listSalesForTable } from "@/lib/sales";
+import {
+  getSalesPageData,
+  type SalesPageSortColumn,
+  type SalesPageSortDir,
+} from "@/lib/sales";
 import { SalesTable } from "@/components/sales/SalesTable";
-import { SalesStatCardWithDialog } from "@/components/sales/SalesStatCardWithDialog";
+import { SalesStatCard } from "@/components/sales/SalesStatCard";
 import { NewSaleDialog } from "@/components/sales/NewSaleDialog";
 
 export const dynamic = "force-dynamic";
 
-type SortColumn =
-  | "sale_id"
-  | "paid_at"
-  | "sales_channel"
-  | "sale_type"
-  | "status"
-  | "net_seller_amount"
-  | "total_cost_amount"
-  | "total_margin_amount";
-
-type SalesPeriod = "total" | "90" | "30" | "7";
-type SalesSortDir = "asc" | "desc";
+type SortColumn = SalesPageSortColumn;
+type SalesSortDir = SalesPageSortDir;
 type SalesTypeFilter = "SET" | "PIECE";
 
 type RawSalesSearchParams = Record<string, string | string[] | undefined>;
@@ -28,25 +23,20 @@ type SalesPageProps = {
 };
 
 type NormalizedSalesQuery = {
-  period: SalesPeriod;
   includeCancelled: boolean;
   channel: string | null;
   saleType: SalesTypeFilter | null;
   sort: SortColumn;
   dir: SalesSortDir;
   page: number;
+  from: string | null;
+  to: string | null;
   canonicalQuery: string;
   baseQuery: string;
 };
 
-type SaleForStats = {
-  paid_at: string | null;
-  net_seller_amount: number | string | null;
-  total_margin_amount: number | string | null;
-  sale_type: string | null;
-};
-
 const PAGE_SIZE = 50;
+const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const ALLOWED_SORT_COLUMNS: ReadonlySet<SortColumn> = new Set([
   "sale_id",
   "paid_at",
@@ -57,14 +47,6 @@ const ALLOWED_SORT_COLUMNS: ReadonlySet<SortColumn> = new Set([
   "total_cost_amount",
   "total_margin_amount",
 ]);
-const ALLOWED_PERIODS: ReadonlySet<SalesPeriod> = new Set([
-  "total",
-  "90",
-  "30",
-  "7",
-]);
-
-const DEFAULT_PERIOD: SalesPeriod = "30";
 const DEFAULT_INCLUDE_CANCELLED = true;
 const DEFAULT_SORT: SortColumn = "paid_at";
 const DEFAULT_DIR: SalesSortDir = "desc";
@@ -80,6 +62,34 @@ const euro = new Intl.NumberFormat("fr-FR", {
 function getFirstParamValue(value: string | string[] | undefined): string | undefined {
   if (Array.isArray(value)) return value[0];
   return value;
+}
+
+function normalizeDateOnly(value: string | null | undefined): string | null {
+  const raw = (value ?? "").trim();
+  if (!raw) return null;
+  if (!DATE_ONLY_RE.test(raw)) return null;
+
+  const parsed = new Date(`${raw}T00:00:00.000Z`);
+  if (Number.isNaN(parsed.getTime())) return null;
+  if (parsed.toISOString().slice(0, 10) !== raw) return null;
+
+  return raw;
+}
+
+function normalizeDateRange(
+  fromInput: string | null | undefined,
+  toInput: string | null | undefined
+): { from: string | null; to: string | null } {
+  let from = normalizeDateOnly(fromInput);
+  let to = normalizeDateOnly(toInput);
+
+  if (from && to && from > to) {
+    const oldFrom = from;
+    from = to;
+    to = oldFrom;
+  }
+
+  return { from, to };
 }
 
 function toIncomingSearchParams(raw: RawSalesSearchParams): URLSearchParams {
@@ -100,11 +110,6 @@ function toIncomingSearchParams(raw: RawSalesSearchParams): URLSearchParams {
 }
 
 function normalizeSalesQuery(raw: RawSalesSearchParams): NormalizedSalesQuery {
-  const periodRaw = (getFirstParamValue(raw.period) ?? "")
-    .trim()
-    .toLowerCase() as SalesPeriod;
-  const period = ALLOWED_PERIODS.has(periodRaw) ? periodRaw : DEFAULT_PERIOD;
-
   const includeCancelledRaw = (getFirstParamValue(raw.include_cancelled) ?? "")
     .trim()
     .toLowerCase();
@@ -135,43 +140,40 @@ function normalizeSalesQuery(raw: RawSalesSearchParams): NormalizedSalesQuery {
   const pageRaw = (getFirstParamValue(raw.page) ?? "").trim();
   const parsedPage = Number.parseInt(pageRaw, 10);
   const page = Number.isFinite(parsedPage) && parsedPage >= 1 ? parsedPage : DEFAULT_PAGE;
+  const { from, to } = normalizeDateRange(
+    getFirstParamValue(raw.from),
+    getFirstParamValue(raw.to)
+  );
 
   const canonicalParams = new URLSearchParams();
-  canonicalParams.set("period", period);
   canonicalParams.set("include_cancelled", includeCancelled ? "true" : "false");
   if (channel) canonicalParams.set("channel", channel);
   if (saleType) canonicalParams.set("sale_type", saleType);
   canonicalParams.set("sort", sort);
   canonicalParams.set("dir", dir);
   canonicalParams.set("page", String(page));
+  if (from) canonicalParams.set("from", from);
+  if (to) canonicalParams.set("to", to);
 
   const baseParams = new URLSearchParams();
-  baseParams.set("period", period);
   baseParams.set("include_cancelled", includeCancelled ? "true" : "false");
   if (channel) baseParams.set("channel", channel);
   if (saleType) baseParams.set("sale_type", saleType);
+  if (from) baseParams.set("from", from);
+  if (to) baseParams.set("to", to);
 
   return {
-    period,
     includeCancelled,
     channel,
     saleType,
     sort,
     dir,
     page,
+    from,
+    to,
     canonicalQuery: canonicalParams.toString(),
     baseQuery: baseParams.toString(),
   };
-}
-
-function getPeriodDays(period: SalesPeriod): number | null {
-  if (period === "total") return null;
-  return Number.parseInt(period, 10);
-}
-
-function toNumber(v: unknown, fallback = 0): number {
-  const n = typeof v === "number" ? v : Number(v);
-  return Number.isFinite(n) ? n : fallback;
 }
 
 export default async function VentesPage({ searchParams }: SalesPageProps) {
@@ -183,166 +185,34 @@ export default async function VentesPage({ searchParams }: SalesPageProps) {
     redirect(`/ventes?${normalized.canonicalQuery}`);
   }
 
-  const offset = (normalized.page - 1) * PAGE_SIZE;
+  const salesPageData = await getSalesPageData(
+    {
+      includeCancelled: normalized.includeCancelled,
+      channel: normalized.channel,
+      saleType: normalized.saleType,
+      sort: normalized.sort,
+      dir: normalized.dir,
+      page: normalized.page,
+      pageSize: PAGE_SIZE,
+      from: normalized.from,
+      to: normalized.to,
+    },
+    supabase
+  );
 
-  const statusFilter = normalized.includeCancelled ? undefined : "CONFIRMED";
-
-  const { rows: rawRows, total } = await listSalesForTable(supabase, {
-    limit: PAGE_SIZE,
-    offset,
-    sort: normalized.sort,
-    dir: normalized.dir,
-    channel: normalized.channel ?? undefined,
-    sale_type: normalized.saleType ?? undefined,
-    status: statusFilter,
-  });
-
-  const totalCount = total ?? 0;
-  const totalPages = totalCount > 0 ? Math.ceil(totalCount / PAGE_SIZE) : 1;
-  const pageFrom = totalCount === 0 ? 0 : offset + 1;
-  const pageTo = Math.min(offset + PAGE_SIZE, totalCount);
-
-  let pageNumbers: Array<number | "dots"> = [];
-  if (totalPages <= 7) {
-    pageNumbers = Array.from({ length: totalPages }, (_, i) => i + 1);
-  } else {
-    const siblings = 1;
-    const startPage = Math.max(2, normalized.page - siblings);
-    const endPage = Math.min(totalPages - 1, normalized.page + siblings);
-
-    pageNumbers = [1];
-    if (startPage > 2) pageNumbers.push("dots");
-    for (let p = startPage; p <= endPage; p += 1) pageNumbers.push(p);
-    if (endPage < totalPages - 1) pageNumbers.push("dots");
-    pageNumbers.push(totalPages);
-  }
-
-  const now = new Date();
-  const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const MS_PER_DAY = 24 * 60 * 60 * 1000;
-
-  const periodDays = getPeriodDays(normalized.period);
-  const maxDaysNeeded = periodDays === null ? null : Math.max(60, periodDays);
-
-  let salesForStatsQuery = supabase
-    .from("sales")
-    .select("paid_at, net_seller_amount, total_margin_amount, sale_type")
-    .eq("status", "CONFIRMED");
-
-  if (normalized.channel) {
-    salesForStatsQuery = salesForStatsQuery.eq("sales_channel", normalized.channel);
-  }
-
-  if (normalized.saleType) {
-    salesForStatsQuery = salesForStatsQuery.eq("sale_type", normalized.saleType);
-  }
-
-  if (maxDaysNeeded !== null) {
-    const cutoff = new Date(todayMidnight.getTime() - maxDaysNeeded * MS_PER_DAY);
-    salesForStatsQuery = salesForStatsQuery.gte("paid_at", cutoff.toISOString());
-  }
-
-  const { data: salesForStatsRaw, error: salesForStatsError } = await salesForStatsQuery;
-
-  if (salesForStatsError) {
-    console.error("VentesPage - erreur chargement stats cards:", salesForStatsError);
-  }
-
-  const salesForStats = (salesForStatsRaw ?? []) as SaleForStats[];
-
-  const isInLastNDays = (paidAt: string | null, days: number): boolean => {
-    if (!paidAt) return false;
-    const d = new Date(paidAt);
-    if (Number.isNaN(d.getTime())) return false;
-
-    const windowAgo = new Date(todayMidnight.getTime() - days * MS_PER_DAY);
-    return d >= windowAgo && d < todayMidnight;
-  };
-
-  const isInPrevNDays = (paidAt: string | null, days: number): boolean => {
-    if (!paidAt) return false;
-    const d = new Date(paidAt);
-    if (Number.isNaN(d.getTime())) return false;
-
-    const windowAgo = new Date(todayMidnight.getTime() - days * MS_PER_DAY);
-    const prevWindowAgo = new Date(todayMidnight.getTime() - 2 * days * MS_PER_DAY);
-    return d >= prevWindowAgo && d < windowAgo;
-  };
-
-  const calcTrend = (current: number, previous: number): number | null => {
-    if (current === 0 && previous === 0) return null;
-    const base = previous === 0 ? 1 : previous;
-    return ((current - previous) / base) * 100;
-  };
-
-  const sumNet = (arr: SaleForStats[]) =>
-    arr.reduce((acc, s) => acc + toNumber(s.net_seller_amount, 0), 0);
-
-  const sumMargin = (arr: SaleForStats[]) =>
-    arr.reduce((acc, s) => acc + toNumber(s.total_margin_amount, 0), 0);
-
-  const countSets = (arr: SaleForStats[]) =>
-    arr.filter((s) => s.sale_type === "SET").length;
-
-  const countPieces = (arr: SaleForStats[]) =>
-    arr.filter((s) => s.sale_type === "PIECE").length;
-
-  const salesInPeriod =
-    periodDays === null
-      ? salesForStats
-      : salesForStats.filter((s) => isInLastNDays(s.paid_at, periodDays));
-
-  const netWindowValue = sumNet(salesInPeriod);
-  const marginWindowValue = sumMargin(salesInPeriod);
-
-  const rateNet = sumNet(salesInPeriod);
-  const rateMargin = sumMargin(salesInPeriod);
-  const avgMarginRateWindowValue = rateNet > 0 ? rateMargin / rateNet : 0;
-
-  const setsWindowValue = countSets(salesInPeriod);
-  const piecesWindowValue = countPieces(salesInPeriod);
-
-  const last30 = salesForStats.filter((s) => isInLastNDays(s.paid_at, 30));
-  const prev30 = salesForStats.filter((s) => isInPrevNDays(s.paid_at, 30));
-
-  const netTrend = calcTrend(sumNet(last30), sumNet(prev30));
-  const marginTrend = calcTrend(sumMargin(last30), sumMargin(prev30));
-
-  const rateLast30Net = sumNet(last30);
-  const ratePrev30Net = sumNet(prev30);
-  const rateLast30Margin = sumMargin(last30);
-  const ratePrev30Margin = sumMargin(prev30);
-
-  const rateLast30 = rateLast30Net > 0 ? rateLast30Margin / rateLast30Net : 0;
-  const ratePrev30 = ratePrev30Net > 0 ? ratePrev30Margin / ratePrev30Net : 0;
-  const rateTrend = calcTrend(rateLast30, ratePrev30);
-
-  const setsTrend = calcTrend(countSets(last30), countSets(prev30));
-  const piecesTrend = calcTrend(countPieces(last30), countPieces(prev30));
-
-  const countSalesByStatus = async (status: "CONFIRMED" | "CANCELLED") => {
-    let q = supabase.from("sales").select("id", { count: "exact", head: true });
-
-    if (normalized.channel) q = q.eq("sales_channel", normalized.channel);
-    if (normalized.saleType) q = q.eq("sale_type", normalized.saleType);
-
-    q = q.eq("status", status);
-
-    const { count, error } = await q;
-    if (error) {
-      console.error(`VentesPage - erreur count ${status}:`, error);
-      return 0;
-    }
-
-    return count ?? 0;
-  };
-
-  const [confirmedCount, cancelledCount] = await Promise.all([
-    countSalesByStatus("CONFIRMED"),
-    normalized.includeCancelled ? countSalesByStatus("CANCELLED") : Promise.resolve(0),
-  ]);
-
-  const totalSalesCount = totalCount;
+  const { table, kpis, headerCounts } = salesPageData;
+  const totalSalesCount = headerCounts.totalSalesCount;
+  const resetDateParams = new URLSearchParams();
+  resetDateParams.set(
+    "include_cancelled",
+    normalized.includeCancelled ? "true" : "false"
+  );
+  if (normalized.channel) resetDateParams.set("channel", normalized.channel);
+  if (normalized.saleType) resetDateParams.set("sale_type", normalized.saleType);
+  resetDateParams.set("sort", normalized.sort);
+  resetDateParams.set("dir", normalized.dir);
+  resetDateParams.set("page", "1");
+  const resetDateHref = `/ventes?${resetDateParams.toString()}`;
 
   return (
     <main className="space-y-6">
@@ -357,80 +227,131 @@ export default async function VentesPage({ searchParams }: SalesPageProps) {
               {totalSalesCount.toLocaleString("fr-FR")} commandes
               {" • "}
               <span className="text-emerald-700">
-                {confirmedCount.toLocaleString("fr-FR")} confirmées
+                {headerCounts.confirmedCount.toLocaleString("fr-FR")} confirmées
               </span>
               {" • "}
               <span className="text-rose-700">
-                {cancelledCount.toLocaleString("fr-FR")} annulées
+                {headerCounts.cancelledCount.toLocaleString("fr-FR")} annulées
               </span>
             </p>
           )}
         </div>
 
-        <NewSaleDialog />
+        <div className="flex items-center gap-2">
+          <details className="group relative">
+            <summary className="list-none inline-flex h-9 cursor-pointer items-center rounded-full border border-slate-200 bg-white px-4 text-xs font-medium text-slate-700 shadow-[0_8px_20px_rgba(15,23,42,0.08)] transition-colors hover:bg-slate-50 [&::-webkit-details-marker]:hidden">
+              Filtrer
+            </summary>
+
+            <div className="absolute right-0 z-20 mt-2 w-80 rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_16px_40px_rgba(15,23,42,0.18)]">
+              <form method="GET" className="space-y-3">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-medium text-slate-500">Du</label>
+                    <input
+                      type="date"
+                      name="from"
+                      defaultValue={normalized.from ?? ""}
+                      className="h-9 w-full rounded-full border border-slate-200 bg-white px-3 text-xs shadow-sm outline-none focus:border-primary"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-medium text-slate-500">Au</label>
+                    <input
+                      type="date"
+                      name="to"
+                      defaultValue={normalized.to ?? ""}
+                      className="h-9 w-full rounded-full border border-slate-200 bg-white px-3 text-xs shadow-sm outline-none focus:border-primary"
+                    />
+                  </div>
+                </div>
+
+                <input
+                  type="hidden"
+                  name="include_cancelled"
+                  value={normalized.includeCancelled ? "true" : "false"}
+                />
+                {normalized.channel && (
+                  <input type="hidden" name="channel" value={normalized.channel} />
+                )}
+                {normalized.saleType && (
+                  <input type="hidden" name="sale_type" value={normalized.saleType} />
+                )}
+                <input type="hidden" name="sort" value={normalized.sort} />
+                <input type="hidden" name="dir" value={normalized.dir} />
+                <input type="hidden" name="page" value="1" />
+
+                <div className="flex items-center justify-end gap-2">
+                  <Link
+                    href={resetDateHref}
+                    className="inline-flex h-8 items-center rounded-full border border-slate-200 px-3 text-[11px] font-medium text-slate-600 hover:bg-slate-50"
+                  >
+                    Réinitialiser
+                  </Link>
+                  <button
+                    type="submit"
+                    className="inline-flex h-8 items-center rounded-full bg-slate-900 px-3 text-[11px] font-medium text-white hover:bg-slate-800"
+                  >
+                    Appliquer
+                  </button>
+                </div>
+              </form>
+            </div>
+          </details>
+
+          <NewSaleDialog />
+        </div>
       </div>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5 items-start">
-        <SalesStatCardWithDialog
-          id="net"
+        <SalesStatCard
           title="CA net (ventes confirmées)"
-          mainValue={euro.format(netWindowValue)}
-          trendPercent={netTrend}
+          mainValue={euro.format(kpis.netWindowValue)}
           color="indigo"
-          period={normalized.period}
         />
 
-        <SalesStatCardWithDialog
-          id="margin"
+        <SalesStatCard
           title="Marge totale"
-          mainValue={euro.format(marginWindowValue)}
-          trendPercent={marginTrend}
+          mainValue={euro.format(kpis.marginWindowValue)}
           color="orange"
-          period={normalized.period}
         />
 
-        <SalesStatCardWithDialog
-          id="rate"
+        <SalesStatCard
           title="Taux de marge moyen"
           mainValue={
-            rateNet > 0 ? `${(avgMarginRateWindowValue * 100).toFixed(1)}%` : "—"
+            kpis.netWindowValue > 0
+              ? `${(kpis.avgMarginRateWindowValue * 100).toFixed(1)}%`
+              : "—"
           }
-          trendPercent={rateTrend}
           color="amber"
-          period={normalized.period}
         />
 
-        <SalesStatCardWithDialog
-          id="sets"
+        <SalesStatCard
           title="Commandes avec set(s)"
-          mainValue={setsWindowValue.toLocaleString("fr-FR")}
-          trendPercent={setsTrend}
+          mainValue={kpis.setsWindowValue.toLocaleString("fr-FR")}
           color="emerald"
-          period={normalized.period}
         />
 
-        <SalesStatCardWithDialog
-          id="pieces"
+        <SalesStatCard
           title="Commandes avec pièce(s)"
-          mainValue={piecesWindowValue.toLocaleString("fr-FR")}
-          trendPercent={piecesTrend}
+          mainValue={kpis.piecesWindowValue.toLocaleString("fr-FR")}
           color="emerald"
-          period={normalized.period}
         />
       </section>
 
       <SalesTable
-        rows={rawRows}
+        rows={table.rows}
         activeSortKey={normalized.sort}
         sortDir={normalized.dir}
         baseQuery={normalized.baseQuery}
         pagination={{
-          currentPage: normalized.page,
-          totalPages,
-          pageNumbers,
-          pageFrom,
-          pageTo,
-          totalCount,
+          currentPage: table.currentPage,
+          totalPages: table.totalPages,
+          pageNumbers: table.pageNumbers,
+          pageFrom: table.pageFrom,
+          pageTo: table.pageTo,
+          totalCount: table.totalCount,
         }}
       />
     </main>

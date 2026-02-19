@@ -1252,3 +1252,116 @@ Statut: `FAIT`
 - Aucun changement SQL/migration dans cette livraison F3.1.
 - Aucun changement DB distante; validations effectuees en local uniquement.
 - Aucun secret sensible ajoute au repo.
+
+## 2026-02-19 - F3.2 Centralisation data `/ventes` via `getSalesPageData(filters)`
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/lib/sales.ts`:
+  - ajout des types du contrat unifie:
+    - `SalesPageFilters`
+    - `SalesPageData`
+    - types associes table/KPIs/deltas/compteurs
+  - ajout de `getSalesPageData(filters, client?)`:
+    - centralisation listing table (`listSalesForTable`) avec tri/pagination/filtres existants
+    - centralisation KPIs (`CA net`, `marge`, `taux`, commandes `SET`/`PIECE`)
+    - centralisation deltas comparatifs (logique existante preservee)
+    - centralisation compteurs en-tete (`confirmed`, `cancelled`, total liste)
+    - fallback preserve:
+      - erreurs KPI/count => fallback visible (0/`—`) sans crash
+      - erreur listing => echec explicite
+  - ajout d'une garde pagination pour eviter un crash sur page hors plage (`page` trop grande):
+    - detection fallback et retour table vide au lieu d'un `500`
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/ventes/page.tsx`:
+  - conservation du contrat query F3.1 (normalisation + redirection canonique + `baseQuery`)
+  - suppression de la logique KPI/deltas/compteurs/pagination dispersee
+  - consommation unique de `getSalesPageData(...)` avec `supabaseServer`
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/ROADMAP.md`:
+  - `F3.2` passe en `FAIT` avec livrables traces
+
+### Verifications executees
+
+- Pre-check local:
+  - `npx supabase --version`: OK (`2.65.10`)
+  - `docker info --format '{{.ServerVersion}}'`: OK (`29.2.0`)
+  - `npx supabase status`: OK
+  - `npx supabase start`: OK
+- Validation DB locale:
+  - `npx supabase db reset --local`: OK
+    - tentative 1: KO transitoire (`Error status 502`)
+    - relance immediate: OK
+- Gates techniques:
+  - `npm ci`: OK (`found 0 vulnerabilities`)
+  - `npm run lint`: OK
+  - `npm run typecheck`: OK
+  - `npm run build`: OK
+  - `npm run test:f2.0`: OK (non-regressions F2.x + checks F1.3/F1.4/F1.5)
+- Scenarios fonctionnels `/ventes` (serveur local + `curl`):
+  - S1 `/ventes` sans query: `307` vers URL canonique
+    - `/ventes?period=30&include_cancelled=true&sort=paid_at&dir=desc&page=1`
+  - S2 filtres `period/include_cancelled/channel/sale_type`: OK (rendu KPI + table coherent, rows vides attendues si filtre sans resultat)
+  - S3 tri/pagination: OK (liens de tri conservent les filtres; `page` hors plage renvoie `200` avec table vide, pas de crash)
+  - S4 params invalides (`period=999`, `dir=up`, `sort=bad`, `page=0`, legacy `stats_window_*`): `307` vers fallback canonique
+  - S5 navigation detail vente:
+    - table cliquable (row `tabindex=\"0\"` presente)
+    - route detail `/ventes/1`: `200`
+- Verifications SQL post-implementation:
+  - `stock_balance.quantity < 0`: `0`
+  - vues lisibles:
+    - `stock_per_piece`: OK
+    - `stock_journal`: OK
+    - `piece_movements`: OK
+  - `healthcheck_business_anomalies_v1`: `0`
+  - coherence lots confirmes (`inventory` vs `PURCHASE/IN`): `0` mismatch
+
+### Perimetre / limites
+
+- Aucun changement SQL/migration dans cette livraison F3.2.
+- Aucun changement DB distante (local uniquement).
+- Aucune decision structurante nouvelle: pas de mise a jour `docs/DECISIONS.md`.
+- Aucun secret sensible ajoute au repo.
+
+## 2026-02-19 - Pivot KPI tableau-first + simplification cards + filtre dates Ventes/Approvisionnement
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Cette livraison supersede la strategie KPI precedente basee sur `period` / `stats_window_*`:
+  - KPI des cards alignes strictement au perimetre des lignes du tableau courant (strategie tableau-first)
+  - cards simplifiees en mode `libelle + valeur` (sans tendance/periode embarquee)
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/lib/sales.ts`:
+  - extension `SalesPageFilters` avec `from` / `to`
+  - normalisation/canonicalisation des bornes de dates
+  - KPI alignes au perimetre du tableau filtre
+  - `deltas` conserves dans le contrat data pour compatibilite, neutralises cote UI
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/ventes/page.tsx`:
+  - URL canonique active sans `period` (legacy redirige)
+  - ajout du filtre compact `Du/Au` (GET) applique au tableau et aux KPI
+  - cards KPI simplifiees
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/approvisionnement/page.tsx`:
+  - URL canonique active sans `stats_window_*` (legacy redirige)
+  - ajout du filtre compact `Du/Au` (GET) applique au tableau et aux KPI
+  - KPI derives du meme perimetre que les lignes affichees
+  - verification `LOT_0` conservee globale (hors filtre date) pour eviter toute recreation incorrecte
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/stock/page.tsx`:
+  - cards KPI simplifiees (libelle + valeur), sans mecanique de tendance/periode
+
+### Verifications executees
+
+- Gates techniques:
+  - `npm run lint`: OK
+  - `npm run typecheck`: OK
+  - `npm run build`: OK
+  - `npm run test:f2.0`: OK
+- Controles HTTP canoniques:
+  - `307` attendu sur parametres legacy (`period`, `stats_window_*`) vers URL canonique
+  - `307` attendu sur bornes inversees (`from > to`) avec inversion automatique appliquee
+
+### Perimetre / limites
+
+- Aucun changement SQL/migration/seed.
+- Aucune ecriture sur DB distante.
+- `period` et `stats_window_*` maintenus uniquement comme legacy redirige.
