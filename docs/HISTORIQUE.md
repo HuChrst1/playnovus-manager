@@ -1498,3 +1498,61 @@ Statut: `FAIT`
 - Aucune ecriture sur DB distante.
 - `src/app/ventes/nouvelle/NewSaleForm.tsx` non modifie (pas necessaire pour F3.5).
 - Verification UI finale des scenarios F3.5 a realiser en manuel sur un poste autorisant `npm run dev` (script manuel fourni dans le rendu de livraison).
+
+## 2026-02-19 - F3.6 Finaliser audit interne sans page globale pieces vendues
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Suppression des composants UI legacy non branches:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/sales/SoldPiecesTable.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/sales/SaleDetailDialog.tsx`
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/ventes/[id]/page.tsx`:
+  - passage en `notFound()` sur vente introuvable (suppression de l'ecran debug JSON)
+- Aucun changement de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/ventes/page.tsx` (contrat query conserve)
+- Aucun changement de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/ventes/[id]/[saleItemId]/page.tsx` (message minimal snapshot vide conserve)
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/ROADMAP.md`:
+  - `F3.6` passe de `EN COURS` a `FAIT`
+  - livrables traces (suppression legacy + 404 detail + non-regression contrat query)
+
+### Verifications executees
+
+- Pre-check local:
+  - `npx supabase --version`: OK (`2.65.10`)
+  - `docker info --format '{{.ServerVersion}}'`: OK (`29.2.0`)
+  - `npx supabase status`: OK (stack locale active)
+- Validation DB locale:
+  - `npx supabase start`: OK (stack deja active)
+  - `npx supabase db reset --local`: OK (migrations F1.1/F1.3/F1.4/F1.5/F1.6/F1.7 + seed)
+- Gates techniques:
+  - `npm ci`: OK (`found 0 vulnerabilities`)
+  - `npm run lint`: OK
+  - `npm run typecheck`: OK
+  - `npm run build`: OK
+  - `npm run test:f2.0`: OK (S1..S12 + checks F1.3/F1.4/F1.5)
+    - note scenario S8: log attendu de conflit `lots_lot_code_key` (cas rollback), puis scenario valide
+- Verifications SQL post-implementation (REST local lecture seule):
+  - `stock_balance_negative_raw=[]`
+  - `stock_per_piece_http=200`
+  - `stock_journal_http=200`
+  - `piece_movements_http=200`
+  - `healthcheck_raw=[]`
+- Verification fonctionnelle `/ventes` (serveur local + `curl`):
+  - S1 canonicalisation `/ventes`: `307` vers `/ventes?include_cancelled=true&sort=paid_at&dir=desc&page=1`
+  - S2 detail commande: `/ventes/21` -> `200`
+  - S3 drilldown item set: `/ventes/21/43` -> `200`
+  - S4 pas de route globale active "pieces vendues": `/ventes/pieces-vendues` -> `404`
+  - S5 IDs invalides:
+    - `/ventes/999999` -> `404`
+    - `/ventes/21/999999` -> `404`
+  - S6 non-regression filtres:
+    - query valide `include_cancelled/channel/sale_type/sort/dir/page/from/to` -> `200`
+    - query invalide -> `307` vers URL canonique
+  - S7 non-regression globale: `npm run test:f2.0` -> OK
+
+### Perimetre / limites
+
+- Aucun changement SQL/migration/seed dans F3.6.
+- Aucune ecriture sur DB distante.
+- Aucune nouvelle decision structurante: `docs/DECISIONS.md` non modifie.

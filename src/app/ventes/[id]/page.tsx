@@ -36,17 +36,9 @@ export default async function VenteDetailPage({ params }: VentesDetailPageProps)
     .eq("id", saleId)
     .single();
 
-    if (saleError || !sale) {
-      return (
-        <main className="p-6 space-y-3">
-          <h1 className="text-xl font-semibold">Erreur chargement vente</h1>
-          <pre className="text-xs bg-black/5 p-3 rounded">
-            {JSON.stringify({ saleId, saleError, sale }, null, 2)}
-          </pre>
-          <Link className="underline" href="/ventes">← Retour aux ventes</Link>
-        </main>
-      );
-    }
+  if (saleError || !sale) {
+    notFound();
+  }
 
   // 2) Charger les lignes de vente
   const { data: items, error: itemsError } = await supabaseServer

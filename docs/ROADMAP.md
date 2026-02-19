@@ -458,13 +458,18 @@ Definition of done:
 
 ### F3.6 - Finaliser audit interne sans page globale pieces vendues
 
-Statut: `EN COURS`
+Statut: `FAIT`
 Objectif: conserver le choix produit "Commandes + drilldown".
 Livrables realises:
 - drilldown commande disponible (`/ventes/[id]`)
 - drilldown item commande maintenu (`/ventes/[id]/[saleItemId]`)
-Reste a faire:
-- suppression des restes d'UI/composants pouvant reintroduire une liste globale non cible
+- suppression des restes UI/composants non branches:
+  - `src/components/sales/SoldPiecesTable.tsx`
+  - `src/components/sales/SaleDetailDialog.tsx`
+- detail commande durci en `404` sur vente introuvable (plus d'ecran debug JSON)
+- verification explicite:
+  - aucune entree UI active vers une liste globale "pieces vendues"
+  - non-regression du contrat query `/ventes` (`include_cancelled`, `channel`, `sale_type`, `sort`, `dir`, `page`, `from`, `to`)
 Definition of done:
 - audit complet possible depuis une commande
 
