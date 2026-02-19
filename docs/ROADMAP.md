@@ -488,15 +488,26 @@ Definition of done:
 
 ## Phase 4 - Dashboard complet branche aux vraies donnees
 
-Statut global: `A FAIRE`
+Statut global: `EN COURS`
 
 ### F4.1 - Creer `src/lib/dashboard.ts`
 
-Statut: `A FAIRE`
+Statut: `FAIT`
 Objectif: centraliser les calculs dashboard.
-Livrables:
+Livrables realises:
 - agregats consolides (CA net, marge nette, valeur stock, cout appro)
 - structure de retour stable pour UI dashboard
+- contrat data typé stable (v1) pret pour F4.2:
+  - `DashboardDateRangeInput`, `DashboardDateRange`
+  - `DashboardMetric`, `DashboardIssueCode`, `DashboardData`
+  - `normalizeDashboardDateRange(...)`
+  - `getDashboardData(client, input?)`
+- normalisation des bornes date (`YYYY-MM-DD`, inversion auto si `from > to`)
+- fallback non bloquant avec signal explicite de donnee partielle (`quality=partial`, `issues`)
+- aggregation paginee defensive (respect `max_rows=1000`) sur:
+  - `sales` (`status='CONFIRMED'`, fallback marge `net - cost` si marge null)
+  - `lots` (`status='confirmed'`)
+  - `stock_per_piece` (snapshot courant non borne par periode)
 Definition of done:
 - pas de calcul metier eparpille dans `src/app/page.tsx`
 

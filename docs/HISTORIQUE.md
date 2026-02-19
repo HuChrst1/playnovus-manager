@@ -1607,3 +1607,94 @@ Statut: `FAIT`
 - Aucun changement SQL/migration/seed dans F3.7.
 - Aucune ecriture sur DB distante.
 - Aucune nouvelle decision structurante: `docs/DECISIONS.md` non modifie.
+
+## 2026-02-19 - F4.1 Creer `src/lib/dashboard.ts` (contrat dashboard v1)
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Creation de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/lib/dashboard.ts`:
+  - contrat data typé stable `dashboard.v1` pour la future UI dashboard (F4.2)
+  - types exportes:
+    - `DashboardDateRangeInput`
+    - `DashboardDateRange`
+    - `DashboardMetric`
+    - `DashboardIssueCode`
+    - `DashboardData`
+  - fonctions exportees:
+    - `normalizeDashboardDateRange(input?)`
+    - `getDashboardData(client, input?)`
+  - filtres/contrat `filters` inclus:
+    - `from`, `to`, `mode` (`GLOBAL|RANGE`)
+    - `salesStatus='CONFIRMED_ONLY'`
+    - `procurementScope='CONFIRMED_LOTS'`
+  - agregats centralises:
+    - `netRevenue` (CA net ventes confirmees)
+    - `netMargin` (marge nette, fallback `net - cost` si `total_margin_amount` null)
+    - `stockValue` (snapshot somme `stock_per_piece.total_value`)
+    - `procurementCost` (somme `lots.total_cost` sur lots `confirmed`)
+  - fallback non bloquant par metrique:
+    - `quality='partial'`
+    - `issue` explicite
+    - `partial` global + `issues` dedupliques
+  - pagination defensive des aggregations (chunks de `1000`) pour respecter `supabase/config.toml` (`api.max_rows=1000`)
+- Aucun changement de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/page.tsx` (placeholder dashboard conserve, F4.2 hors scope)
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/ROADMAP.md`:
+  - `Phase 4` passe de `A FAIRE` a `EN COURS`
+  - `F4.1` passe de `A FAIRE` a `FAIT`
+  - livrables realises F4.1 detailles
+
+### Verifications executees
+
+- Pre-check local:
+  - `npx supabase --version`: OK (`2.65.10`)
+  - `docker info --format '{{.ServerVersion}}'`: OK (`29.2.0`)
+  - `npx supabase status`: OK (stack locale active)
+- Validation DB locale:
+  - `npx supabase start`: OK (stack deja active)
+  - `npx supabase db reset --local`: OK (migrations F1.1/F1.3/F1.4/F1.5/F1.6/F1.7 + seed)
+- Verifications contrat F4.1:
+  - presence exports types/fonctions dans `src/lib/dashboard.ts`: OK (`rg`)
+  - `normalizeDashboardDateRange`:
+    - global par defaut: `from=null`, `to=null`, `mode=GLOBAL`
+    - inversion auto `from > to`: OK
+    - date invalide ignoree: OK
+  - execution `getDashboardData` sur client mock (sans I/O reseau): OK
+    - calculs `netRevenue/netMargin/stockValue/procurementCost`: conformes
+    - fallback partiel force (`SALES_DATA_UNAVAILABLE`): conforme (`partial=true`, metrics degradees)
+- Coherence agregats metier (SQL local en lecture):
+  - global (`sales CONFIRMED`, `lots confirmed`, `stock_per_piece`):
+    - `net_revenue=10.0000`
+    - `net_margin=8.7000`
+    - `stock_value=7.1000`
+    - `procurement_cost=8.4000`
+  - periode bornee `2026-02-14`:
+    - `net_revenue=10.0000`
+    - `net_margin=8.7000`
+    - `stock_value=7.1000` (snapshot non borne)
+    - `procurement_cost=8.4000`
+- Verifications SQL post-implementation:
+  - `stock_balance.quantity < 0`: `0`
+  - vues lisibles:
+    - `stock_per_piece`: `2` lignes
+    - `stock_journal`: `4` lignes
+    - `piece_movements`: `4` lignes
+  - `healthcheck_business_anomalies_v1`: `0` anomalie
+  - coherence lots confirmes:
+    - `inventory` vs `PURCHASE/IN` mismatch: `0`
+    - lots confirmes sans `PURCHASE/IN`: `0`
+- Gates techniques:
+  - `npm ci`: OK (`found 0 vulnerabilities`)
+  - `npm run lint`: OK
+  - `npm run typecheck`: OK
+  - `npm run build`: OK
+  - `npm run test:f2.0`: OK (S1..S12 + checks F1.3/F1.4/F1.5)
+    - note scenario S8: log attendu de conflit `lots_lot_code_key` (cas rollback), puis scenario valide
+
+### Perimetre / limites
+
+- Aucun changement SQL/migration/seed dans F4.1.
+- Aucune ecriture sur DB distante.
+- Aucun changement F4.2/F4.3+.
+- `docs/DECISIONS.md` non modifie (pas de decision structurante supplementaire formalisee dans cette livraison).
