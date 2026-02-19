@@ -1556,3 +1556,54 @@ Statut: `FAIT`
 - Aucun changement SQL/migration/seed dans F3.6.
 - Aucune ecriture sur DB distante.
 - Aucune nouvelle decision structurante: `docs/DECISIONS.md` non modifie.
+
+## 2026-02-19 - F3.7 Nettoyage des composants KPI legacy non utilises
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Suppression des composants KPI legacy orphelins:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/sales/SalesStatCardWithDialog.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/dashboard/StatCardWithDialog.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/approvisionnement/ApproStatsSection.tsx`
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/ROADMAP.md`:
+  - `F3.7` passe de `A FAIRE` a `FAIT`
+  - correction du chemin cible vers `src/app/approvisionnement/ApproStatsSection.tsx`
+  - `Phase 3` passe de `EN COURS` a `FAIT`
+- Verification explicite:
+  - plus aucune reference active aux composants KPI legacy supprimes
+  - les routes actives conservent les composants KPI actuels:
+    - `SalesStatCard` (`/ventes`, `/approvisionnement`, `/stock`, details `/ventes/[id]`)
+    - `DashboardStatCard` (`/historique-stock`)
+
+### Verifications executees
+
+- Pre-check local:
+  - `npx supabase --version`: OK (`2.65.10`)
+  - `docker info --format '{{.ServerVersion}}'`: OK (`29.2.0`)
+  - `npx supabase status`: OK (stack locale active)
+- Validation references F3.7:
+  - `rg -n "SalesStatCardWithDialog|StatCardWithDialog|ApproStatsSection" src`: OK (0 resultat)
+  - `rg -n "SalesStatCard|DashboardStatCard" src/app`: OK (usages actifs attendus)
+- Validation DB locale:
+  - `npx supabase start`: OK (stack deja active)
+  - `npx supabase db reset --local`: OK (migrations F1.1/F1.3/F1.4/F1.5/F1.6/F1.7 + seed)
+- Gates techniques:
+  - `npm ci`: OK (`found 0 vulnerabilities`)
+  - `npm run lint`: OK
+  - `npm run typecheck`: OK
+  - `npm run build`: OK
+  - `npm run test:f2.0`: OK (S1..S12 + checks F1.3/F1.4/F1.5)
+    - note scenario S8: log attendu de conflit `lots_lot_code_key` (cas rollback), puis scenario valide
+- Verifications SQL post-implementation (via `npm run test:f2.0`):
+  - `stock_balance.quantity < 0`: `0`
+  - vues lisibles: `stock_per_piece`, `stock_journal`, `piece_movements`
+  - `healthcheck_business_anomalies_v1`: `0`
+  - coherence `inventory` vs `PURCHASE/IN` pour lots confirmes: OK
+
+### Perimetre / limites
+
+- Aucun changement SQL/migration/seed dans F3.7.
+- Aucune ecriture sur DB distante.
+- Aucune nouvelle decision structurante: `docs/DECISIONS.md` non modifie.

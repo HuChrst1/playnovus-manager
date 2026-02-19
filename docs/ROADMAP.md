@@ -351,7 +351,7 @@ Definition of done:
 
 ## Phase 3 - Ventes/Commandes + KPIs + contrat data unique
 
-Statut global: `EN COURS`
+Statut global: `FAIT`
 
 ### F3.1 - Contrat query standardise pour `/ventes`
 
@@ -475,13 +475,13 @@ Definition of done:
 
 ### F3.7 - Nettoyage des composants KPI legacy non utilises
 
-Statut: `A FAIRE`
+Statut: `FAIT`
 Objectif: supprimer les composants KPI obsoletes apres le pivot tableau-first.
-Livrables:
+Livrables realises:
 - retrait des composants legacy non utilises:
   - `src/components/sales/SalesStatCardWithDialog.tsx`
   - `src/components/dashboard/StatCardWithDialog.tsx`
-  - `src/components/approvisionnement/ApproStatsSection.tsx` et composants associes
+  - `src/app/approvisionnement/ApproStatsSection.tsx` et composants associes orphelins
 - verification qu'aucune route active ne depend encore des variantes legacy
 Definition of done:
 - plus aucun composant KPI legacy orphelin dans le flux actif
