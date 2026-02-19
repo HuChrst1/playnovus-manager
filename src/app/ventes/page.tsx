@@ -25,6 +25,7 @@ type SalesPageProps = {
 
 type NormalizedSalesQuery = {
   includeCancelled: boolean;
+  newIntent: boolean;
   channel: string | null;
   saleType: SalesTypeFilter | null;
   sort: SortColumn;
@@ -120,6 +121,8 @@ function normalizeSalesQuery(raw: RawSalesSearchParams): NormalizedSalesQuery {
       : includeCancelledRaw === "false"
       ? false
       : DEFAULT_INCLUDE_CANCELLED;
+  const newRaw = (getFirstParamValue(raw.new) ?? "").trim();
+  const newIntent = newRaw === "1";
 
   const channelRaw = (getFirstParamValue(raw.channel) ?? "").trim();
   const channel = channelRaw.length > 0 ? channelRaw : null;
@@ -148,6 +151,7 @@ function normalizeSalesQuery(raw: RawSalesSearchParams): NormalizedSalesQuery {
 
   const canonicalParams = new URLSearchParams();
   canonicalParams.set("include_cancelled", includeCancelled ? "true" : "false");
+  if (newIntent) canonicalParams.set("new", "1");
   if (channel) canonicalParams.set("channel", channel);
   if (saleType) canonicalParams.set("sale_type", saleType);
   canonicalParams.set("sort", sort);
@@ -158,6 +162,7 @@ function normalizeSalesQuery(raw: RawSalesSearchParams): NormalizedSalesQuery {
 
   const baseParams = new URLSearchParams();
   baseParams.set("include_cancelled", includeCancelled ? "true" : "false");
+  if (newIntent) baseParams.set("new", "1");
   if (channel) baseParams.set("channel", channel);
   if (saleType) baseParams.set("sale_type", saleType);
   if (from) baseParams.set("from", from);
@@ -165,6 +170,7 @@ function normalizeSalesQuery(raw: RawSalesSearchParams): NormalizedSalesQuery {
 
   return {
     includeCancelled,
+    newIntent,
     channel,
     saleType,
     sort,
@@ -207,6 +213,7 @@ export default async function VentesPage({ searchParams }: SalesPageProps) {
   const buildStatusToggleHref = (includeCancelled: boolean) => {
     const params = new URLSearchParams();
     params.set("include_cancelled", includeCancelled ? "true" : "false");
+    if (normalized.newIntent) params.set("new", "1");
     if (normalized.channel) params.set("channel", normalized.channel);
     if (normalized.saleType) params.set("sale_type", normalized.saleType);
     params.set("sort", normalized.sort);
@@ -225,6 +232,7 @@ export default async function VentesPage({ searchParams }: SalesPageProps) {
     "include_cancelled",
     normalized.includeCancelled ? "true" : "false"
   );
+  if (normalized.newIntent) resetDateParams.set("new", "1");
   if (normalized.channel) resetDateParams.set("channel", normalized.channel);
   if (normalized.saleType) resetDateParams.set("sale_type", normalized.saleType);
   resetDateParams.set("sort", normalized.sort);
@@ -319,6 +327,9 @@ export default async function VentesPage({ searchParams }: SalesPageProps) {
                   name="include_cancelled"
                   value={normalized.includeCancelled ? "true" : "false"}
                 />
+                {normalized.newIntent && (
+                  <input type="hidden" name="new" value="1" />
+                )}
                 {normalized.channel && (
                   <input type="hidden" name="channel" value={normalized.channel} />
                 )}
@@ -347,7 +358,7 @@ export default async function VentesPage({ searchParams }: SalesPageProps) {
             </div>
           </details>
 
-          <NewSaleDialog />
+          <NewSaleDialog openFromIntent={normalized.newIntent} />
         </div>
       </div>
 

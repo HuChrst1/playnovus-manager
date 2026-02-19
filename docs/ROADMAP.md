@@ -439,12 +439,20 @@ Definition of done:
 
 ### F3.5 - Unifier l'entree Nouvelle vente (pop-up)
 
-Statut: `EN COURS`
+Statut: `FAIT`
 Objectif: un seul parcours UX.
 Livrables realises:
-- `/ventes` ouvre la pop-up via action utilisateur
-Reste a faire:
 - `/ventes/nouvelle` redirige vers `/ventes?new=1`
+- `/ventes` accepte l'intent URL `new=1` dans la canonicalisation SSR
+- `new=1` ouvre automatiquement la pop-up `Nouvelle vente` sans clic
+- fermeture pop-up depuis `new=1`:
+  - fermeture UI
+  - nettoyage URL (suppression de `new`, conservation des filtres actifs)
+- soumission reussie depuis `new=1`:
+  - fermeture pop-up
+  - nettoyage URL (suppression de `new`)
+  - refresh de la liste
+- entree existante par bouton `Nouvelle vente` conservee
 Definition of done:
 - plus de flux paralleles divergents
 

@@ -1433,3 +1433,68 @@ Statut: `FAIT`
 - Aucun changement SQL/migration/seed.
 - Aucun changement de schema sur DB distante.
 - Aucune decision structurante nouvelle: pas de mise a jour `docs/DECISIONS.md`.
+
+## 2026-02-19 - F3.5 Unifier l'entree `Nouvelle vente` via `/ventes` + pop-up
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/ventes/nouvelle/page.tsx`:
+  - suppression du rendu page dediee
+  - redirection serveur directe vers `/ventes?new=1`
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/ventes/page.tsx`:
+  - extension de la canonicalisation query SSR avec support de l'intent `new=1`
+  - `new` accepte uniquement la valeur `1` (toute autre valeur est supprimee par canonicalisation)
+  - propagation de `new=1` dans les liens SSR (`bascule statut`, `reset date`, filtre GET, tri/pagination via `baseQuery`) tant que l'intent est actif
+  - conservation stricte du contrat F3.1/F3.4 pour `include_cancelled`, `channel`, `sale_type`, `sort`, `dir`, `page`, `from`, `to`
+  - ouverture de la modale via `NewSaleDialog openFromIntent={normalized.newIntent}`
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/sales/NewSaleDialog.tsx`:
+  - ouverture automatique de la modale quand l'intent URL `new=1` est present
+  - fermeture manuelle: nettoyage URL (suppression de `new`) sans perdre les autres query params
+  - soumission reussie (`onDone`): fermeture modale + nettoyage URL + `router.refresh()`
+  - conservation du bouton `Nouvelle vente` et du flux local existant quand `new` est absent
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/ROADMAP.md`:
+  - `F3.5` passe de `EN COURS` a `FAIT`
+  - livrables F3.5 traces dans la section dediee
+
+### Verifications executees
+
+- Pre-check local:
+  - `npx supabase --version`: OK (`2.65.10`)
+  - `docker info --format '{{.ServerVersion}}'`: OK (`29.2.0`)
+  - `npx supabase status`: OK (stack locale active)
+- Validation DB locale:
+  - `npx supabase start`: OK (stack deja active)
+  - `npx supabase db reset --local`: OK (baseline + F1.3/F1.4/F1.5/F1.6/F1.7 + seed)
+- Gates techniques:
+  - `npm ci`: OK (`found 0 vulnerabilities`)
+  - `npm run lint`: OK
+  - `npm run typecheck`: OK
+  - `npm run build`: OK
+  - `npm run test:f2.0`: OK (S1..S12 + checks F1.3/F1.4/F1.5)
+- Verification des scenarios F3.5:
+  - tentative d'automatisation HTTP/UI via `npm run dev` + `curl`: KO environnement sandbox
+    - erreur observee: `listen EPERM: operation not permitted 0.0.0.0:3000`
+  - preuves locales de comportement (lecture code):
+    - redirection `/ventes/nouvelle` -> `/ventes?new=1`: OK
+    - canonicalisation `new=1` preservee sur `/ventes`: OK
+    - ouverture/fermeture/succes pilotes par intent URL dans `NewSaleDialog`: OK
+- Verifications SQL post-implementation (via `test:f2.0`):
+  - `stock_balance.quantity < 0`: `0`
+  - vues lisibles: `stock_per_piece`, `stock_journal`, `piece_movements`
+  - `healthcheck_business_anomalies_v1`: `0`
+  - coherence `inventory` vs `PURCHASE/IN` pour lots confirmes: OK
+- Controle local REST lecture seule complementaire:
+  - `stock_balance_negative_count=0`
+  - `healthcheck_anomalies_count=0`
+  - `stock_per_piece_http=200`
+  - `stock_journal_http=200`
+  - `piece_movements_http=200`
+
+### Perimetre / limites
+
+- Aucun changement SQL/migration/seed dans cette livraison F3.5.
+- Aucune ecriture sur DB distante.
+- `src/app/ventes/nouvelle/NewSaleForm.tsx` non modifie (pas necessaire pour F3.5).
+- Verification UI finale des scenarios F3.5 a realiser en manuel sur un poste autorisant `npm run dev` (script manuel fourni dans le rendu de livraison).
