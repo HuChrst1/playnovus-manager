@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { supabaseServer as supabase } from "@/lib/supabase-server";
+import { cn } from "@/lib/utils";
 import {
   getSalesPageData,
   type SalesPageSortColumn,
@@ -202,6 +203,23 @@ export default async function VentesPage({ searchParams }: SalesPageProps) {
 
   const { table, kpis, headerCounts } = salesPageData;
   const totalSalesCount = headerCounts.totalSalesCount;
+
+  const buildStatusToggleHref = (includeCancelled: boolean) => {
+    const params = new URLSearchParams();
+    params.set("include_cancelled", includeCancelled ? "true" : "false");
+    if (normalized.channel) params.set("channel", normalized.channel);
+    if (normalized.saleType) params.set("sale_type", normalized.saleType);
+    params.set("sort", normalized.sort);
+    params.set("dir", normalized.dir);
+    params.set("page", "1");
+    if (normalized.from) params.set("from", normalized.from);
+    if (normalized.to) params.set("to", normalized.to);
+    return `/ventes?${params.toString()}`;
+  };
+
+  const includeCancelledHref = buildStatusToggleHref(true);
+  const excludeCancelledHref = buildStatusToggleHref(false);
+
   const resetDateParams = new URLSearchParams();
   resetDateParams.set(
     "include_cancelled",
@@ -229,15 +247,44 @@ export default async function VentesPage({ searchParams }: SalesPageProps) {
               <span className="text-emerald-700">
                 {headerCounts.confirmedCount.toLocaleString("fr-FR")} confirmées
               </span>
-              {" • "}
-              <span className="text-rose-700">
-                {headerCounts.cancelledCount.toLocaleString("fr-FR")} annulées
-              </span>
+              {normalized.includeCancelled && (
+                <>
+                  {" • "}
+                  <span className="text-rose-700">
+                    {headerCounts.cancelledCount.toLocaleString("fr-FR")} annulées
+                  </span>
+                </>
+              )}
             </p>
           )}
         </div>
 
         <div className="flex items-center gap-2">
+          <div className="inline-flex items-center rounded-full border border-slate-200 bg-white p-1 shadow-[0_8px_20px_rgba(15,23,42,0.08)]">
+            <Link
+              href={includeCancelledHref}
+              className={cn(
+                "inline-flex h-7 items-center rounded-full px-3 text-[11px] font-medium transition-colors",
+                normalized.includeCancelled
+                  ? "bg-slate-900 text-white"
+                  : "text-slate-600 hover:bg-slate-50"
+              )}
+            >
+              Inclure annulées
+            </Link>
+            <Link
+              href={excludeCancelledHref}
+              className={cn(
+                "inline-flex h-7 items-center rounded-full px-3 text-[11px] font-medium transition-colors",
+                !normalized.includeCancelled
+                  ? "bg-slate-900 text-white"
+                  : "text-slate-600 hover:bg-slate-50"
+              )}
+            >
+              Exclure annulées
+            </Link>
+          </div>
+
           <details className="group relative">
             <summary className="list-none inline-flex h-9 cursor-pointer items-center rounded-full border border-slate-200 bg-white px-4 text-xs font-medium text-slate-700 shadow-[0_8px_20px_rgba(15,23,42,0.08)] transition-colors hover:bg-slate-50 [&::-webkit-details-marker]:hidden">
               Filtrer

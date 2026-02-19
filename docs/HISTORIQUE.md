@@ -1365,3 +1365,71 @@ Statut: `FAIT`
 - Aucun changement SQL/migration/seed.
 - Aucune ecriture sur DB distante.
 - `period` et `stats_window_*` maintenus uniquement comme legacy redirige.
+
+## 2026-02-19 - F3.4 Controle explicite du statut `include_cancelled` sur `/ventes`
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/ventes/page.tsx`:
+  - ajout d'un controle UI explicite en 2 modes pour piloter `include_cancelled`:
+    - `Inclure annulees` -> `include_cancelled=true`
+    - `Exclure annulees` -> `include_cancelled=false`
+  - reconstruction des liens statut en conservant le contexte actif:
+    - `channel`, `sale_type`, `sort`, `dir`, `from`, `to`
+    - reset pagination force a `page=1` sur bascule de statut
+  - conservation stricte de la canonicalisation SSR existante (contrat query F3.1 inchange)
+  - conservation du filtre date compact existant (propagation `include_cancelled` maintenue)
+  - ajustement en-tete:
+    - mode `include_cancelled=true`: total + confirmees + annulees
+    - mode `include_cancelled=false`: indicateur `annulees` masque
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/ROADMAP.md`:
+  - `F3.4` passe de `EN COURS` a `FAIT`
+  - livrables UI / pagination / preservation contexte documentes
+
+### Verifications executees
+
+- Pre-check local:
+  - `npx supabase --version`: OK (`2.65.10`)
+  - `docker info --format '{{.ServerVersion}}'`: OK (`29.2.0`)
+  - `npx supabase status`: OK (stack locale active)
+- Validation DB locale:
+  - `npx supabase start`: OK (stack deja active)
+  - `npx supabase db reset --local`: OK (migrations + seed)
+- Gates techniques:
+  - `npm ci`: OK (`found 0 vulnerabilities`)
+  - `npm run lint`: OK
+  - `npm run typecheck`: OK
+  - `npm run build`: OK
+  - `npm run test:f2.0`: OK (non-regressions F2.x + checks F1.3/F1.4/F1.5)
+- Scenarios fonctionnels `/ventes` (serveur local + `curl`):
+  - S1 `/ventes` sans query: `307` vers URL canonique
+    - `/ventes?include_cancelled=true&sort=paid_at&dir=desc&page=1`
+  - S2 bascule statut UI:
+    - controle `Inclure annulees` / `Exclure annulees` visible
+    - en mode exclusion, le bloc en-tete ne rend plus la section `annulees`
+  - S3 preservation contexte:
+    - liens de bascule statut conservent `channel`, `sale_type`, `sort`, `dir`, `from`, `to`
+    - `page` force a `1` sur la bascule
+  - S4 params invalides (`include_cancelled=maybe`, `sort=bad`, `dir=up`, `page=0`, dates invalides):
+    - `307` vers fallback canonique
+  - S5 navigation detail:
+    - ligne table focusable (`tabindex=\"0\"`)
+    - route detail testee: `/ventes/21` -> `200`
+- Verifications SQL post-implementation (local REST):
+  - `stock_balance.quantity < 0`: `0`
+  - vues lisibles:
+    - `stock_per_piece`: HTTP `200`
+    - `stock_journal`: HTTP `200`
+    - `piece_movements`: HTTP `200`
+  - `healthcheck_business_anomalies_v1`: `0`
+  - coherence lots confirmes:
+    - `inventory` vs `PURCHASE/IN` mismatch: `0`
+    - lots confirmes sans `PURCHASE/IN`: `0`
+
+### Perimetre / limites
+
+- Aucun changement SQL/migration/seed.
+- Aucun changement de schema sur DB distante.
+- Aucune decision structurante nouvelle: pas de mise a jour `docs/DECISIONS.md`.

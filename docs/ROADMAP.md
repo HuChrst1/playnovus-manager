@@ -425,13 +425,15 @@ Definition of done:
 
 ### F3.4 - Conserver l'historique annule dans la table Commandes
 
-Statut: `EN COURS`
+Statut: `FAIT`
 Objectif: finaliser l'ergonomie du filtre de statut sur `/ventes`.
 Livrables realises:
 - base query et contrat `include_cancelled` actifs cote SSR
 - historique `CANCELLED` conserve dans la table selon les filtres actifs
-Reste a faire:
-- ajouter si besoin un controle UI de statut explicite (toggle/chip) pour piloter `include_cancelled` sans edition manuelle de l'URL
+- ajout d'un controle UI explicite de statut (2 modes) pour piloter `include_cancelled` sans edition manuelle de l'URL
+- reset pagination sur `page=1` lors du changement de mode statut
+- conservation des autres filtres actifs (`channel`, `sale_type`, `sort`, `dir`, `from`, `to`) lors du changement de mode statut
+- masquage de l'indicateur `annulees` dans l'en-tete quand `include_cancelled=false`
 Definition of done:
 - controle statut explicite finalise et non regressif
 
