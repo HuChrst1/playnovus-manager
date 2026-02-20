@@ -1,7 +1,7 @@
 # Journal des décisions
 
 Date de mise à jour initiale: 2026-02-12
-Derniere mise a jour: 2026-02-18
+Derniere mise a jour: 2026-02-20
 
 ## Décisions prises
 
@@ -240,7 +240,205 @@ Derniere mise a jour: 2026-02-18
   - adoption de `@biomejs/biome` comme moteur lint bloqueur
   - ajout d'un garde-fou specifique `<img>` pour maintenir le minimum de protection Next sans plugin ESLint
   - maintien des gates qualite (`lint`, `typecheck`, `build`, `test:f2.0`) sans modification de logique metier
-  - verrouillage d'une trajectoire simple de maintenance supply-chain (moins de dependances lint transitive critiques)
+- verrouillage d'une trajectoire simple de maintenance supply-chain (moins de dependances lint transitive critiques)
+
+### D-021 - Dashboard V2 en mode hub analytique + drilldowns existants (Recharts)
+
+- Statut: validee
+- Constat:
+  - le dashboard `/` F4.2 couvrait les 4 KPI essentiels mais restait trop minimal pour un pilotage quotidien
+  - le besoin metier prioritaire est un cockpit unique oriente profit/cash avec lecture decisionnelle rapide
+  - la creation de nouvelles routes analytiques dediees augmenterait le cout UX et la maintenance hors phase initiale
+- Impact:
+  - adoption d'une architecture `Hub + drilldowns`:
+    - `/` devient le cockpit analytique principal
+    - actions detaillees redirigees vers pages operationnelles existantes (`/ventes`, `/approvisionnement`, `/stock`, `/historique-stock`, `/catalogue`)
+  - contrat URL dashboard etendu a `preset/from/to` avec canonicalisation SSR stricte
+  - baseline comparaison standardisee: periode precedente equivalente
+  - visualisations standardisees via `Recharts` (phase A sans migration SQL)
+  - conservation explicite de la compatibilite `dashboard.v1` et ajout d'un contrat `dashboard.v2` pour l'enrichissement
+
+### D-022 - Dashboard V3 strict: modales etendues + composition fixe en 5 blocs
+
+- Statut: validee
+- Constat:
+  - la lecture V2 restait encore en ecart avec la vision produit attendue pour le pilotage quotidien
+  - le besoin prioritaire est un tableau de bord dense mais strictement actionnable, avec detail contextuel immediat sans changer de page
+  - l'effet de detail attendu est une modale etendue avec animation courte (overlay + pop), et non un simple drilldown de navigation
+- Impact:
+  - la composition `/` devient contractuelle en 5 blocs:
+    - bloc 1: 11 KPI financiers/operations
+    - bloc 2: tendances temporelles (CA + marge) + cycles sets/pieces
+    - bloc 3: comparaison sets vs pieces (grouped + tableau + pie)
+    - bloc 4: pilotage achats/stock (mensuel + tendance)
+    - bloc 5: opportunites catalogue
+  - contrat URL unifie:
+    - `preset=7|30|90|12m|custom`, avec compat legacy `total -> 30`
+    - canonicalisation SSR stricte (`from/to` invalides ignores, permutation auto, custom borne unique => plage 1 jour)
+  - definitions metier verrouillees:
+    - `12 mois = 365 jours glissants`
+    - rotation stock = `CA periode / stock moyen (ouverture+cloture)/2`
+    - taux immobilisation = `stock actuel / CA cumule 12 mois`
+  - interaction detail:
+    - toutes cartes KPI et tous blocs ouvrent une modale etendue
+    - animation dashboard-only: overlay `opacity 0->0.5`, modale `opacity 0->1` + `scale 0.95->1` en `150ms ease-out` (sortie inverse)
+  - sections V2 retirees de `/`:
+    - `alertes actionnables`
+    - `drilldowns rapides`
+
+### D-023 - Dashboard V3.1: preset total canonique + filtre en drawer + cards compactes cliquables
+
+- Statut: validee
+- Constat:
+  - la vision produit cible une densite forte sur `/` avec des cards compactes et detail uniquement en modale
+  - les chips de filtre permanentes nuisaient a la lisibilite et occupaient trop d'espace utile
+  - le preset `total` devait devenir officiel (et non un alias legacy) pour piloter la totalite de l'historique business
+  - le bloc 3 necessitait une lecture modale plus focalisee pour eviter la surcharge visuelle
+- Impact:
+  - `DashboardPreset` devient `total|7|30|90|12m|custom`
+  - canonicalisation SSR de `/`:
+    - fallback par defaut `/?preset=total`
+    - `preset` invalide -> `total`
+    - `custom` avec `from/to` strictement normalises (invalides ignores, permutation auto, borne unique -> plage 1 jour)
+  - implementation du preset `total` sur plage reelle:
+    - borne de debut = plus ancienne date exploitable entre ventes confirmees et lots confirmes
+    - borne de fin = aujourd'hui
+  - UX dashboard:
+    - suppression des boutons `Agrandir`
+    - ouverture modale au clic sur toute la card
+    - filtres de temps deplaces dans un drawer lateral droit avec timeline discrete (`Total`, `12m`, `90j`, `30j`, `7j`) + mode custom
+    - modale KPI recentree sur la valeur (formule masquee)
+    - modale bloc 3 refondue en vues focalisees `Graphique/Tableau/Camembert`
+
+### D-024 - Dashboard V3.2: filtre inline non intrusif + KPI unitaires + bento trend-dominant
+
+- Statut: validee
+- Constat:
+  - le filtre en drawer lateral restait trop intrusif visuellement pour un usage rapide
+  - la section KPI englobante reduisait la lisibilite attendue (objectif `1 KPI = 1 card`)
+  - la disposition des blocs n'etait pas encore percue comme un vrai bento a densite variee
+- Impact:
+  - filtre dashboard migre de `Sheet` vers `Popover` dans le header:
+    - sans overlay pleine page
+    - presets en application instantanee (`Total`, `12m`, `90j`, `30j`, `7j`)
+    - mode custom conserve (`from/to` + `Appliquer`)
+  - suppression du wrapper "Sante financiere":
+    - rendu direct des 11 KPI en cards unitaires
+    - densite desktop 5 colonnes
+    - style cards KPI adouci (pastel + ring leger, sans contour dur)
+  - layout bento verrouille en mode trend-dominant:
+    - carte tendances en bloc majeur (`col-span-8`, `row-span-2` sur XL)
+    - autres blocs repartis en tailles variees
+    - previews graphiques compactes en dashboard, detail reserve aux modales
+
+### D-025 - Dashboard V3.2.1: KPI aligns sur cards standard + popover filtre horizontal a gauche
+
+- Statut: validee
+- Constat:
+  - les KPI restaient visuellement en ecart (effet transparent/pastel juge non coherent)
+  - le popover filtre apparaissait en dessous du bouton avec une lecture trop verticale
+- Impact:
+  - KPI harmonises avec les cards standards du dashboard:
+    - fond blanc
+    - bordure legere
+    - ombre douce
+    - plus de gradient pastel specifique KPI
+  - popover filtre deplace a gauche du bouton `Filtrer`:
+    - `side=left`
+    - contenu horizontalise (presets + actions/custom)
+  - comportement fonctionnel conserve:
+    - presets instantanes
+    - mode custom applique via bouton `Appliquer`
+    - reset vers `/?preset=total`
+
+### D-026 - Dashboard V3.2.2: filtre inline horizontal desktop (no-overlap) + drawer mobile
+
+- Statut: validee
+- Constat:
+  - un panneau filtre flottant pouvait encore recouvrir la zone KPI selon la taille d'ecran
+  - l'objectif UX exige un filtre desktop tres horizontal, sans empilement principal vertical
+- Impact:
+  - desktop/tablette:
+    - remplacement du panneau flottant par un bandeau inline dans le header
+    - panneau en flux normal, garantissant zero overlap avec les KPI
+    - controles alignes horizontalement (`flex-nowrap`) avec scroll horizontal si necessaire
+  - mobile:
+    - fallback via drawer dedie (`Sheet`) pour conserver un usage lisible sur petit viewport
+  - comportement fonctionnel inchange:
+    - presets instantanes
+    - mode custom via `from/to` + `Appliquer`
+    - reset `/?preset=total`
+  - aucun impact sur la couche data:
+    - contrat `dashboard.v3` inchangé
+    - query params `preset/from/to` inchangés
+
+### D-027 - Dashboard V3.2.4: header filtre verrouille (zone centrale) + garde viewport
+
+- Statut: validee
+- Constat:
+  - le bouton `Filtrer` devait rester strictement positionne a droite du header en desktop/tablette
+  - le panneau filtre devait s'ouvrir uniquement dans la zone centrale du header, sans depasser ni recouvrir les KPI
+  - des bascules de viewport pouvaient laisser le `Sheet` mobile ouvert en contexte desktop, provoquant fond sombre + ouverture en bas
+- Impact:
+  - header desktop/tablette verrouille en grille 3 zones (`gauche/centre/droite`)
+  - bouton `Filtrer` fixe en colonne droite (`justify-self-end`, alignement haut)
+  - panneau filtre desktop rendu uniquement dans la colonne centrale:
+    - en flux normal (pas de panel flottant)
+    - largeur bornee au slot central
+    - layout horizontal strict (`flex-nowrap`, `whitespace-nowrap`, `overflow-x-auto`)
+  - garde viewport ajoutee (`matchMedia`) pour fermer automatiquement:
+    - le `Sheet` mobile en passage desktop/tablette
+    - le panneau desktop en retour mobile
+  - logique metier conservee:
+    - presets instantanes
+    - custom via `from/to` + `Appliquer`
+    - reset `/?preset=total`
+  - aucun impact sur la couche data:
+    - contrat `dashboard.v3` inchangé
+    - query params `preset/from/to` inchangés
+
+### D-028 - Dashboard V3.2.5: suppression Sheet dashboard et filtre inline unique
+
+- Statut: validee
+- Constat:
+  - la coexistence `panneau inline + Sheet mobile` sur le dashboard pouvait encore produire un comportement perçu comme incoherent en desktop (fond sombre + panneau bas)
+  - l'objectif produit prioritaire est un comportement desktop-first unique et previsible
+- Impact:
+  - suppression du `Sheet` pour le filtre de la page `/`
+  - un seul declencheur `Filtrer` conserve dans le header
+  - un seul mode d'affichage du filtre:
+    - panneau inline dans la zone centrale du header
+    - aucun overlay plein ecran
+    - aucune ouverture en bas
+  - controle horizontal strict maintenu:
+    - `Total`, `12m`, `90j`, `30j`, `7j`, `Personnalise`, `Du`, `Au`, `Appliquer`, `Reinitialiser`
+  - logique metier conservee:
+    - presets instantanes
+    - custom via `from/to` + `Appliquer`
+    - reset `/?preset=total`
+  - aucun impact sur la couche data:
+    - contrat `dashboard.v3` inchangé
+    - query params `preset/from/to` inchangés
+
+### D-029 - Dashboard V3.2.6: header compact mono-ligne sans metadonnees secondaires
+
+- Statut: validee
+- Constat:
+  - le header restait trop haut pour la densite souhaitee
+  - l'objectif UX prioritaire etait de maximiser l'espace utile pour les KPI/charts
+- Impact:
+  - le header de `/` est reduit a une ligne structurelle:
+    - gauche: `DASHBOARD`
+    - centre: panneau filtre inline (si ouvert)
+    - droite: bouton `Filtrer`
+  - suppression des elements secondaires du header:
+    - label version
+    - badges periode/preset/granularite
+  - panneau filtre conserve en mode horizontal strict et compact (`h-10`)
+  - logique metier filtre conservee (presets instantanes, custom apply, reset total)
+  - aucun impact sur la couche data:
+    - contrat `dashboard.v3` inchangé
+    - query params `preset/from/to` inchangés
 
 ## Hypothèses / décisions en attente
 

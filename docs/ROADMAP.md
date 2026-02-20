@@ -513,25 +513,301 @@ Definition of done:
 
 ### F4.2 - Remplacer le placeholder de `src/app/page.tsx`
 
-Statut: `A FAIRE`
+Statut: `FAIT`
 Objectif: afficher un dashboard reel.
-Livrables:
-- cards KPI alimentees DB
-- filtres periode partages
+Livrables realises:
+- dashboard `/` branche sur `getDashboardData(...)` avec client serveur `supabaseServer`
+- contrat URL canonique `/`:
+  - params supportes `from`, `to` uniquement
+  - normalisation `YYYY-MM-DD`, inversion auto `from > to`, invalides ignores
+  - redirection SSR vers URL canonique
+- cards KPI alimentees DB (sans valeurs fictives):
+  - CA net
+  - marge nette
+  - valeur stock
+  - cout approvisionnements
+- cards KPI cliquables avec detail F4.2:
+  - definition metier
+  - periode active
+  - scope de calcul
+  - etat qualite (`ok|partial`) + issue eventuelle
+- filtre periode global partage (`from/to`) avec reset/apply
+- signal explicite de donnees partielles:
+  - bandeau d'alerte visible si `partial=true`
+  - messages metier derives de `issues`
+  - affichage `—` sur KPI partiel (pas de faux `0`)
 - liens rapides vers `/approvisionnement`, `/ventes`, `/stock`, `/catalogue`
 Definition of done:
 - plus aucun chiffre fictif dans le dashboard
 
-### F4.3 - Ajouter visualisations exploitables
+### F4.3 - Dashboard V2 Hub analytique + drilldowns existants
+
+Statut: `FAIT`
+Objectif: transformer `/` en hub de pilotage riche, oriente profit/cash, sans creer de nouveaux ecrans analytiques dedies.
+Livrables realises:
+- contrat URL canonique `/` aligne Dashboard V2:
+  - params supportes `preset`, `from`, `to`
+  - presets `total|90|30|7|custom`
+  - canonicalisation SSR (dates invalides ignorees, permutation auto si `from > to`, `from/to` force `preset=custom`)
+- nouvel agregateur `getDashboardHubData(...)` dans `src/lib/dashboard.ts` (compat `getDashboardData` v1 conservee):
+  - contrat `dashboard.v2`
+  - 8 KPI de tete: CA net, marge nette, taux de marge, commandes confirmees, panier moyen, cout approvisionnements, valeur stock, rotation stock (proxy)
+  - comparaison vs periode precedente equivalente quand applicable
+  - series/diagnostics:
+    - trend business (CA/marge/cout ventes)
+    - mix ventes par canal + type SET/PIECE
+    - bridge profit (CA -> cout ventes -> marge)
+    - pression flux appro vs cout ventes (hebdo)
+    - concentration stock (top immobilisations)
+    - age du stock (repartition par anciennete)
+    - opportunites catalogue (top sets completion)
+  - alertes actionnables:
+    - quality issues (`partial`, `issues`)
+    - anomalies metier healthcheck
+- refonte complete de `src/app/page.tsx`:
+  - layout hub dense (KPI + blocs graphiques + table opportunites + alertes)
+  - filtre global chips + plage libre
+  - cartes KPI cliquables avec details metier et drilldowns
+  - drilldowns vers pages existantes uniquement (`/ventes`, `/approvisionnement`, `/stock`, `/historique-stock`, `/catalogue`)
+- visualisations implementees avec Recharts (phase A sans migration SQL)
+- robustesse donnee partielle conservee: rendu non bloquant, signal explicite, aucune valeur business fictive
+Definition of done:
+- dashboard `/` fournit une lecture decisionnelle complete en 4 niveaux (KPI, tendances, diagnostic, action)
+- chaque KPI/bloc expose un drilldown operationnel
+- aucune migration SQL ajoutee pour F4.3
+
+### F4.4 - Extensions analytiques avancees (phase B)
 
 Statut: `A FAIRE`
-Objectif: lecture business operationnelle.
+Objectif: etendre les analyses apres validation usage metier reel.
 Livrables:
-- tendances CA/marge
-- split set vs piece
-- indicateurs stock utiles aux decisions
+- forecasting et projections
+- cohortes canal et analyses avancees de mix
+- lead-time fournisseur et rotation fine par famille
+- eventuelles vues/materialized views SQL uniquement si strictement justifiees
 Definition of done:
-- visuels bases sur donnees reelles et coherents avec pages sources
+- nouvelles analyses activees uniquement si elles restent actionnables et sans bruit decoratif
+
+### F4.5 - Dashboard V3 aligne vision produit (blocs + modales etendues)
+
+Statut: `FAIT`
+Objectif: refondre `/` selon la vision produit verrouillee (11 KPI, blocs graphiques imposes, modales etendues).
+Livrables realises:
+- contrat URL canonique `/` stabilise:
+  - params supportes `preset`, `from`, `to`
+  - presets `7|30|90|12m|custom`
+  - baseline V3 avant ajustements F4.6 (preset `total` officialise ensuite)
+  - canonicalisation SSR stricte (dates invalides ignorees, permutation auto `from > to`, `from/to` force `preset=custom`, borne manquante en `custom` => plage 1 jour)
+- dashboard `/` reconstruit en 5 blocs stricts:
+  - bloc 1 sante financiere: 11 KPI (CA net, marge nette, taux marge, valeur stock, nb ventes, cout appro, cout moyen piece achetee, nb lots confirmes, panier moyen, rotation stock, taux immobilisation)
+  - bloc 2 tendances temporelles: courbes CA+marge + histogramme empile ventes sets/pieces
+  - bloc 3 comparaison sets vs pieces: grouped chart (switch CA/marge/taux) + tableau comparatif + pie CA 2 segments
+  - bloc 4 pilotage achats/stock: histogramme achats mensuels + courbe tendance (correlation ventes en modal)
+  - bloc 5 opportunites catalogue: table top sets par completion exploitable
+- interaction modale etendue sur toutes les cartes KPI et tous les blocs:
+  - overlay sombre + modale centree
+  - animation dashboard-only: fade + scale `0.95 -> 1`, `150ms`, `ease-out`, fermeture inverse
+  - contenu modal KPI: definition, formule, periode active, mini-serie KPI, filtres cibles
+  - contenu modal blocs: vue agrandie + controles cibles + action secondaire vers pages operationnelles existantes
+- comportements metier verrouilles implementes:
+  - `12 mois` = `365 jours glissants`
+  - rotation stock = `CA net periode / ((stock ouverture + stock cloture)/2)`
+  - taux immobilisation = `valeur stock actuelle / CA cumule 12 mois`
+  - cout moyen piece achetee calcule sur periode active
+  - etat `partial=true` rendu non bloquant avec signal explicite + valeurs `—` si non interpretable
+- hors scope explicite respecte:
+  - suppression des sections `alertes actionnables` et `drilldowns rapides` de la page `/`
+  - aucune migration SQL ajoutee
+Definition of done:
+- dashboard V3 strictement conforme a la composition demandee, sans derive F4.4+
+
+### F4.6 - Dashboard V3.1 ajustements UX/UI (cards compactes + preset total)
+
+Statut: `FAIT`
+Objectif: finaliser l'experience dashboard avec une lecture plus compacte et des details via modales, sans changer le scope metier.
+Livrables realises:
+- preset `total` officialise et canonique sur `/`:
+  - `DashboardPreset` etendu a `total|7|30|90|12m|custom`
+  - route canonique par defaut `/?preset=total`
+  - `preset` invalide -> fallback `total`
+  - `custom` conserve avec `from/to` normalises (invalides ignores, permutation si `from > to`, borne unique => plage 1 jour)
+  - `total` calcule sur l'historique reel: date min business disponible (`sales CONFIRMED` et `lots confirmed`) jusqu'a aujourd'hui
+- refonte UI ciblee du dashboard:
+  - titre principal `DASHBOARD`
+  - suppression des chips permanentes
+  - bouton `Filtrer` ouvrant un drawer lateral droit
+  - timeline discrete dans le drawer: `Total`, `12m`, `90j`, `30j`, `7j` + mode `custom`
+- layout bento compact:
+  - cards miniatures pour les blocs 2->5 (plus de longues sections empilees)
+  - une card = un apercu, detail en modale
+- interaction card-first:
+  - suppression des boutons `Agrandir`
+  - ouverture des modales au clic sur toute la card (cards KPI + cards graphiques)
+  - accessibilite clavier conservee (cartes interactives en bouton)
+- modales ajustees:
+  - modale KPI: valeur KPI clairement visible, formule masquee
+  - modale bloc 3: navigation `Graphique | Tableau | Camembert` plus lisible et focalisee
+  - animation dashboard-only conservee (overlay + pop 150ms ease-out)
+Definition of done:
+- dashboard dense et compact, detail reserve aux modales, preset par defaut `total` actif et canonique
+
+### F4.7 - Dashboard V3.2 ajustements UX/UI (KPI unitaires + filtre inline + bento trend-dominant)
+
+Statut: `FAIT`
+Objectif: corriger les irritants UX restants du dashboard sans modifier le contrat data.
+Livrables realises:
+- bloc KPI simplifie:
+  - suppression du grand wrapper "Sante financiere"
+  - rendu direct `1 KPI = 1 card` (11 cards)
+  - style KPI ajuste (suppression du contour visuel dur, fond pastel + ombre douce + ring leger)
+  - densite desktop fixee a 5 colonnes
+- filtre inline dans le header:
+  - remplacement `Sheet` lateral par `Popover` ancre au bouton `Filtrer`
+  - suppression de l'effet plein ecran assombri pour l'usage filtre
+  - presets `Total/12m/90j/30j/7j` en application instantanee
+  - mode `custom` conserve avec `from/to` + bouton `Appliquer`
+  - reset cible `/?preset=total`
+- layout bento trend-dominant:
+  - grille non empilee `1 -> 2 -> 12 colonnes` selon breakpoints
+  - bloc tendances dominant (`col-span-8`, `row-span-2` en desktop XL)
+  - autres blocs repartis en cartes de tailles variees
+  - previews graphiques compactes (hauteurs reduites, legendes masquees en preview)
+- detail preserve:
+  - cards toujours cliquables
+  - modales detaillees conservees avec animation dashboard-only existante
+Definition of done:
+- dashboard plus dense et lisible, filtre non intrusif, disposition conforme au style bento cible
+
+### F4.8 - Dashboard V3.2.1 uniformisation KPI + filtre popover horizontal a gauche
+
+Statut: `FAIT`
+Objectif: corriger les derniers ecarts visuels d'ergonomie sans toucher a la couche data.
+Livrables realises:
+- KPI unifies sur le style des autres cards dashboard:
+  - suppression du rendu pastel/gradient specifique KPI
+  - reprise du style `MinimalCardButton` (fond blanc, bordure legere, ombre douce, rayon identique)
+- filtre popover repositionne:
+  - ouverture a gauche du bouton `Filtrer` (`side=left`)
+  - contenu reorganise en disposition horizontale
+  - presets visibles sur une ligne avec application instantanee conservee
+  - mode `custom` conserve (`from/to` + `Appliquer`) avec reset `/?preset=total`
+- aucune modification du contrat data dashboard (`dashboard.v3`) ni des query params (`preset/from/to`)
+Definition of done:
+- rendu KPI coherent avec le reste du dashboard et filtre horizontal a gauche operationnel
+
+### F4.9 - Dashboard V3.2.2 filtre inline horizontal sans overlap KPI + fallback mobile
+
+Statut: `FAIT`
+Objectif: eliminer tout overlap du panneau filtre avec les KPI et imposer une lecture horizontale sur desktop/tablette.
+Livrables realises:
+- desktop/tablette:
+  - suppression du popover flottant pour les filtres temps
+  - ajout d'un bandeau filtre inline dans le header (flux normal) qui pousse le contenu vers le bas
+  - layout horizontal strict (`flex-nowrap`) des controles:
+    - presets `Total/12m/90j/30j/7j`
+    - `Personnalise`, `Du`, `Au`, `Appliquer`, `Reinitialiser`
+  - aucun empiètement sur la grille KPI
+- mobile:
+  - drawer filtre dedie (fallback mobile only) via `Sheet`
+  - logique fonctionnelle identique preservee
+- logique metier filtre conservee:
+  - presets instantanes
+  - custom applique via `Appliquer`
+  - reset vers `/?preset=total`
+- aucun changement du contrat data/API:
+  - `dashboard.v3` inchangé
+  - query params `preset/from/to` inchangés
+Definition of done:
+- panneau filtre desktop horizontal inline sans overlap KPI, mobile geré via drawer
+
+### F4.10 - Dashboard V3.2.4 header stabilise (bouton droite + filtre inline en zone centrale)
+
+Statut: `FAIT`
+Objectif: verrouiller le comportement header pour que le filtre s'ouvre uniquement dans la zone centrale, sans bascule drawer en desktop/tablette.
+Livrables realises:
+- header desktop/tablette stabilise en grille 3 zones:
+  - gauche: titre + metadata
+  - centre: panneau filtre inline (zone centrale du header)
+  - droite: bouton `Filtrer` fixe en haut a droite
+- panneau filtre desktop:
+  - rendu en flux normal dans la zone centrale
+  - largeur bornee au slot central (`w-full`, `max-w-full`)
+  - organisation strictement horizontale (`flex-nowrap`, `whitespace-nowrap`, `overflow-x-auto`)
+  - aucun depassement vers les KPI
+- robustesse viewport:
+  - fermeture automatique du `Sheet` mobile quand le viewport passe en desktop/tablette
+  - fermeture du panneau desktop quand retour en mobile
+- logique metier conservee:
+  - presets instantanes
+  - mode custom via `from/to` + `Appliquer`
+  - reset vers `/?preset=total`
+- aucun changement de contrat:
+  - `dashboard.v3` inchangé
+  - query params `preset/from/to` inchangés
+Definition of done:
+- bouton filtre fixe a droite en desktop/tablette et panneau inline borné a la zone centrale sans overlay plein ecran
+
+### F4.11 - Dashboard V3.2.5 desktop prioritaire strict (filtre inline unique, sans Sheet)
+
+Statut: `FAIT`
+Objectif: supprimer definitivement les effets de modal mobile sur `/` et imposer un filtre unique inline dans le header.
+Livrables realises:
+- suppression complete du mode `Sheet` pour le filtre dashboard:
+  - plus de drawer bas
+  - plus d'overlay sombre plein ecran
+- declencheur unique:
+  - un seul bouton `Filtrer` conserve
+  - bouton maintenu en zone droite du header
+  - ouverture/fermeture du panneau inline central
+- filtre inline unique (toutes tailles d'ecran):
+  - rendu exclusivement dans la zone centrale du header (rectangle rouge)
+  - disposition horizontale stricte:
+    - `Total`, `12m`, `90j`, `30j`, `7j`, `Personnalise`, `Du`, `Au`, `Appliquer`, `Reinitialiser`
+  - contraintes d'affichage:
+    - `flex-nowrap`
+    - `whitespace-nowrap`
+    - `overflow-x-auto`
+  - aucun empilement vertical principal
+- logique metier conservee:
+  - presets instantanes
+  - custom via `from/to` + `Appliquer`
+  - reset vers `/?preset=total`
+- aucun changement de contrat:
+  - `dashboard.v3` inchangé
+  - query params `preset/from/to` inchangés
+Definition of done:
+- filtre dashboard sans `Sheet`, sans overlay, sans ouverture en bas, et inline borne dans le header
+
+### F4.12 - Dashboard V3.2.6 header mono-ligne ultra compact
+
+Statut: `FAIT`
+Objectif: reduire la hauteur du header au minimum en alignant sur une meme ligne `titre + panneau filtre + bouton Filtrer`.
+Livrables realises:
+- simplification du header dashboard:
+  - suppression des informations secondaires:
+    - libelle version (`Dashboard V3.2.x`)
+    - badges `periode / preset / granularite`
+  - conservation du seul titre `DASHBOARD` a gauche
+- layout desktop mono-ligne:
+  - grille 3 zones conservee (`gauche / centre / droite`)
+  - alignement vertical central des 3 zones
+  - bouton `Filtrer` maintenu a droite
+- panneau filtre inline centre:
+  - visible uniquement quand ouvert
+  - hauteur compacte fixe (`h-10`)
+  - rendu horizontal strict:
+    - `Total`, `12m`, `90j`, `30j`, `7j`, `Personnalise`, `Du`, `Au`, `Appliquer`, `Reinitialiser`
+    - `flex-nowrap`, `whitespace-nowrap`, `overflow-x-auto`
+  - aucune hauteur additionnelle quand ferme
+- logique metier conservee:
+  - presets instantanes
+  - custom via `from/to` + `Appliquer`
+  - reset `/?preset=total`
+- aucun changement de contrat:
+  - `dashboard.v3` inchangé
+  - query params `preset/from/to` inchangés
+Definition of done:
+- header compact mono-ligne sur desktop sans retour panel bas ni overlay
 
 ## Phase 5 - Coherence UI transversale
 
@@ -652,10 +928,19 @@ Definition of done:
 19. F4.1
 20. F4.2
 21. F4.3
-22. F5.1
-23. F5.2
-24. F5.3
-25. F6.1
-26. F6.2
-27. F6.3
-28. F6.4
+22. F4.4
+23. F4.5
+24. F4.6
+25. F4.7
+26. F4.8
+27. F4.9
+28. F4.10
+29. F4.11
+30. F4.12
+31. F5.1
+32. F5.2
+33. F5.3
+34. F6.1
+35. F6.2
+36. F6.3
+37. F6.4

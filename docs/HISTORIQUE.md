@@ -2,6 +2,447 @@
 
 Ce fichier consigne les changements du projet, etapes par etapes.
 
+## 2026-02-20 - Dashboard V3.2.6 (header mono-ligne ultra compact)
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/dashboard/DashboardExecutiveView.tsx`:
+  - header compacte en mono-ligne (desktop prioritaire):
+    - `DASHBOARD` a gauche
+    - panneau filtre inline au centre (si ouvert)
+    - bouton `Filtrer` a droite
+  - suppression des informations secondaires du header:
+    - libelle de version
+    - badges `periode / preset / granularite`
+  - panneau filtre conserve en inline, horizontal strict (`flex-nowrap`, `whitespace-nowrap`, `overflow-x-auto`)
+  - reduction de hauteur du header via paddings compacts + panneau `h-10`
+  - logique filtre inchangee:
+    - presets instantanes
+    - custom via `from/to` + `Appliquer`
+    - reset `/?preset=total`
+- Documentation mise a jour:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/ROADMAP.md` (`F4.12` ajoute)
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/DECISIONS.md` (D-029)
+
+### Verifications executees
+
+- `npm run lint`: OK
+- `npm run typecheck`: OK
+- `npm run build`: OK
+- `npm run test:f2.0`: OK
+
+### Perimetre / limites
+
+- Aucun changement SQL/migration.
+- Aucun changement du contrat data dashboard.
+- Aucune ecriture DB distante.
+
+## 2026-02-20 - Dashboard V3.2.5 (filtre inline unique sans Sheet)
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/dashboard/DashboardExecutiveView.tsx`:
+  - suppression complete du mode `Sheet` pour le filtre dashboard
+  - suppression du bouton mobile dedie; conservation d'un seul bouton `Filtrer`
+  - panneau filtre rendu uniquement inline dans le header (zone centrale)
+  - conservation de la disposition horizontale stricte des controles:
+    - `Total/12m/90j/30j/7j`, `Personnalise`, `Du`, `Au`, `Appliquer`, `Reinitialiser`
+  - conservation de la logique filtre:
+    - presets instantanes
+    - custom via `from/to` + `Appliquer`
+    - reset vers `/?preset=total`
+- Documentation mise a jour:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/ROADMAP.md` (`F4.11` ajoute)
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/DECISIONS.md` (D-028)
+
+### Verifications executees
+
+- `npm run lint`: OK
+- `npm run typecheck`: OK
+- `npm run build`: OK
+- `npm run test:f2.0`: OK
+
+### Perimetre / limites
+
+- Aucun changement SQL/migration.
+- Aucun changement du contrat data dashboard.
+- Aucune ecriture DB distante.
+
+## 2026-02-20 - Dashboard V3.2.4 (header stabilise + filtre inline zone centrale)
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/dashboard/DashboardExecutiveView.tsx`:
+  - stabilisation du header desktop/tablette en 3 zones fixes:
+    - gauche: titre + metadata
+    - centre: panneau filtre inline
+    - droite: bouton `Filtrer` fixe
+  - panneau filtre desktop borne a la zone centrale:
+    - rendu en flux normal (pas de panel flottant)
+    - largeur limitee au slot central (`w-full`, `max-w-full`)
+    - disposition strictement horizontale avec scroll horizontal si necessaire
+  - robustesse viewport:
+    - fermeture automatique du `Sheet` mobile si passage en desktop/tablette (`matchMedia`)
+    - fermeture du panneau desktop si retour en mobile
+  - logique filtre preservee:
+    - presets instantanes
+    - custom `from/to` via `Appliquer`
+    - reset `/?preset=total`
+- Documentation mise a jour:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/ROADMAP.md` (`F4.10` ajoute)
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/DECISIONS.md` (D-027)
+
+### Verifications executees
+
+- `npm run lint`: OK
+- `npm run typecheck`: OK
+- `npm run build`: OK
+- `npm run test:f2.0`: OK
+
+### Perimetre / limites
+
+- Aucun changement SQL/migration.
+- Aucun changement du contrat data dashboard.
+- Aucune ecriture DB distante.
+
+## 2026-02-20 - Dashboard V3.2.2 (filtre inline horizontal desktop + drawer mobile)
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/dashboard/DashboardExecutiveView.tsx`:
+  - suppression du filtre flottant desktop/tablette (popover)
+  - ajout d'un bandeau filtre inline dans le header (flux normal, sans overlap KPI)
+  - disposition horizontale stricte des controles desktop:
+    - presets `Total/12m/90j/30j/7j`
+    - bouton `Personnalise`
+    - champs `Du` / `Au`
+    - actions `Appliquer` / `Reinitialiser`
+  - fallback mobile only:
+    - drawer filtre dedie (`Sheet`) pour petits ecrans
+  - logique filtre preservee:
+    - presets instantanes
+    - custom via `Appliquer`
+    - reset `/?preset=total`
+- Uniformisation KPI conservee:
+  - cards KPI gardent le style standard des cards dashboard (fond blanc, bordure legere, ombre douce)
+- Documentation mise a jour:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/ROADMAP.md` (`F4.9` ajoute)
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/DECISIONS.md` (D-026)
+
+### Verifications executees
+
+- `npm run lint`: OK
+- `npm run typecheck`: OK
+- `npm run build`: OK
+- `npm run test:f2.0`: OK
+
+### Perimetre / limites
+
+- Aucun changement SQL/migration.
+- Aucun changement du contrat data dashboard.
+- Aucune ecriture DB distante.
+
+## 2026-02-20 - Dashboard V3.2.1 (uniformisation KPI + filtre popover horizontal gauche)
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/dashboard/DashboardExecutiveView.tsx`:
+  - suppression du style KPI pastel/gradient
+  - cards KPI alignees sur le style des autres cards dashboard (`MinimalCardButton`: fond blanc, bordure legere, ombre douce)
+  - popover filtre repositionne a gauche du bouton `Filtrer` (`side=left`)
+  - contenu du popover refondu en layout horizontal:
+    - colonne presets/timeline
+    - colonne actions + mode custom
+  - presets instantanes, mode custom et reset `/?preset=total` conserves
+- Documentation mise a jour:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/ROADMAP.md` (`F4.8` ajoute)
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/DECISIONS.md` (D-025)
+
+### Verifications executees
+
+- `npm run lint`: OK
+- `npm run typecheck`: OK
+- `npm run build`: OK
+- `npm run test:f2.0`: OK
+
+### Perimetre / limites
+
+- Aucun changement SQL/migration.
+- Aucun changement du contrat data dashboard.
+- Aucune ecriture DB distante.
+
+## 2026-02-20 - Dashboard V3.2 (KPI unitaires, filtre inline, bento trend-dominant)
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Mise a jour UI dashboard dans `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/dashboard/DashboardExecutiveView.tsx`:
+  - suppression du wrapper global "Sante financiere"
+  - rendu direct des KPI: `1 KPI = 1 card`
+  - suppression du contour visuel dur des cards KPI (style pastel + ring leger)
+  - densite KPI desktop fixee a 5 colonnes
+  - remplacement du filtre `Sheet` lateral par un `Popover` compact dans le header
+  - presets temps en application instantanee (`Total`, `12m`, `90j`, `30j`, `7j`)
+  - mode `custom` conserve via `from/to` + bouton `Appliquer`
+  - reset filtre sur `/?preset=total`
+  - grille bento refondue en mode trend-dominant:
+    - tendances en bloc majeur (`col-span-8`, `row-span-2` sur XL)
+    - blocs secondaires repartis en tailles variees
+  - previews condensees:
+    - hauteurs graphiques reduites en dashboard
+    - legendes masquees en preview
+  - modales detaillees conservees au clic sur toute card
+- Aucun changement du contrat data dashboard (`dashboard.v3`) ni des query params publics (`preset/from/to`).
+
+### Verifications executees
+
+- Gates techniques:
+  - `npm run lint`: OK
+  - `npm run typecheck`: OK
+  - `npm run build`: OK
+  - `npm run test:f2.0`: OK
+
+### Perimetre / limites
+
+- Aucun changement SQL/migration.
+- Aucune ecriture DB distante.
+- Ajustements limites au perimetre UX/UI dashboard.
+
+## 2026-02-20 - Dashboard V3.1 (ajustements UX/UI cibles: cards compactes, filtres drawer, preset total)
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Evolution data dashboard dans `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/lib/dashboard.ts`:
+  - `DashboardPreset` officiel: `total|7|30|90|12m|custom`
+  - fallback canonique par defaut vers `preset=total` (plus d'alias legacy vers `30`)
+  - `total` calcule sur l'historique reel:
+    - debut = plus ancienne date business exploitable (`sales.status=CONFIRMED` et `lots.status=confirmed`)
+    - fin = date de reference courante
+  - `activeBucket` et `stackedBucket` resolves sur la plage effective (y compris `total`)
+- Canonicalisation SSR de `/` dans `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/page.tsx`:
+  - `/` redirige vers `/?preset=total`
+  - `preset` invalide redirige vers `/?preset=total`
+  - `custom` conserve la normalisation stricte `from/to` (invalides ignores, permutation auto, borne unique => plage 1 jour)
+- Refonte UI dashboard dans `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/dashboard/DashboardExecutiveView.tsx`:
+  - titre principal: `DASHBOARD`
+  - suppression des chips de filtres visibles en header
+  - bouton `Filtrer` ouvrant un drawer lateral droit (`Sheet`)
+  - timeline discrete de presets dans le drawer: `Total`, `12m`, `90j`, `30j`, `7j` + mode `custom`
+  - layout bento compact des blocs 2->5 (plus de sections longues empilees)
+  - suppression des boutons `Agrandir`
+  - ouverture des modales au clic sur toute la card
+  - modale KPI: valeur KPI visible en tete, formule retiree de l'affichage
+  - modale bloc 3: UX focalisee par vue (`Graphique`, `Tableau`, `Camembert`) avec vue initiale selon la card cliquee
+- Ajustements composants dashboard:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/dashboard/DashboardHubCharts.tsx`:
+    - variantes compactes des charts pour previews cards
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/dashboard/DashboardModal.tsx`:
+    - support trigger optionnel + mode controle (`open`, `onOpenChange`)
+    - animation overlay + scale dashboard-only conservee
+- Documentation mise a jour:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/ROADMAP.md` (ajout F4.6 `FAIT`)
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/DECISIONS.md` (D-023)
+
+### Verifications executees
+
+- Pre-check local:
+  - `npx supabase --version`: OK (`2.65.10`)
+  - `docker info --format '{{.ServerVersion}}'`: OK (`29.2.0`)
+  - `npx supabase status`: OK
+  - `npx supabase start`: OK
+- Rejouabilite DB locale:
+  - `npx supabase db reset --local`: OK
+  - note: un premier reset a remonte un etat transitoire `supabase_storage ... unhealthy`; un second run immediat a passe completement.
+- Gates techniques:
+  - `npm run lint`: OK
+  - `npm run typecheck`: OK
+  - `npm run build`: OK
+  - `npm run test:f2.0`: OK (inclut checks SQL F1.3/F1.4/F1.5/F1.6/F1.7 + coherence inventory/PURCHASE)
+
+### Perimetre / limites
+
+- Aucun changement de schema SQL (aucune migration ajoutee).
+- Aucune ecriture sur DB distante.
+- Scope cible V3.1 respecte: UX/UI dashboard uniquement, sans derive F4.4+.
+
+## 2026-02-19 - Dashboard V3 (refonte stricte vision produit: KPI + blocs + modales etendues)
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Refonte complete de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/page.tsx`:
+  - abandon du layout V2 au profit de la composition V3 stricte en 5 blocs
+  - branchement serveur sur `getDashboardExecutiveData(...)` + canonicalisation SSR via `normalizeDashboardExecutiveQuery(...)`
+  - contrat URL applique:
+    - `preset=7|30|90|12m|custom`
+    - support legacy `preset=total` redirige en canonique `preset=30`
+    - `from/to` invalides ignores, permutation auto si bornes inversees, plage 1 jour en custom si borne unique
+- Ajout d'une vue client dediee `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/dashboard/DashboardExecutiveView.tsx`:
+  - bloc 1: 11 KPI finances/operations
+  - bloc 2: tendances temporelles (courbes CA+marge + histogramme empile sets/pieces)
+  - bloc 3: comparaison sets vs pieces (grouped chart CA/marge/taux + tableau + pie 2 segments)
+  - bloc 4: pilotage achats/stock (histogramme mensuel + tendance)
+  - bloc 5: opportunites catalogue (top completion exploitable)
+  - suppression explicite des sections `Alertes actionnables` et `Drilldowns rapides`
+- Ajout d'une modale dashboard-only `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/dashboard/DashboardModal.tsx`:
+  - overlay fondu `opacity 0 -> 0.5`
+  - modale centree avec `opacity 0 -> 1` et `scale 0.95 -> 1`
+  - duree `150ms`, easing `ease-out`, fermeture inverse
+- Refonte des graphiques Recharts `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/dashboard/DashboardHubCharts.tsx`:
+  - courbes duales CA/Marge + courbes optionnelles modal
+  - histogrammes empiles/groupes
+  - pie Sets/Pieces 2 segments
+  - series KPI miniatures pour modales KPI
+- Extension/alignement data dashboard V3 dans `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/lib/dashboard.ts` (v1 conservee):
+  - preset `12m` (`365j glissants`)
+  - formules verrouillees:
+    - rotation stock = `CA periode / stock moyen (ouverture+cloture)/2`
+    - immobilisation = `stock actuel / CA cumule 12 mois`
+    - cout moyen piece achetee sur periode active
+  - robustesse `partial=true` et rendu `—` cote UI si valeur non interpretable
+
+### Verifications executees
+
+- Pre-check local:
+  - `npx supabase --version`: OK (`2.65.10`)
+  - `docker info --format '{{.ServerVersion}}'`: OK (`29.2.0`)
+  - `npx supabase status`: OK (stack locale active)
+  - `npx supabase start`: OK (stack deja active)
+- Rejouabilite DB locale:
+  - `npx supabase db reset --local`: OK (migrations F1.x + seed appliques)
+- Gates techniques:
+  - `npm ci`: OK
+  - `npm run lint`: OK
+  - `npm run typecheck`: OK
+  - `npm run build`: OK
+  - `npm run test:f2.0`: OK
+- Verifications SQL post-implementation (via `test:f2.0`):
+  - anti-stock negatif actif (F1.3)
+  - anti-doublon actif (F1.4)
+  - `stock_balance.quantity < 0`: aucune ligne
+  - vues `stock_per_piece`, `stock_journal`, `piece_movements`: lisibles
+  - `healthcheck_business_anomalies_v1`: execution OK (`0` anomalie sur seed local)
+  - coherence lots confirmes (`inventory` vs `PURCHASE/IN`): OK
+
+### Perimetre / limites
+
+- Aucun changement de schema SQL (aucune migration ajoutee).
+- Aucune ecriture sur DB distante.
+- Scope strict dashboard V3 sur `/` (pas de nouveaux ecrans analytiques dedies).
+
+## 2026-02-19 - Dashboard V2 Hub analytique (profit/cash + drilldowns)
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Refonte complete de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/page.tsx`:
+  - remplacement du dashboard minimal F4.2 par un hub analytique dense
+  - contrat URL canonique `preset/from/to`:
+    - presets `total|90|30|7|custom`
+    - canonicalisation SSR (dates invalides ignorees, permutation auto si `from > to`, `from/to` force `preset=custom`)
+  - filtres globaux:
+    - chips rapides (`Total`, `90j`, `30j`, `7j`)
+    - plage libre `from/to`
+  - 8 KPI cliquables avec details metier + drilldowns:
+    - CA net
+    - marge nette
+    - taux de marge
+    - commandes confirmees
+    - panier moyen
+    - cout approvisionnements
+    - valeur stock
+    - rotation stock (proxy)
+  - blocs analytiques:
+    - trend business (CA net, marge nette, cout des ventes)
+    - mix ventes (canal + type SET/PIECE)
+    - bridge profit (CA -> cout ventes -> marge)
+    - pression flux (appro vs cout ventes)
+    - concentration stock
+    - age du stock
+    - opportunites catalogue (table compacte)
+    - alertes actionnables (qualite + anomalies metier)
+  - drilldowns rapides vers pages existantes:
+    - `/approvisionnement`
+    - `/ventes`
+    - `/stock`
+    - `/catalogue`
+  - gestion explicite de `partial=true` conservee (bandeau + cartes en `—` si donnee partielle)
+- Extension data en conservant la compatibilite v1 dans `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/lib/dashboard.ts`:
+  - ajout contrat `dashboard.v2`:
+    - `DashboardPreset`
+    - `DashboardHubFilters`
+    - `DashboardComparisonMetric`
+    - `DashboardKpiCard`
+    - `DashboardSeriesPoint`
+    - `DashboardBreakdownRow`
+    - `DashboardAlertItem`
+    - `DashboardHubData`
+  - ajout `normalizeDashboardHubQuery(...)` et `getDashboardHubData(...)`
+  - calcul des comparaisons vs periode precedente equivalente (quand applicable)
+  - consolidation multi-sources sans migration SQL:
+    - `sales`
+    - `lots`
+    - `stock_per_piece`
+    - `stock_journal`
+    - `sold_pieces_journal`
+    - `set_with_completion`
+    - `healthcheck_business_anomalies_v1`
+- Ajout des composants Recharts dans `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/dashboard/DashboardHubCharts.tsx`:
+  - `TrendBusinessChart`
+  - `SalesMixChart`
+  - `ProfitBridgeChart`
+  - `FlowPressureChart`
+  - `StockConcentrationChart`
+  - `StockAgeDonutChart`
+- Mise a jour dependances:
+  - ajout `recharts` dans `package.json` + lockfile regenere
+- Mise a jour roadmap:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/ROADMAP.md` (`F4.3` passe a `FAIT`, `F4.4` cree pour phase B)
+
+### Verifications executees
+
+- Pre-check environnement local:
+  - `npx supabase --version`: OK (`2.65.10`)
+  - `docker info --format '{{.ServerVersion}}'`: OK (`29.2.0`)
+  - `npx supabase status`: OK (stack locale active)
+  - `npx supabase start`: OK (stack deja active)
+- Rejouabilite DB locale:
+  - `npx supabase db reset --local`: OK (migrations F1.x + seed appliques)
+- Gates techniques:
+  - `npm ci`: OK
+  - `npm run lint`: OK
+  - `npm run typecheck`: OK
+  - `npm run build`: OK
+  - `npm run test:f2.0`: OK
+- Verifications SQL post-implementation (via `test:f2.0`):
+  - anti-stock negatif actif (F1.3)
+  - anti-doublon actif (F1.4)
+  - `stock_balance.quantity < 0`: aucune ligne
+  - vues `stock_per_piece`, `stock_journal`, `piece_movements`: lisibles
+  - `healthcheck_business_anomalies_v1`: execution OK (`0` anomalie sur seed local)
+  - coherence lots confirmes (`inventory` vs `PURCHASE/IN`): OK
+
+### Perimetre / limites
+
+- Aucun changement de schema SQL (aucune migration ajoutee).
+- Aucune ecriture sur DB distante.
+- Scope livre = phase A du dashboard V2 (hub + drilldowns), phase B avancee conservee hors scope (`F4.4`).
+
 ## 2026-02-12 - F0.1 Standardiser les scripts qualite
 
 Statut: `FAIT`
@@ -1698,3 +2139,75 @@ Statut: `FAIT`
 - Aucune ecriture sur DB distante.
 - Aucun changement F4.2/F4.3+.
 - `docs/DECISIONS.md` non modifie (pas de decision structurante supplementaire formalisee dans cette livraison).
+
+## 2026-02-19 - F4.2 Remplacer le placeholder dashboard `/`
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Reecriture complete de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/page.tsx`:
+  - suppression de tous les placeholders statiques/fictifs
+  - route dynamique forcee (`dynamic = "force-dynamic"`)
+  - contrat URL canonique sur `/`:
+    - params supportes `from`, `to` uniquement
+    - normalisation `YYYY-MM-DD` + inversion auto `from > to`
+    - redirection SSR vers URL canonique (suppression params hors contrat)
+  - branchement DB reel via:
+    - `getDashboardData(...)`
+    - client serveur `supabaseServer`
+  - rendu des 4 KPI consolides reels:
+    - `CA net`
+    - `Marge nette`
+    - `Valeur stock`
+    - `Cout approvisionnements`
+  - cards KPI cliquables (details F4.2):
+    - definition metier
+    - periode active
+    - scope de calcul
+    - etat qualite + issue eventuelle
+    - renvoi explicite au filtre global `from/to`
+  - filtre periode global partage (panneau `Filtrer`, `Du/Au`, `Appliquer`, `Reinitialiser`)
+  - gestion explicite des donnees partielles:
+    - bandeau visible si `partial=true`
+    - mapping des `issues` en messages metier
+    - affichage `—` sur KPI partiel (pas de faux `0`)
+  - ajout des acces rapides vers:
+    - `/approvisionnement`
+    - `/ventes`
+    - `/stock`
+    - `/catalogue`
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/ROADMAP.md`:
+  - `F4.2` passe de `A FAIRE` a `FAIT`
+  - livrables F4.2 detailles
+
+### Verifications executees
+
+- Pre-check local:
+  - `npx supabase --version`: OK (`2.65.10`)
+  - `docker info --format '{{.ServerVersion}}'`: OK (`29.2.0`)
+  - `npx supabase status`: OK (stack locale active)
+- Validation DB locale:
+  - `npx supabase start`: OK (stack deja active)
+  - `npx supabase db reset --local`: OK (migrations F1.1/F1.3/F1.4/F1.5/F1.6/F1.7 + seed)
+- Gates techniques:
+  - `npm ci`: OK (`found 0 vulnerabilities`)
+  - `npm run lint`: OK
+  - `npm run typecheck`: OK
+  - `npm run build`: OK
+    - route dashboard racine compilee en SSR dynamique (`ƒ /`)
+  - `npm run test:f2.0`: OK (S1..S12 + checks F1.3/F1.4/F1.5)
+    - note scenario S8: log attendu de conflit `lots_lot_code_key` (cas rollback), puis scenario valide
+- Verifications SQL post-implementation (via `npm run test:f2.0`):
+  - `stock_balance.quantity < 0`: `0`
+  - vues lisibles: `stock_per_piece`, `stock_journal`, `piece_movements`
+  - `healthcheck_business_anomalies_v1`: `0`
+  - coherence `inventory` vs `PURCHASE/IN` pour lots confirmes: OK
+
+### Perimetre / limites
+
+- Aucun changement SQL/migration/seed dans F4.2.
+- Aucune ecriture sur DB distante.
+- Aucun changement F4.3+ (pas de visualisations/tendances/split avances).
+- `docs/DECISIONS.md` non modifie (aucune decision structurante supplementaire).
+- Validation UI HTTP automatisee sur `npm run dev` non executable dans le sandbox actuel (`listen EPERM`); controles manuels `npm run dev` requis pour les scenarios UX finaux.
