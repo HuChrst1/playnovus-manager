@@ -440,6 +440,30 @@ Derniere mise a jour: 2026-02-20
     - contrat `dashboard.v3` inchangé
     - query params `preset/from/to` inchangés
 
+### D-030 - F4.4 phase B: axes analytiques verrouilles (projection cash/profit, cohorte canal, appro par canal, rotation theme)
+
+- Statut: validee
+- Constat:
+  - la priorite metier est la decision achat rapide via projection cash/profit, pas une lecture uniquement descriptive
+  - l'axe "fournisseur" devait rester exploitable sans taxonomie rigide, en reutilisant les libelles operationnels existants
+  - la rotation fine devait etre alignee sur la famille produit la plus lisible cote business (`theme` set)
+  - les blocs masques en cas de donnees faibles reduisent la confiance et degradent la lisibilite decisionnelle
+- Impact:
+  - projections F4.4 standardisees:
+    - horizons 30j et 90j
+    - signal global achat `ACCELERER|STABLE|FREINER`
+  - cohortes avancees alignees sur `sales.sales_channel` (classement contribution marge puis CA)
+  - lead-time d'approvisionnement calcule par canal `lots.supplier` (normalisation trim/casse sans taxonomie imposee)
+  - rotation fine par famille alignee sur `sets_catalog.theme`
+  - politique explicite d'insuffisance de donnees:
+    - sections conservees visibles
+    - message explicite `manque de donnees pour formuler une analyse fiable`
+    - valeurs non fiables en `—`
+  - contraintes de compatibilite conservees:
+    - contrat `dashboard.v3` additif uniquement
+    - query params `preset/from/to` inchanges
+    - aucune migration SQL imposee par F4.4
+
 ## Hypothèses / décisions en attente
 
 ### H-002 - Politique d'authentification applicative

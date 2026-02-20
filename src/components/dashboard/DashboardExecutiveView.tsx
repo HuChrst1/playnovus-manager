@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Filter, TriangleAlert } from "lucide-react";
+import { Filter } from "lucide-react";
 import {
   DASHBOARD_EXECUTIVE_ISSUE_MESSAGES,
+  type DashboardActionSignal,
   type DashboardExecutiveData,
+  type DashboardExecutiveIssueCode,
   type DashboardFinancialKpi,
   type DashboardFinancialKpiKey,
   type DashboardPreset,
@@ -47,6 +49,11 @@ const integer = new Intl.NumberFormat("fr-FR", {
   maximumFractionDigits: 0,
 });
 
+const decimal = new Intl.NumberFormat("fr-FR", {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 1,
+});
+
 const FILTER_TIMELINE: Array<{ preset: Exclude<DashboardPreset, "custom">; label: string }> = [
   { preset: "total", label: "Total" },
   { preset: "12m", label: "12m" },
@@ -69,6 +76,50 @@ type KpiSeriesMetric =
   | "averageBasket"
   | "stockRotation"
   | "immobilizationRate";
+
+const PROCUREMENT_BLOCK_ISSUE_CODES = new Set<DashboardExecutiveIssueCode>([
+  "FORECAST_UNAVAILABLE",
+  "FORECAST_DATA_INSUFFICIENT",
+  "CHANNEL_COHORTS_UNAVAILABLE",
+  "CHANNEL_COHORTS_DATA_INSUFFICIENT",
+  "SOURCING_LEAD_TIME_UNAVAILABLE",
+  "SOURCING_LEAD_TIME_DATA_INSUFFICIENT",
+  "THEME_ROTATION_UNAVAILABLE",
+  "THEME_ROTATION_DATA_INSUFFICIENT",
+]);
+
+const INSUFFICIENT_ANALYSIS_MESSAGE = "manque de données pour formuler une analyse fiable";
+
+function formatCurrencyOrDash(value: number | null): string {
+  if (value === null) return "—";
+  return euro.format(value);
+}
+
+function formatPercentOrDash(value: number | null): string {
+  if (value === null) return "—";
+  return `${percent.format(value)} %`;
+}
+
+function formatDecimalOrDash(value: number | null, suffix = ""): string {
+  if (value === null) return "—";
+  return `${decimal.format(value)}${suffix}`;
+}
+
+function signalLabel(signal: DashboardActionSignal): string {
+  if (signal === "ACCELERER") return "ACCELERER";
+  if (signal === "FREINER") return "FREINER";
+  return "STABLE";
+}
+
+function signalClassName(signal: DashboardActionSignal): string {
+  if (signal === "ACCELERER") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+  if (signal === "FREINER") {
+    return "border-rose-200 bg-rose-50 text-rose-700";
+  }
+  return "border-amber-200 bg-amber-50 text-amber-700";
+}
 
 function toPeriodParams(filters: DashboardExecutiveData["filters"]): URLSearchParams {
   const params = new URLSearchParams();
@@ -189,6 +240,29 @@ function MinimalCardButton({
       </div>
       <div className="min-h-0 flex-1">{children}</div>
     </button>
+  );
+}
+
+function ActionSignalPill({ signal }: { signal: DashboardActionSignal }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em]",
+        signalClassName(signal)
+      )}
+    >
+      {signalLabel(signal)}
+    </span>
+  );
+}
+
+function InsufficientAnalysisNotice({ show }: { show: boolean }) {
+  if (!show) return null;
+
+  return (
+    <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+      {INSUFFICIENT_ANALYSIS_MESSAGE}
+    </p>
   );
 }
 
@@ -610,33 +684,323 @@ function SetPieceModalBody({
 
 function ProcurementModalBody({ dashboard }: { dashboard: DashboardExecutiveData }) {
   const [showSales, setShowSales] = useState(true);
+  const forecast = dashboard.forecast;
+  const cohorts = dashboard.salesChannelCohorts;
+  const leadTime = dashboard.sourcingChannelLeadTime;
+  const themeRotation = dashboard.themeRotation;
 
   return (
-    <div className="space-y-4">
-      <label className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700">
-        <input
-          type="checkbox"
-          checked={showSales}
-          onChange={(event) => setShowSales(event.target.checked)}
-          className="h-3.5 w-3.5"
-        />
-        Afficher la correlation avec les ventes mensuelles
-      </label>
+    <div className="space-y-5">
+      <div className="grid gap-3 md:grid-cols-[1fr_auto_auto] md:items-center">
+        <label className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700">
+          <input
+            type="checkbox"
+            checked={showSales}
+            onChange={(event) => setShowSales(event.target.checked)}
+            className="h-3.5 w-3.5"
+          />
+          Afficher la correlation avec les ventes mensuelles
+        </label>
+
+        <div className="flex justify-start md:justify-center">
+          <ActionSignalPill signal={forecast.signal} />
+        </div>
+
+        <div className="flex justify-start gap-2 md:justify-end">
+          <Link
+            href={toSalesHref(dashboard.filters)}
+            className="inline-flex h-9 items-center rounded-full border border-slate-200 px-4 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50"
+          >
+            Ouvrir ventes
+          </Link>
+          <Link
+            href={toProcurementHref(dashboard.filters)}
+            className="inline-flex h-9 items-center rounded-full border border-slate-200 px-4 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50"
+          >
+            Ouvrir approvisionnements
+          </Link>
+        </div>
+      </div>
 
       <ProcurementMonthlyChart
         points={dashboard.procurementStockSeries.points}
         showSalesCorrelation={showSales}
-        height={360}
+        height={320}
       />
 
-      <div className="flex justify-end">
-        <Link
-          href={toProcurementHref(dashboard.filters)}
-          className="inline-flex h-9 items-center rounded-full border border-slate-200 px-4 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50"
-        >
-          Ouvrir approvisionnements
-        </Link>
+      <section className="space-y-3 rounded-2xl border border-slate-100 bg-white p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+              Projection cash / profit
+            </p>
+            <p className="text-sm text-slate-700">{forecast.signalReason}</p>
+          </div>
+          <ActionSignalPill signal={forecast.signal} />
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-3">
+          <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-xs">
+            <p className="text-slate-500">Proj. CA net 30j</p>
+            <p className="font-semibold text-slate-900">
+              {formatCurrencyOrDash(forecast.projections.d30.projectedNetRevenue)}
+            </p>
+          </div>
+          <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-xs">
+            <p className="text-slate-500">Proj. marge nette 30j</p>
+            <p className="font-semibold text-slate-900">
+              {formatCurrencyOrDash(forecast.projections.d30.projectedNetMargin)}
+            </p>
+          </div>
+          <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-xs">
+            <p className="text-slate-500">Couverture stock (jours)</p>
+            <p className="font-semibold text-slate-900">
+              {formatDecimalOrDash(forecast.stockCoverageDays, " j")}
+            </p>
+          </div>
+        </div>
+
+        <div className="overflow-auto rounded-2xl border border-slate-100">
+          <table className="min-w-full text-sm">
+            <thead className="bg-slate-50 text-[11px] uppercase tracking-[0.14em] text-slate-500">
+              <tr>
+                <th className="px-3 py-2 text-left">Horizon</th>
+                <th className="px-3 py-2 text-right">CA projete</th>
+                <th className="px-3 py-2 text-right">Marge projetee</th>
+                <th className="px-3 py-2 text-right">Ventes observees</th>
+                <th className="px-3 py-2 text-right">Jours actifs</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[forecast.projections.d30, forecast.projections.d90].map((row) => (
+                <tr key={row.horizonDays} className="border-t border-slate-100 bg-white">
+                  <td className="px-3 py-2 font-medium text-slate-900">{row.horizonDays} jours</td>
+                  <td className="px-3 py-2 text-right text-slate-700">
+                    {formatCurrencyOrDash(row.projectedNetRevenue)}
+                  </td>
+                  <td className="px-3 py-2 text-right text-slate-700">
+                    {formatCurrencyOrDash(row.projectedNetMargin)}
+                  </td>
+                  <td className="px-3 py-2 text-right text-slate-700">
+                    {integer.format(row.observedSalesCount)}
+                  </td>
+                  <td className="px-3 py-2 text-right text-slate-700">
+                    {integer.format(row.daysWithSales)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <InsufficientAnalysisNotice show={forecast.quality === "partial"} />
+      </section>
+
+      <section className="space-y-3 rounded-2xl border border-slate-100 bg-white p-4">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+          Cohortes canaux ventes
+        </p>
+        {cohorts.rows.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-3 text-sm text-slate-500">
+            Aucune cohorte exploitable sur la periode.
+          </p>
+        ) : (
+          <div className="overflow-auto rounded-2xl border border-slate-100">
+            <table className="min-w-full text-sm">
+              <thead className="bg-slate-50 text-[11px] uppercase tracking-[0.14em] text-slate-500">
+                <tr>
+                  <th className="px-3 py-2 text-left">Canal</th>
+                  <th className="px-3 py-2 text-right">Commandes</th>
+                  <th className="px-3 py-2 text-right">CA net</th>
+                  <th className="px-3 py-2 text-right">Marge</th>
+                  <th className="px-3 py-2 text-right">Tx marge</th>
+                  <th className="px-3 py-2 text-right">Panier</th>
+                  <th className="px-3 py-2 text-right">Part CA</th>
+                  <th className="px-3 py-2 text-right">Part marge</th>
+                  <th className="px-3 py-2 text-right">Mix sets/pieces</th>
+                </tr>
+              </thead>
+              <tbody>
+                {cohorts.rows.map((row) => (
+                  <tr key={row.key} className="border-t border-slate-100 bg-white">
+                    <td className="px-3 py-2 font-medium text-slate-900">{row.channel}</td>
+                    <td className="px-3 py-2 text-right text-slate-700">
+                      {integer.format(row.ordersCount)}
+                    </td>
+                    <td className="px-3 py-2 text-right text-slate-700">{euro.format(row.netRevenue)}</td>
+                    <td className="px-3 py-2 text-right text-slate-700">{euro.format(row.netMargin)}</td>
+                    <td className="px-3 py-2 text-right text-slate-700">
+                      {formatPercentOrDash(row.marginRate)}
+                    </td>
+                    <td className="px-3 py-2 text-right text-slate-700">
+                      {formatCurrencyOrDash(row.averageBasket)}
+                    </td>
+                    <td className="px-3 py-2 text-right text-slate-700">
+                      {formatPercentOrDash(row.revenueShare)}
+                    </td>
+                    <td className="px-3 py-2 text-right text-slate-700">
+                      {formatPercentOrDash(row.marginShare)}
+                    </td>
+                    <td className="px-3 py-2 text-right text-slate-700">
+                      {formatPercentOrDash(row.setMixRate)} / {formatPercentOrDash(row.pieceMixRate)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <InsufficientAnalysisNotice show={cohorts.quality === "partial"} />
+      </section>
+
+      <section className="space-y-3 rounded-2xl border border-slate-100 bg-white p-4">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+          Lead-time canaux d'approvisionnement
+        </p>
+        {leadTime.rows.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-3 text-sm text-slate-500">
+            Aucun lot exploitable sur la periode.
+          </p>
+        ) : (
+          <div className="overflow-auto rounded-2xl border border-slate-100">
+            <table className="min-w-full text-sm">
+              <thead className="bg-slate-50 text-[11px] uppercase tracking-[0.14em] text-slate-500">
+                <tr>
+                  <th className="px-3 py-2 text-left">Canal d'appro</th>
+                  <th className="px-3 py-2 text-right">Lots observes</th>
+                  <th className="px-3 py-2 text-right">Lots vendus</th>
+                  <th className="px-3 py-2 text-right">Lots non vendus</th>
+                  <th className="px-3 py-2 text-right">Mediane</th>
+                  <th className="px-3 py-2 text-right">P75</th>
+                </tr>
+              </thead>
+              <tbody>
+                {leadTime.rows.map((row) => (
+                  <tr key={row.key} className="border-t border-slate-100 bg-white">
+                    <td className="px-3 py-2 font-medium text-slate-900">{row.channel}</td>
+                    <td className="px-3 py-2 text-right text-slate-700">
+                      {integer.format(row.observedLots)}
+                    </td>
+                    <td className="px-3 py-2 text-right text-slate-700">{integer.format(row.soldLots)}</td>
+                    <td className="px-3 py-2 text-right text-slate-700">
+                      {integer.format(row.unsoldLots)}
+                    </td>
+                    <td className="px-3 py-2 text-right text-slate-700">
+                      {formatDecimalOrDash(row.medianLeadTimeDays, " j")}
+                    </td>
+                    <td className="px-3 py-2 text-right text-slate-700">
+                      {formatDecimalOrDash(row.p75LeadTimeDays, " j")}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <InsufficientAnalysisNotice show={leadTime.quality === "partial"} />
+      </section>
+
+      <section className="space-y-3 rounded-2xl border border-slate-100 bg-white p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+            Rotation par theme
+          </p>
+          <Link
+            href="/catalogue"
+            className="inline-flex h-8 items-center rounded-full border border-slate-200 px-3 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50"
+          >
+            Ouvrir catalogue
+          </Link>
+        </div>
+        {themeRotation.rows.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-3 text-sm text-slate-500">
+            Aucune rotation exploitable sur la periode.
+          </p>
+        ) : (
+          <div className="overflow-auto rounded-2xl border border-slate-100">
+            <table className="min-w-full text-sm">
+              <thead className="bg-slate-50 text-[11px] uppercase tracking-[0.14em] text-slate-500">
+                <tr>
+                  <th className="px-3 py-2 text-left">Theme</th>
+                  <th className="px-3 py-2 text-right">Cmd sets</th>
+                  <th className="px-3 py-2 text-right">Unites</th>
+                  <th className="px-3 py-2 text-right">CA net</th>
+                  <th className="px-3 py-2 text-right">Marge</th>
+                  <th className="px-3 py-2 text-right">Vitesse hebdo</th>
+                  <th className="px-3 py-2 text-right">Couverture sets</th>
+                  <th className="px-3 py-2 text-right">Couverture sem.</th>
+                  <th className="px-3 py-2 text-right">Signal</th>
+                </tr>
+              </thead>
+              <tbody>
+                {themeRotation.rows.map((row) => (
+                  <tr key={row.key} className="border-t border-slate-100 bg-white">
+                    <td className="px-3 py-2 font-medium text-slate-900">{row.theme}</td>
+                    <td className="px-3 py-2 text-right text-slate-700">{integer.format(row.setOrders)}</td>
+                    <td className="px-3 py-2 text-right text-slate-700">{integer.format(row.soldUnits)}</td>
+                    <td className="px-3 py-2 text-right text-slate-700">{euro.format(row.netRevenue)}</td>
+                    <td className="px-3 py-2 text-right text-slate-700">{euro.format(row.netMargin)}</td>
+                    <td className="px-3 py-2 text-right text-slate-700">
+                      {formatDecimalOrDash(row.weeklyVelocity)}
+                    </td>
+                    <td className="px-3 py-2 text-right text-slate-700">
+                      {integer.format(row.stockCoverageSets)}
+                    </td>
+                    <td className="px-3 py-2 text-right text-slate-700">
+                      {formatDecimalOrDash(row.coverageWeeks)}
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      <ActionSignalPill signal={row.signal} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <InsufficientAnalysisNotice show={themeRotation.quality === "partial"} />
+      </section>
+    </div>
+  );
+}
+
+function ProcurementPreview({
+  dashboard,
+  isProcurementBlockPartial,
+}: {
+  dashboard: DashboardExecutiveData;
+  isProcurementBlockPartial: boolean;
+}) {
+  const forecast = dashboard.forecast;
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
+        <span className="text-xs text-slate-500">Signal achat</span>
+        <ActionSignalPill signal={forecast.signal} />
       </div>
+      <div className="grid gap-2 sm:grid-cols-3">
+        <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
+          <p className="text-[11px] text-slate-500">CA 30j</p>
+          <p className="text-sm font-semibold text-slate-900">
+            {formatCurrencyOrDash(forecast.projections.d30.projectedNetRevenue)}
+          </p>
+        </div>
+        <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
+          <p className="text-[11px] text-slate-500">Marge 30j</p>
+          <p className="text-sm font-semibold text-slate-900">
+            {formatCurrencyOrDash(forecast.projections.d30.projectedNetMargin)}
+          </p>
+        </div>
+        <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
+          <p className="text-[11px] text-slate-500">Couverture</p>
+          <p className="text-sm font-semibold text-slate-900">
+            {formatDecimalOrDash(forecast.stockCoverageDays, " j")}
+          </p>
+        </div>
+      </div>
+      {isProcurementBlockPartial ? (
+        <p className="text-[10px] text-slate-500">Donnees partielles (bloc achats/stock)</p>
+      ) : null}
     </div>
   );
 }
@@ -752,6 +1116,12 @@ export function DashboardExecutiveView({ dashboard }: { dashboard: DashboardExec
   const stackedPoints = dashboard.stackedSalesSeries.byBucket[dashboard.stackedSalesSeries.defaultBucket];
   const groupedPoints =
     dashboard.setPieceComparison.groupedByBucket[dashboard.setPieceComparison.defaultBucket];
+  const isProcurementBlockPartial =
+    dashboard.forecast.quality === "partial" ||
+    dashboard.salesChannelCohorts.quality === "partial" ||
+    dashboard.sourcingChannelLeadTime.quality === "partial" ||
+    dashboard.themeRotation.quality === "partial" ||
+    dashboard.issues.some((issue) => PROCUREMENT_BLOCK_ISSUE_CODES.has(issue));
 
   const applyFilters = () => {
     router.push(
@@ -878,20 +1248,6 @@ export function DashboardExecutiveView({ dashboard }: { dashboard: DashboardExec
         </div>
       </header>
 
-      {dashboard.partial && (
-        <section className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
-          <p className="inline-flex items-center gap-2 font-medium">
-            <TriangleAlert className="h-4 w-4" />
-            Donnees partielles detectees sur le dashboard.
-          </p>
-          <ul className="mt-2 space-y-1 text-xs">
-            {dashboard.issues.map((issue) => (
-              <li key={issue}>- {DASHBOARD_EXECUTIVE_ISSUE_MESSAGES[issue]}</li>
-            ))}
-          </ul>
-        </section>
-      )}
-
       <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-5">
         {dashboard.kpis.map((kpi) => {
           const actionHref = getKpiActionHref(kpi.key, dashboard.filters);
@@ -1014,19 +1370,17 @@ export function DashboardExecutiveView({ dashboard }: { dashboard: DashboardExec
           trigger={
             <MinimalCardButton
               title="Pilotage achats / stock"
-              subtitle="Histogramme mensuel + tendance"
+              subtitle="Projection cash/profit et signal achat"
               className="md:col-span-2 xl:col-span-6"
             >
-              <ProcurementMonthlyChart
-                points={dashboard.procurementStockSeries.points}
-                height={150}
-                compact
-                showLegend={false}
+              <ProcurementPreview
+                dashboard={dashboard}
+                isProcurementBlockPartial={isProcurementBlockPartial}
               />
             </MinimalCardButton>
           }
           title="Bloc 4 - Pilotage achats et stock"
-          description="Vue mensuelle des achats avec correlation ventes optionnelle."
+          description="Vue mensuelle achats + projections, cohortes, lead-time et rotation theme."
           contentClassName="w-[min(96vw,1100px)]"
         >
           <ProcurementModalBody dashboard={dashboard} />

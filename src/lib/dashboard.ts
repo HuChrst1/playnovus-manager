@@ -353,7 +353,15 @@ export type DashboardExecutiveIssueCode =
   | DashboardIssueCode
   | "STOCK_TIMELINE_UNAVAILABLE"
   | "CATALOGUE_OPPORTUNITIES_UNAVAILABLE"
-  | "IMMOBILIZATION_UNAVAILABLE";
+  | "IMMOBILIZATION_UNAVAILABLE"
+  | "FORECAST_UNAVAILABLE"
+  | "FORECAST_DATA_INSUFFICIENT"
+  | "CHANNEL_COHORTS_UNAVAILABLE"
+  | "CHANNEL_COHORTS_DATA_INSUFFICIENT"
+  | "SOURCING_LEAD_TIME_UNAVAILABLE"
+  | "SOURCING_LEAD_TIME_DATA_INSUFFICIENT"
+  | "THEME_ROTATION_UNAVAILABLE"
+  | "THEME_ROTATION_DATA_INSUFFICIENT";
 
 export type DashboardFinancialKpi = {
   key: DashboardFinancialKpiKey;
@@ -460,6 +468,97 @@ export type DashboardProcurementStockSeries = {
   points: DashboardProcurementStockPoint[];
 };
 
+export type DashboardActionSignal = "ACCELERER" | "STABLE" | "FREINER";
+
+export type DashboardForecastProjection = {
+  horizonDays: 30 | 90;
+  observedFrom: string;
+  observedTo: string;
+  observedSalesCount: number;
+  daysWithSales: number;
+  observedNetRevenue: number;
+  observedNetMargin: number;
+  projectedNetRevenue: number | null;
+  projectedNetMargin: number | null;
+  avgDailyNetRevenue: number | null;
+  avgDailyNetMargin: number | null;
+  quality: "ok" | "partial";
+  note: string | null;
+};
+
+export type DashboardForecast = {
+  quality: "ok" | "partial";
+  note: string | null;
+  signal: DashboardActionSignal;
+  signalReason: string;
+  stockCoverageDays: number | null;
+  projections: {
+    d30: DashboardForecastProjection;
+    d90: DashboardForecastProjection;
+  };
+};
+
+export type DashboardSalesChannelCohort = {
+  key: string;
+  channel: string;
+  ordersCount: number;
+  setOrders: number;
+  pieceOrders: number;
+  netRevenue: number;
+  netMargin: number;
+  marginRate: number | null;
+  averageBasket: number | null;
+  revenueShare: number | null;
+  marginShare: number | null;
+  setMixRate: number | null;
+  pieceMixRate: number | null;
+};
+
+export type DashboardSalesChannelCohorts = {
+  quality: "ok" | "partial";
+  note: string | null;
+  totalOrders: number;
+  totalRevenue: number;
+  totalMargin: number;
+  rows: DashboardSalesChannelCohort[];
+};
+
+export type DashboardSourcingChannelLeadTimeRow = {
+  key: string;
+  channel: string;
+  observedLots: number;
+  soldLots: number;
+  unsoldLots: number;
+  medianLeadTimeDays: number | null;
+  p75LeadTimeDays: number | null;
+};
+
+export type DashboardSourcingChannelLeadTime = {
+  quality: "ok" | "partial";
+  note: string | null;
+  rows: DashboardSourcingChannelLeadTimeRow[];
+};
+
+export type DashboardThemeRotationRow = {
+  key: string;
+  theme: string;
+  setOrders: number;
+  soldUnits: number;
+  netRevenue: number;
+  netMargin: number;
+  marginRate: number | null;
+  weeklyVelocity: number | null;
+  stockCoverageSets: number;
+  coverageWeeks: number | null;
+  signal: DashboardActionSignal;
+};
+
+export type DashboardThemeRotation = {
+  quality: "ok" | "partial";
+  note: string | null;
+  rows: DashboardThemeRotationRow[];
+};
+
 export type DashboardSetOpportunity = {
   key: string;
   setId: string;
@@ -504,6 +603,10 @@ export type DashboardExecutiveData = {
   stackedSalesSeries: DashboardStackedSalesSeries;
   setPieceComparison: DashboardSetPieceComparison;
   procurementStockSeries: DashboardProcurementStockSeries;
+  forecast: DashboardForecast;
+  salesChannelCohorts: DashboardSalesChannelCohorts;
+  sourcingChannelLeadTime: DashboardSourcingChannelLeadTime;
+  themeRotation: DashboardThemeRotation;
   opportunities: DashboardSetOpportunity[];
   modalConfigs: DashboardModalConfig[];
   partial: boolean;
@@ -523,19 +626,38 @@ export const DASHBOARD_EXECUTIVE_ISSUE_MESSAGES: Record<DashboardExecutiveIssueC
     "Les opportunites catalogue ne sont pas disponibles temporairement.",
   IMMOBILIZATION_UNAVAILABLE:
     "Le taux d'immobilisation n'a pas pu etre calcule.",
+  FORECAST_UNAVAILABLE: "Les projections cash/profit sont indisponibles temporairement.",
+  FORECAST_DATA_INSUFFICIENT:
+    "Projection: manque de donnees pour formuler une analyse fiable.",
+  CHANNEL_COHORTS_UNAVAILABLE:
+    "Les cohortes canal sont indisponibles temporairement.",
+  CHANNEL_COHORTS_DATA_INSUFFICIENT:
+    "Cohortes canal: manque de donnees pour formuler une analyse fiable.",
+  SOURCING_LEAD_TIME_UNAVAILABLE:
+    "Le lead-time des canaux d'approvisionnement est indisponible temporairement.",
+  SOURCING_LEAD_TIME_DATA_INSUFFICIENT:
+    "Lead-time canal d'approvisionnement: manque de donnees pour formuler une analyse fiable.",
+  THEME_ROTATION_UNAVAILABLE:
+    "La rotation par theme est indisponible temporairement.",
+  THEME_ROTATION_DATA_INSUFFICIENT:
+    "Rotation par theme: manque de donnees pour formuler une analyse fiable.",
 };
 
 type SalesHubRow = Pick<
   Tables<"sales">,
   | "id"
   | "paid_at"
+  | "sales_channel"
   | "net_seller_amount"
   | "total_margin_amount"
   | "total_cost_amount"
   | "sale_type"
 >;
 
-type LotHubRow = Pick<Tables<"lots">, "id" | "purchase_date" | "total_cost" | "total_pieces">;
+type LotHubRow = Pick<
+  Tables<"lots">,
+  "id" | "purchase_date" | "total_cost" | "total_pieces" | "supplier"
+>;
 
 type StockSnapshotRow = Pick<
   Tables<"stock_per_piece">,
@@ -557,6 +679,17 @@ type SetOpportunitySourceRow = Pick<
   | "total_parts_owned"
   | "total_parts_needed"
 >;
+
+type SoldPieceJournalHubRow = Pick<Tables<"sold_pieces_journal">, "lot_id" | "paid_at">;
+
+type SetSaleItemHubRow = Pick<
+  Tables<"sale_items">,
+  "sale_id" | "item_kind" | "set_id" | "quantity" | "net_amount" | "cost_amount" | "margin_amount"
+>;
+
+type SetCatalogThemeRow = Pick<Tables<"sets_catalog">, "id" | "theme">;
+
+type SetCoverageRow = Pick<Tables<"set_with_completion">, "id" | "theme" | "max_complete_sets">;
 
 type OldestSalesDateRow = Pick<Tables<"sales">, "paid_at">;
 type OldestLotDateRow = Pick<Tables<"lots">, "purchase_date">;
@@ -606,6 +739,8 @@ type StockTimelineResult = {
   dayCloseMap: Record<string, number>;
   hasAnomaly: boolean;
 };
+
+const INSUFFICIENT_ANALYSIS_MESSAGE = "manque de donnees pour formuler une analyse fiable";
 
 function formatDateOnly(value: string): string {
   const parsed = toUtcDateFromDateOnly(value);
@@ -820,6 +955,74 @@ function listDateRangeDays(from: string, to: string): string[] {
   return days;
 }
 
+function normalizeAnalyticLabel(
+  value: string | null | undefined,
+  fallback: string
+): {
+  key: string;
+  label: string;
+} {
+  const cleaned = (value ?? "").replace(/\s+/g, " ").trim();
+  if (!cleaned) {
+    return {
+      key: fallback.toLocaleLowerCase("fr-FR"),
+      label: fallback,
+    };
+  }
+
+  return {
+    key: cleaned.toLocaleLowerCase("fr-FR"),
+    label: cleaned,
+  };
+}
+
+function roundTo(value: number, digits: number): number {
+  const factor = 10 ** digits;
+  return Math.round(value * factor) / factor;
+}
+
+function percentile(values: number[], quantile: number): number | null {
+  if (values.length === 0) return null;
+
+  const sorted = [...values].sort((a, b) => a - b);
+  const safeQ = Math.max(0, Math.min(1, quantile));
+  const index = (sorted.length - 1) * safeQ;
+  const lower = Math.floor(index);
+  const upper = Math.ceil(index);
+
+  const lowerValue = sorted[lower] ?? 0;
+  const upperValue = sorted[upper] ?? lowerValue;
+
+  if (lower === upper) {
+    return lowerValue;
+  }
+
+  return lowerValue + (upperValue - lowerValue) * (index - lower);
+}
+
+function splitIntoChunks<T>(values: T[], chunkSize: number): T[][] {
+  if (values.length === 0) return [];
+  const safeChunkSize = Math.max(1, Math.floor(chunkSize));
+  const chunks: T[][] = [];
+  for (let index = 0; index < values.length; index += safeChunkSize) {
+    chunks.push(values.slice(index, index + safeChunkSize));
+  }
+  return chunks;
+}
+
+function parseNumericText(value: string | null | undefined): number | null {
+  const raw = (value ?? "").trim();
+  if (!raw || !/^\d+$/.test(raw)) return null;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function diffDays(valueFrom: string, valueTo: string): number {
+  const fromTs = toUtcDateFromDateOnly(valueFrom).getTime();
+  const toTs = toUtcDateFromDateOnly(valueTo).getTime();
+  return Math.floor((toTs - fromTs) / DAY_IN_MS);
+}
+
 async function loadSalesRows(
   client: SupabaseClient<Database>,
   range: DateRangeLike
@@ -832,7 +1035,7 @@ async function loadSalesRows(
     let query = client
       .from("sales")
       .select(
-        "id, paid_at, net_seller_amount, total_margin_amount, total_cost_amount, sale_type"
+        "id, paid_at, sales_channel, net_seller_amount, total_margin_amount, total_cost_amount, sale_type"
       )
       .eq("status", "CONFIRMED")
       .order("id", { ascending: true })
@@ -864,7 +1067,7 @@ async function loadLotsRows(
   while (true) {
     let query = client
       .from("lots")
-      .select("id, purchase_date, total_cost, total_pieces")
+      .select("id, purchase_date, total_cost, total_pieces, supplier")
       .eq("status", "confirmed")
       .order("id", { ascending: true })
       .range(offset, offset + AGGREGATION_PAGE_SIZE - 1);
@@ -995,6 +1198,121 @@ async function loadSetOpportunitiesRows(
 
   if (error) throw error;
   return (data ?? []) as SetOpportunitySourceRow[];
+}
+
+async function loadSoldPiecesRowsUntil(
+  client: SupabaseClient<Database>,
+  to: string
+): Promise<SoldPieceJournalHubRow[]> {
+  const rows: SoldPieceJournalHubRow[] = [];
+  let offset = 0;
+  const toIso = `${to}T23:59:59.999Z`;
+
+  while (true) {
+    const { data, error } = await client
+      .from("sold_pieces_journal")
+      .select("lot_id, paid_at")
+      .not("lot_id", "is", null)
+      .not("paid_at", "is", null)
+      .lte("paid_at", toIso)
+      .order("paid_at", { ascending: true })
+      .range(offset, offset + AGGREGATION_PAGE_SIZE - 1);
+
+    if (error) throw error;
+
+    const batch = (data ?? []) as SoldPieceJournalHubRow[];
+    rows.push(...batch);
+
+    if (batch.length < AGGREGATION_PAGE_SIZE) break;
+    offset += AGGREGATION_PAGE_SIZE;
+  }
+
+  return rows;
+}
+
+async function loadSetSaleItemsRowsBySaleIds(
+  client: SupabaseClient<Database>,
+  saleIds: number[]
+): Promise<SetSaleItemHubRow[]> {
+  if (saleIds.length === 0) return [];
+
+  const rows: SetSaleItemHubRow[] = [];
+  const uniqueIds = Array.from(new Set(saleIds));
+  const chunks = splitIntoChunks(uniqueIds, 200);
+
+  for (const chunk of chunks) {
+    let offset = 0;
+
+    while (true) {
+      const { data, error } = await client
+        .from("sale_items")
+        .select("sale_id, item_kind, set_id, quantity, net_amount, cost_amount, margin_amount")
+        .in("sale_id", chunk)
+        .eq("item_kind", "SET")
+        .order("sale_id", { ascending: true })
+        .range(offset, offset + AGGREGATION_PAGE_SIZE - 1);
+
+      if (error) throw error;
+
+      const batch = (data ?? []) as SetSaleItemHubRow[];
+      rows.push(...batch);
+
+      if (batch.length < AGGREGATION_PAGE_SIZE) break;
+      offset += AGGREGATION_PAGE_SIZE;
+    }
+  }
+
+  return rows;
+}
+
+async function loadSetCatalogThemeRows(
+  client: SupabaseClient<Database>
+): Promise<SetCatalogThemeRow[]> {
+  const rows: SetCatalogThemeRow[] = [];
+  let offset = 0;
+
+  while (true) {
+    const { data, error } = await client
+      .from("sets_catalog")
+      .select("id, theme")
+      .order("id", { ascending: true })
+      .range(offset, offset + AGGREGATION_PAGE_SIZE - 1);
+
+    if (error) throw error;
+
+    const batch = (data ?? []) as SetCatalogThemeRow[];
+    rows.push(...batch);
+
+    if (batch.length < AGGREGATION_PAGE_SIZE) break;
+    offset += AGGREGATION_PAGE_SIZE;
+  }
+
+  return rows;
+}
+
+async function loadSetCoverageRows(
+  client: SupabaseClient<Database>
+): Promise<SetCoverageRow[]> {
+  const rows: SetCoverageRow[] = [];
+  let offset = 0;
+
+  while (true) {
+    const { data, error } = await client
+      .from("set_with_completion")
+      .select("id, theme, max_complete_sets")
+      .order("id", { ascending: true })
+      .range(offset, offset + AGGREGATION_PAGE_SIZE - 1);
+
+    if (error) throw error;
+
+    const batch = (data ?? []) as SetCoverageRow[];
+    rows.push(...batch);
+
+    if (batch.length < AGGREGATION_PAGE_SIZE) break;
+    offset += AGGREGATION_PAGE_SIZE;
+  }
+
+  return rows;
 }
 
 function getSignedStockMovementValue(row: StockJournalRow): {
@@ -1298,6 +1616,506 @@ function toMovingAverage(values: number[], windowSize: number): number[] {
   });
 }
 
+type SalesWindowSummary = {
+  netRevenue: number;
+  netMargin: number;
+  salesCount: number;
+  daysWithSales: number;
+};
+
+function summarizeSalesWindow(
+  rows: SalesHubRow[],
+  from: string,
+  to: string
+): SalesWindowSummary {
+  let netRevenue = 0;
+  let netMargin = 0;
+  let salesCount = 0;
+  const daysWithSales = new Set<string>();
+
+  for (const row of rows) {
+    const dateOnly = extractDateOnlyFromIso(row.paid_at);
+    if (!dateOnly || dateOnly < from || dateOnly > to) continue;
+
+    const revenue = toNumber(row.net_seller_amount, 0);
+    const margin =
+      row.total_margin_amount !== null
+        ? toNumber(row.total_margin_amount, 0)
+        : revenue - toNumber(row.total_cost_amount, 0);
+
+    netRevenue += revenue;
+    netMargin += margin;
+    salesCount += 1;
+    daysWithSales.add(dateOnly);
+  }
+
+  return {
+    netRevenue,
+    netMargin,
+    salesCount,
+    daysWithSales: daysWithSales.size,
+  };
+}
+
+function buildForecastProjection(options: {
+  horizonDays: 30 | 90;
+  to: string;
+  salesRows: SalesHubRow[];
+  minimumSalesCount: number;
+  minimumDaysWithSales: number;
+}): DashboardForecastProjection {
+  const observedFrom = addDaysDateOnly(options.to, -(options.horizonDays - 1));
+  const observedTo = options.to;
+  const summary = summarizeSalesWindow(options.salesRows, observedFrom, observedTo);
+  const isReliable =
+    summary.salesCount >= options.minimumSalesCount &&
+    summary.daysWithSales >= options.minimumDaysWithSales;
+
+  const avgDailyNetRevenue = isReliable ? summary.netRevenue / options.horizonDays : null;
+  const avgDailyNetMargin = isReliable ? summary.netMargin / options.horizonDays : null;
+
+  return {
+    horizonDays: options.horizonDays,
+    observedFrom,
+    observedTo,
+    observedSalesCount: summary.salesCount,
+    daysWithSales: summary.daysWithSales,
+    observedNetRevenue: summary.netRevenue,
+    observedNetMargin: summary.netMargin,
+    projectedNetRevenue:
+      avgDailyNetRevenue !== null ? avgDailyNetRevenue * options.horizonDays : null,
+    projectedNetMargin: avgDailyNetMargin !== null ? avgDailyNetMargin * options.horizonDays : null,
+    avgDailyNetRevenue,
+    avgDailyNetMargin,
+    quality: isReliable ? "ok" : "partial",
+    note: isReliable ? null : `Projection: ${INSUFFICIENT_ANALYSIS_MESSAGE}.`,
+  };
+}
+
+function buildForecast(options: {
+  salesRows: SalesHubRow[];
+  stockValueCurrent: number;
+  to: string;
+}): DashboardForecast {
+  const d30 = buildForecastProjection({
+    horizonDays: 30,
+    to: options.to,
+    salesRows: options.salesRows,
+    minimumSalesCount: 4,
+    minimumDaysWithSales: 4,
+  });
+  const d90 = buildForecastProjection({
+    horizonDays: 90,
+    to: options.to,
+    salesRows: options.salesRows,
+    minimumSalesCount: 10,
+    minimumDaysWithSales: 8,
+  });
+
+  const quality = d30.quality === "ok" && d90.quality === "ok" ? "ok" : "partial";
+  const projectedDailyRevenue30 = d30.avgDailyNetRevenue;
+  const stockCoverageDays =
+    projectedDailyRevenue30 !== null && projectedDailyRevenue30 > 0
+      ? options.stockValueCurrent / projectedDailyRevenue30
+      : null;
+
+  let signal: DashboardActionSignal = "STABLE";
+  let signalReason = "Pilotage stable recommande.";
+
+  if (quality === "partial") {
+    signal = "STABLE";
+    signalReason = `Projection: ${INSUFFICIENT_ANALYSIS_MESSAGE}.`;
+  } else if (projectedDailyRevenue30 !== null && projectedDailyRevenue30 <= 0) {
+    signal = "FREINER";
+    signalReason = "Aucune traction recente sur 30 jours: freiner les achats.";
+  } else if (stockCoverageDays !== null && stockCoverageDays < 30) {
+    signal = "ACCELERER";
+    signalReason = "Couverture stock courte face a la projection 30 jours: accelerer les achats.";
+  } else if (stockCoverageDays !== null && stockCoverageDays > 120) {
+    signal = "FREINER";
+    signalReason = "Couverture stock elevee face a la projection: freiner les achats.";
+  }
+
+  return {
+    quality,
+    note: quality === "partial" ? `Projection: ${INSUFFICIENT_ANALYSIS_MESSAGE}.` : null,
+    signal,
+    signalReason,
+    stockCoverageDays: stockCoverageDays !== null ? roundTo(stockCoverageDays, 1) : null,
+    projections: {
+      d30,
+      d90,
+    },
+  };
+}
+
+function buildSalesChannelCohorts(salesRows: SalesHubRow[]): DashboardSalesChannelCohorts {
+  const grouped = new Map<
+    string,
+    {
+      channel: string;
+      ordersCount: number;
+      setOrders: number;
+      pieceOrders: number;
+      netRevenue: number;
+      netMargin: number;
+    }
+  >();
+
+  for (const row of salesRows) {
+    const normalized = normalizeAnalyticLabel(row.sales_channel, "Non renseigne");
+    const existing = grouped.get(normalized.key);
+    const target =
+      existing ??
+      {
+        channel: normalized.label,
+        ordersCount: 0,
+        setOrders: 0,
+        pieceOrders: 0,
+        netRevenue: 0,
+        netMargin: 0,
+      };
+
+    const revenue = toNumber(row.net_seller_amount, 0);
+    const margin =
+      row.total_margin_amount !== null
+        ? toNumber(row.total_margin_amount, 0)
+        : revenue - toNumber(row.total_cost_amount, 0);
+
+    target.ordersCount += 1;
+    target.netRevenue += revenue;
+    target.netMargin += margin;
+
+    const saleType = (row.sale_type ?? "").toUpperCase();
+    if (saleType === "SET") target.setOrders += 1;
+    if (saleType === "PIECE") target.pieceOrders += 1;
+
+    grouped.set(normalized.key, target);
+  }
+
+  const totalOrders = salesRows.length;
+  const totalRevenue = Array.from(grouped.values()).reduce((acc, row) => acc + row.netRevenue, 0);
+  const totalMargin = Array.from(grouped.values()).reduce((acc, row) => acc + row.netMargin, 0);
+
+  const rows: DashboardSalesChannelCohort[] = Array.from(grouped.entries())
+    .map(([key, row]) => ({
+      key,
+      channel: row.channel,
+      ordersCount: row.ordersCount,
+      setOrders: row.setOrders,
+      pieceOrders: row.pieceOrders,
+      netRevenue: row.netRevenue,
+      netMargin: row.netMargin,
+      marginRate: row.netRevenue > 0 ? (row.netMargin / row.netRevenue) * 100 : null,
+      averageBasket: row.ordersCount > 0 ? row.netRevenue / row.ordersCount : null,
+      revenueShare: totalRevenue > 0 ? (row.netRevenue / totalRevenue) * 100 : null,
+      marginShare: totalMargin > 0 ? (row.netMargin / totalMargin) * 100 : null,
+      setMixRate: row.ordersCount > 0 ? (row.setOrders / row.ordersCount) * 100 : null,
+      pieceMixRate: row.ordersCount > 0 ? (row.pieceOrders / row.ordersCount) * 100 : null,
+    }))
+    .sort((a, b) => {
+      if (b.netMargin !== a.netMargin) return b.netMargin - a.netMargin;
+      if (b.netRevenue !== a.netRevenue) return b.netRevenue - a.netRevenue;
+      return a.channel.localeCompare(b.channel, "fr");
+    });
+
+  const quality =
+    totalOrders >= 5 && rows.filter((row) => row.ordersCount > 0).length >= 2 ? "ok" : "partial";
+
+  return {
+    quality,
+    note:
+      quality === "partial"
+        ? `Cohortes canal: ${INSUFFICIENT_ANALYSIS_MESSAGE}.`
+        : null,
+    totalOrders,
+    totalRevenue,
+    totalMargin,
+    rows,
+  };
+}
+
+function buildSourcingChannelLeadTime(options: {
+  lotsRows: LotHubRow[];
+  soldPiecesRows: SoldPieceJournalHubRow[];
+  effectiveTo: string;
+}): DashboardSourcingChannelLeadTime {
+  const firstSaleByLotId = new Map<number, string>();
+
+  for (const row of options.soldPiecesRows) {
+    const lotId = parseNumericText(row.lot_id);
+    if (lotId === null) continue;
+
+    const paidDate = extractDateOnlyFromIso(row.paid_at);
+    if (!paidDate || paidDate > options.effectiveTo) continue;
+
+    const current = firstSaleByLotId.get(lotId);
+    if (!current || paidDate < current) {
+      firstSaleByLotId.set(lotId, paidDate);
+    }
+  }
+
+  const grouped = new Map<
+    string,
+    {
+      channel: string;
+      observedLots: number;
+      soldLots: number;
+      unsoldLots: number;
+      leadTimes: number[];
+    }
+  >();
+
+  for (const lot of options.lotsRows) {
+    const purchaseDate = normalizeDateOnly(lot.purchase_date);
+    if (!purchaseDate) continue;
+
+    const normalized = normalizeAnalyticLabel(lot.supplier, "Non renseigne");
+    const existing = grouped.get(normalized.key);
+    const target =
+      existing ??
+      {
+        channel: normalized.label,
+        observedLots: 0,
+        soldLots: 0,
+        unsoldLots: 0,
+        leadTimes: [],
+      };
+
+    target.observedLots += 1;
+
+    const firstSaleDate = firstSaleByLotId.get(lot.id);
+    if (firstSaleDate && firstSaleDate >= purchaseDate) {
+      target.soldLots += 1;
+      target.leadTimes.push(diffDays(purchaseDate, firstSaleDate));
+    } else {
+      target.unsoldLots += 1;
+    }
+
+    grouped.set(normalized.key, target);
+  }
+
+  const rows: DashboardSourcingChannelLeadTimeRow[] = Array.from(grouped.entries())
+    .map(([key, row]) => ({
+      key,
+      channel: row.channel,
+      observedLots: row.observedLots,
+      soldLots: row.soldLots,
+      unsoldLots: row.unsoldLots,
+      medianLeadTimeDays: percentile(row.leadTimes, 0.5),
+      p75LeadTimeDays: percentile(row.leadTimes, 0.75),
+    }))
+    .sort((a, b) => {
+      if (b.observedLots !== a.observedLots) return b.observedLots - a.observedLots;
+      if (b.soldLots !== a.soldLots) return b.soldLots - a.soldLots;
+      return a.channel.localeCompare(b.channel, "fr");
+    });
+
+  const totalObservedLots = rows.reduce((acc, row) => acc + row.observedLots, 0);
+  const totalSoldLots = rows.reduce((acc, row) => acc + row.soldLots, 0);
+  const quality = totalObservedLots >= 3 && totalSoldLots >= 2 ? "ok" : "partial";
+
+  return {
+    quality,
+    note:
+      quality === "partial"
+        ? `Lead-time canal d'approvisionnement: ${INSUFFICIENT_ANALYSIS_MESSAGE}.`
+        : null,
+    rows,
+  };
+}
+
+function resolveThemeSignal(options: {
+  weeklyVelocity: number | null;
+  stockCoverageSets: number;
+  coverageWeeks: number | null;
+}): DashboardActionSignal {
+  if (options.weeklyVelocity === null || options.weeklyVelocity <= 0) {
+    return options.stockCoverageSets > 0 ? "FREINER" : "STABLE";
+  }
+
+  if (options.stockCoverageSets <= 0) {
+    return "ACCELERER";
+  }
+
+  if (options.coverageWeeks !== null && options.coverageWeeks < 2) {
+    return "ACCELERER";
+  }
+
+  if (options.coverageWeeks !== null && options.coverageWeeks > 8) {
+    return "FREINER";
+  }
+
+  return "STABLE";
+}
+
+function buildThemeRotation(options: {
+  salesRows: SalesHubRow[];
+  setSaleItemsRows: SetSaleItemHubRow[];
+  setThemeRows: SetCatalogThemeRow[];
+  setCoverageRows: SetCoverageRow[];
+  from: string;
+  to: string;
+}): DashboardThemeRotation {
+  const setThemeBySetId = new Map<string, { key: string; label: string }>();
+  for (const row of options.setThemeRows) {
+    const setId = (row.id ?? "").trim();
+    if (!setId) continue;
+    setThemeBySetId.set(setId, normalizeAnalyticLabel(row.theme, "Sans theme"));
+  }
+
+  const stockCoverageByTheme = new Map<string, number>();
+  const themeLabelByKey = new Map<string, string>();
+  for (const row of options.setCoverageRows) {
+    const normalized = normalizeAnalyticLabel(row.theme, "Sans theme");
+    const stockCoverage = Math.max(0, toNumber(row.max_complete_sets, 0));
+    stockCoverageByTheme.set(
+      normalized.key,
+      (stockCoverageByTheme.get(normalized.key) ?? 0) + stockCoverage
+    );
+    themeLabelByKey.set(normalized.key, normalized.label);
+
+    const setId = (row.id ?? "").trim();
+    if (setId && !setThemeBySetId.has(setId)) {
+      setThemeBySetId.set(setId, normalized);
+    }
+  }
+
+  const salesById = new Map<number, SalesHubRow>();
+  for (const sale of options.salesRows) {
+    salesById.set(sale.id, sale);
+  }
+
+  const setItemsBySale = new Map<number, SetSaleItemHubRow[]>();
+  for (const row of options.setSaleItemsRows) {
+    const list = setItemsBySale.get(row.sale_id) ?? [];
+    list.push(row);
+    setItemsBySale.set(row.sale_id, list);
+  }
+
+  const grouped = new Map<
+    string,
+    {
+      theme: string;
+      setOrders: Set<number>;
+      soldUnits: number;
+      netRevenue: number;
+      netMargin: number;
+      stockCoverageSets: number;
+    }
+  >();
+
+  for (const [saleId, items] of setItemsBySale.entries()) {
+    const sale = salesById.get(saleId);
+    if (!sale) continue;
+    if ((sale.sale_type ?? "").toUpperCase() !== "SET") continue;
+
+    const positiveItems = items.filter((item) => toNumber(item.quantity, 0) > 0);
+    if (positiveItems.length === 0) continue;
+
+    const saleRevenue = toNumber(sale.net_seller_amount, 0);
+    const totalQty = positiveItems.reduce((acc, item) => acc + toNumber(item.quantity, 0), 0);
+
+    for (const item of positiveItems) {
+      const quantity = toNumber(item.quantity, 0);
+      if (quantity <= 0) continue;
+
+      const explicitNet = item.net_amount !== null ? toNumber(item.net_amount, Number.NaN) : Number.NaN;
+      const netAmount =
+        Number.isFinite(explicitNet) && explicitNet >= 0
+          ? explicitNet
+          : totalQty > 0
+            ? saleRevenue * (quantity / totalQty)
+            : 0;
+      const costAmount = item.cost_amount !== null ? toNumber(item.cost_amount, 0) : 0;
+      const explicitMargin =
+        item.margin_amount !== null ? toNumber(item.margin_amount, Number.NaN) : Number.NaN;
+      const marginAmount =
+        Number.isFinite(explicitMargin) ? explicitMargin : netAmount - costAmount;
+
+      const setId = (item.set_id ?? "").trim();
+      const normalizedTheme = setThemeBySetId.get(setId) ?? normalizeAnalyticLabel(null, "Sans theme");
+      themeLabelByKey.set(normalizedTheme.key, normalizedTheme.label);
+
+      const existing = grouped.get(normalizedTheme.key);
+      const target =
+        existing ??
+        {
+          theme: normalizedTheme.label,
+          setOrders: new Set<number>(),
+          soldUnits: 0,
+          netRevenue: 0,
+          netMargin: 0,
+          stockCoverageSets: stockCoverageByTheme.get(normalizedTheme.key) ?? 0,
+        };
+
+      target.setOrders.add(saleId);
+      target.soldUnits += quantity;
+      target.netRevenue += netAmount;
+      target.netMargin += marginAmount;
+      target.stockCoverageSets = stockCoverageByTheme.get(normalizedTheme.key) ?? target.stockCoverageSets;
+
+      grouped.set(normalizedTheme.key, target);
+    }
+  }
+
+  for (const [key, coverage] of stockCoverageByTheme.entries()) {
+    if (grouped.has(key)) continue;
+    grouped.set(key, {
+      theme: themeLabelByKey.get(key) ?? "Sans theme",
+      setOrders: new Set<number>(),
+      soldUnits: 0,
+      netRevenue: 0,
+      netMargin: 0,
+      stockCoverageSets: coverage,
+    });
+  }
+
+  const periodWeeks = Math.max(1, diffDaysInclusive(options.from, options.to) / 7);
+  const rows: DashboardThemeRotationRow[] = Array.from(grouped.entries())
+    .map(([key, row]) => {
+      const setOrders = row.setOrders.size;
+      const weeklyVelocity = row.soldUnits > 0 ? row.soldUnits / periodWeeks : 0;
+      const coverageWeeks = weeklyVelocity > 0 ? row.stockCoverageSets / weeklyVelocity : null;
+
+      return {
+        key,
+        theme: row.theme,
+        setOrders,
+        soldUnits: row.soldUnits,
+        netRevenue: row.netRevenue,
+        netMargin: row.netMargin,
+        marginRate: row.netRevenue > 0 ? (row.netMargin / row.netRevenue) * 100 : null,
+        weeklyVelocity: weeklyVelocity > 0 ? roundTo(weeklyVelocity, 2) : 0,
+        stockCoverageSets: row.stockCoverageSets,
+        coverageWeeks: coverageWeeks !== null ? roundTo(coverageWeeks, 2) : null,
+        signal: resolveThemeSignal({
+          weeklyVelocity,
+          stockCoverageSets: row.stockCoverageSets,
+          coverageWeeks,
+        }),
+      };
+    })
+    .sort((a, b) => {
+      if (b.netMargin !== a.netMargin) return b.netMargin - a.netMargin;
+      if (b.soldUnits !== a.soldUnits) return b.soldUnits - a.soldUnits;
+      return a.theme.localeCompare(b.theme, "fr");
+    });
+
+  const totalSetOrders = rows.reduce((acc, row) => acc + row.setOrders, 0);
+  const quality =
+    rows.filter((row) => row.soldUnits > 0).length >= 2 && totalSetOrders >= 3 ? "ok" : "partial";
+
+  return {
+    quality,
+    note:
+      quality === "partial"
+        ? `Rotation par theme: ${INSUFFICIENT_ANALYSIS_MESSAGE}.`
+        : null,
+    rows,
+  };
+}
+
 function buildFinancialKpi(options: {
   key: DashboardFinancialKpiKey;
   label: string;
@@ -1419,47 +2237,96 @@ export async function getDashboardExecutiveData(
     to: effectiveTo,
   });
 
-  const [salesRows, procurementRows, stockRows, stockJournalRows, opportunitiesRows] =
-    await Promise.all([
-      loadRequired("sales", "SALES_DATA_UNAVAILABLE", [] as SalesHubRow[], () =>
-        loadSalesRows(client, {
+  const forecastFrom = addDaysDateOnly(effectiveTo, -89);
+  const [
+    salesRows,
+    procurementRows,
+    stockRows,
+    stockJournalRows,
+    opportunitiesRows,
+    forecastSalesRows,
+    soldPiecesRows,
+    setThemeRows,
+    setCoverageRows,
+  ] = await Promise.all([
+    loadRequired("sales", "SALES_DATA_UNAVAILABLE", [] as SalesHubRow[], () =>
+      loadSalesRows(client, {
+        from: effectiveFrom,
+        to: effectiveTo,
+      })
+    ),
+    loadRequired(
+      "procurement",
+      "PROCUREMENT_COST_UNAVAILABLE",
+      [] as LotHubRow[],
+      () =>
+        loadLotsRows(client, {
           from: effectiveFrom,
           to: effectiveTo,
         })
-      ),
-      loadRequired(
-        "procurement",
-        "PROCUREMENT_COST_UNAVAILABLE",
-        [] as LotHubRow[],
-        () =>
-          loadLotsRows(client, {
-            from: effectiveFrom,
-            to: effectiveTo,
-          })
-      ),
-      loadRequired(
-        "stock snapshot",
-        "STOCK_VALUE_UNAVAILABLE",
-        [] as StockSnapshotRow[],
-        () => loadStockSnapshotRows(client)
-      ),
-      loadRequired(
-        "stock journal",
-        "STOCK_TIMELINE_UNAVAILABLE",
-        [] as StockJournalRow[],
-        () => loadStockJournalRowsUntil(client, effectiveTo)
-      ),
-      loadRequired(
-        "set opportunities",
-        "CATALOGUE_OPPORTUNITIES_UNAVAILABLE",
-        [] as SetOpportunitySourceRow[],
-        () => loadSetOpportunitiesRows(client)
-      ),
-    ]);
+    ),
+    loadRequired(
+      "stock snapshot",
+      "STOCK_VALUE_UNAVAILABLE",
+      [] as StockSnapshotRow[],
+      () => loadStockSnapshotRows(client)
+    ),
+    loadRequired(
+      "stock journal",
+      "STOCK_TIMELINE_UNAVAILABLE",
+      [] as StockJournalRow[],
+      () => loadStockJournalRowsUntil(client, effectiveTo)
+    ),
+    loadRequired(
+      "set opportunities",
+      "CATALOGUE_OPPORTUNITIES_UNAVAILABLE",
+      [] as SetOpportunitySourceRow[],
+      () => loadSetOpportunitiesRows(client)
+    ),
+    loadRequired("forecast sales", "FORECAST_UNAVAILABLE", [] as SalesHubRow[], () =>
+      loadSalesRows(client, {
+        from: forecastFrom,
+        to: effectiveTo,
+      })
+    ),
+    loadRequired(
+      "sold pieces journal",
+      "SOURCING_LEAD_TIME_UNAVAILABLE",
+      [] as SoldPieceJournalHubRow[],
+      () => loadSoldPiecesRowsUntil(client, effectiveTo)
+    ),
+    loadRequired(
+      "sets catalog themes",
+      "THEME_ROTATION_UNAVAILABLE",
+      [] as SetCatalogThemeRow[],
+      () => loadSetCatalogThemeRows(client)
+    ),
+    loadRequired(
+      "set coverage",
+      "THEME_ROTATION_UNAVAILABLE",
+      [] as SetCoverageRow[],
+      () => loadSetCoverageRows(client)
+    ),
+  ]);
+
+  const setSaleItemsRows = await loadRequired(
+    "set sale items",
+    "THEME_ROTATION_UNAVAILABLE",
+    [] as SetSaleItemHubRow[],
+    () =>
+      loadSetSaleItemsRowsBySaleIds(
+        client,
+        salesRows.filter((row) => (row.sale_type ?? "").toUpperCase() === "SET").map((row) => row.id)
+      )
+  );
 
   const salesUnavailable = issues.has("SALES_DATA_UNAVAILABLE");
   const procurementUnavailable = issues.has("PROCUREMENT_COST_UNAVAILABLE");
   const stockSnapshotUnavailable = issues.has("STOCK_VALUE_UNAVAILABLE");
+
+  if (salesUnavailable) {
+    issues.add("CHANNEL_COHORTS_UNAVAILABLE");
+  }
 
   const stockTimeline = buildStockTimelineFromJournal({
     rows: stockJournalRows,
@@ -1750,6 +2617,46 @@ export async function getDashboardExecutiveData(
     })),
   };
 
+  const forecast = buildForecast({
+    salesRows: forecastSalesRows,
+    stockValueCurrent,
+    to: effectiveTo,
+  });
+
+  const salesChannelCohorts = buildSalesChannelCohorts(salesRows);
+  const sourcingChannelLeadTime = buildSourcingChannelLeadTime({
+    lotsRows: procurementRows,
+    soldPiecesRows,
+    effectiveTo,
+  });
+  const themeRotation = buildThemeRotation({
+    salesRows,
+    setSaleItemsRows,
+    setThemeRows,
+    setCoverageRows,
+    from: effectiveFrom,
+    to: effectiveTo,
+  });
+
+  if (!issues.has("FORECAST_UNAVAILABLE") && forecast.quality === "partial") {
+    issues.add("FORECAST_DATA_INSUFFICIENT");
+  }
+
+  if (!issues.has("CHANNEL_COHORTS_UNAVAILABLE") && salesChannelCohorts.quality === "partial") {
+    issues.add("CHANNEL_COHORTS_DATA_INSUFFICIENT");
+  }
+
+  if (
+    !issues.has("SOURCING_LEAD_TIME_UNAVAILABLE") &&
+    sourcingChannelLeadTime.quality === "partial"
+  ) {
+    issues.add("SOURCING_LEAD_TIME_DATA_INSUFFICIENT");
+  }
+
+  if (!issues.has("THEME_ROTATION_UNAVAILABLE") && themeRotation.quality === "partial") {
+    issues.add("THEME_ROTATION_DATA_INSUFFICIENT");
+  }
+
   const opportunities = opportunitiesRows
     .map((row) => {
       const setId = row.id ?? "";
@@ -1920,6 +2827,10 @@ export async function getDashboardExecutiveData(
     stackedSalesSeries,
     setPieceComparison,
     procurementStockSeries,
+    forecast,
+    salesChannelCohorts,
+    sourcingChannelLeadTime,
+    themeRotation,
     opportunities,
     modalConfigs: buildModalConfigs(),
     partial: issueList.length > 0,

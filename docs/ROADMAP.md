@@ -578,13 +578,30 @@ Definition of done:
 
 ### F4.4 - Extensions analytiques avancees (phase B)
 
-Statut: `A FAIRE`
+Statut: `FAIT`
 Objectif: etendre les analyses apres validation usage metier reel.
-Livrables:
-- forecasting et projections
-- cohortes canal et analyses avancees de mix
-- lead-time fournisseur et rotation fine par famille
-- eventuelles vues/materialized views SQL uniquement si strictement justifiees
+Livrables realises:
+- extensions analytiques additives sur le contrat `dashboard.v3` (sans rupture):
+  - `forecast` (projections 30j/90j, fiabilite, signal achat global `ACCELERER|STABLE|FREINER`)
+  - `salesChannelCohorts` (cohortes par `sales_channel`, part CA/marge, mix sets/pieces)
+  - `sourcingChannelLeadTime` (canal d'appro = `lots.supplier` normalise, mediane/P75, lots non vendus)
+  - `themeRotation` (famille = `sets_catalog.theme`, rotation commerciale + couverture stock proxy + signal par theme)
+- bloc "Pilotage achats/stock" enrichi (dashboard + modale):
+  - apercu projection/signal directement visible sur `/`
+  - modale etendue en 4 sections actionnables:
+    - projection cash/profit
+    - cohortes canaux ventes
+    - lead-time canaux d'approvisionnement
+    - rotation par theme
+- gestion explicite de donnees insuffisantes:
+  - section visible (non masquee) + message explicite:
+    - `manque de donnees pour formuler une analyse fiable`
+  - valeurs non fiables affichees en `—`
+  - `partial/issues/quality` conserves avec nouveaux codes F4.4 dedies
+- perimetre et compatibilite respectes:
+  - aucun changement des query params publics (`preset`, `from`, `to`)
+  - aucune regression UX V3.2.x (header compact, filtre inline, modales)
+  - aucune migration SQL ajoutee pour F4.4
 Definition of done:
 - nouvelles analyses activees uniquement si elles restent actionnables et sans bruit decoratif
 
@@ -813,6 +830,58 @@ Definition of done:
 
 Statut global: `A FAIRE`
 
+### F5.0 - Operations lots et ventes
+
+Statut: `A FAIRE`
+Objectif: ajouter des fonctions operationnelles dans le detail lot et la numerotation metier des ventes.
+
+#### F5.0.1 - Import CSV pieces depuis detail lot
+
+Statut: `A FAIRE`
+Objectif: depuis `/approvisionnement/[id]`, permettre import/collage CSV (Excel/Sheets) pour alimenter les lignes pieces/quantites d'un lot comme une saisie manuelle.
+Livrables:
+- bouton `Importer CSV` + zone `coller CSV`
+- mapping attendu:
+  - colonne A: `Numero de piece`
+  - colonne B: `Quantite de piece`
+- import applique sur le lot courant comme une saisie utilisateur standard
+- pas de blocage si la piece n'existe pas encore au catalogue
+Definition of done:
+- un CSV valide ajoute/met a jour les lignes du lot
+- les pieces inconnues catalogue sont acceptees (catalogue complete plus tard)
+- resultat identique a une saisie manuelle equivalente dans le logiciel
+
+#### F5.0.2 - Pieces jointes facture (photo/pdf) sur detail lot
+
+Statut: `A FAIRE`
+Objectif: depuis `/approvisionnement/[id]`, permettre depot de factures en `photo` ou `pdf`.
+Livrables:
+- upload de piece jointe depuis le detail lot
+- affichage des pieces jointes associees au lot
+- suppression manuelle d'une piece jointe
+Definition of done:
+- une piece jointe (photo/pdf) peut etre ajoutee et rattachee au lot
+- une piece jointe peut etre supprimee depuis l'UI du lot
+- la trace documentaire reste consultable tant que non supprimee
+
+#### F5.0.3 - Numerotation metier des ventes (MAX+1 avec reset si vide)
+
+Statut: `A FAIRE`
+Objectif: implementer une numerotation metier visible des ventes (et non une contrainte sur l'ID SQL technique).
+Livrables:
+- numero de vente calcule en `MAX + 1`
+- si aucune vente existante (apres suppression), la prochaine vente repart a `1`
+- une vente annulee conserve son numero, la suivante continue a `+1`
+Definition of done:
+- premiere vente visible = `n°1`
+- suppression de la seule vente existante -> prochaine vente = `n°1`
+- annulation de `n°1` -> vente suivante = `n°2`
+
+Impacts API/interfaces/types publics (futurs):
+- F5.0.1: entree CSV structuree (`piece_ref`, `quantity`) depuis UI lot
+- F5.0.2: gestion d'attachements lot (upload + suppression)
+- F5.0.3: introduction/usage d'un `numero_vente_metier` distinct de l'ID technique
+
 ### F5.1 - Normaliser composants de structure
 
 Statut: `A FAIRE`
@@ -937,10 +1006,13 @@ Definition of done:
 28. F4.10
 29. F4.11
 30. F4.12
-31. F5.1
-32. F5.2
-33. F5.3
-34. F6.1
-35. F6.2
-36. F6.3
-37. F6.4
+31. F5.0.1
+32. F5.0.2
+33. F5.0.3
+34. F5.1
+35. F5.2
+36. F5.3
+37. F6.1
+38. F6.2
+39. F6.3
+40. F6.4

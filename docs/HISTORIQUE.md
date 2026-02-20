@@ -2,6 +2,67 @@
 
 Ce fichier consigne les changements du projet, etapes par etapes.
 
+## 2026-02-20 - F4.4 Extensions analytiques avancees (phase B)
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/lib/dashboard.ts`:
+  - extension additive du contrat `dashboard.v3`:
+    - `forecast` (projections 30j/90j + signal achat global)
+    - `salesChannelCohorts` (cohortes `sales_channel` et mix avance)
+    - `sourcingChannelLeadTime` (lead-time par canal d'appro via `lots.supplier`)
+    - `themeRotation` (rotation/couverture par `theme` des sets)
+  - nouveaux chargements data locaux sans migration SQL:
+    - `sold_pieces_journal`, `sale_items` (item_kind `SET`), `sets_catalog`, `set_with_completion`
+  - ajout de codes `issues` F4.4 dedies (`*_UNAVAILABLE`, `*_DATA_INSUFFICIENT`)
+  - conservation robuste `partial/issues/quality` et des query params publics (`preset/from/to`)
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/dashboard/DashboardExecutiveView.tsx`:
+  - bloc "Pilotage achats / stock" enrichi en apercu:
+    - signal achat global + projection CA/marge 30j + couverture
+  - modale bloc 4 etendue:
+    - section Projection cash/profit
+    - section Cohortes canaux ventes
+    - section Lead-time canaux d'approvisionnement
+    - section Rotation par theme
+  - en cas d'insuffisance, message explicite affiche (section visible, non masquee):
+    - `manque de donnees pour formuler une analyse fiable`
+- Documentation:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/ROADMAP.md` (`F4.4` passe a `FAIT`)
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/DECISIONS.md` (D-030)
+
+### Verifications executees
+
+- Pre-check local:
+  - `npx supabase --version`: OK (`2.65.10`)
+  - `docker info`: OK
+  - `npx supabase status`: OK
+- Rejouabilite locale:
+  - `npx supabase start`: OK
+  - `npx supabase db reset --local`: OK (migrations F1.1 -> F1.7 + seed)
+- Gates techniques:
+  - `npm ci`: OK
+  - `npm run lint`: OK
+  - `npm run typecheck`: OK
+  - `npm run build`: OK
+  - `npm run test:f2.0`: OK
+- Verifications SQL post-implementation:
+  - `stock_balance.quantity < 0`: `0`
+  - vues `stock_per_piece`, `stock_journal`, `piece_movements`: lisibles
+  - `healthcheck_business_anomalies_v1`: `0`
+  - coherence lots confirmes (`inventory` vs `PURCHASE/IN`): OK via `test:f2.0`
+- Smoke runtime local (`npm run dev` + requetes HTTP):
+  - `/` = 200
+  - `/ventes`, `/approvisionnement` = 307 canonique (sans erreur serveur)
+  - `/stock`, `/catalogue`, `/historique-stock` = 200
+
+### Perimetre / limites
+
+- Scope strict F4.4 respecte (pas de F5+).
+- Aucun changement SQL/migration.
+- Aucune ecriture DB distante.
+
 ## 2026-02-20 - Dashboard V3.2.6 (header mono-ligne ultra compact)
 
 Statut: `FAIT`
