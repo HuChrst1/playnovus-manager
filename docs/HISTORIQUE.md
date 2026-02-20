@@ -2,6 +2,80 @@
 
 Ce fichier consigne les changements du projet, etapes par etapes.
 
+## 2026-02-20 - F5.0.1 Import CSV pieces depuis detail lot
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/approvisionnement/action.ts`:
+  - ajout de la server action `importLotPiecesFromCsv(lotId, { csvContent })`
+  - parsing CSV cote serveur:
+    - delimiters `;` et `,`
+    - entete optionnelle `Numero de piece` / `Quantite de piece` (tolerante casse/espaces/accents)
+  - validation metier:
+    - `piece_ref` non vide
+    - `quantity` entier strictement positif
+  - import partiel:
+    - lignes valides appliquees
+    - lignes invalides rejetees avec motif et numero de ligne
+  - doublons internes CSV agreges (addition des quantites) avant application
+  - application via la logique existante `addPieceToLot` pour conserver:
+    - fusion `(lot_id, piece_ref)`
+    - recalcul `lots.total_pieces`
+    - recalcul `inventory.unit_cost`
+    - verrou serveur sur lot `draft` uniquement
+  - retour structure detaillee:
+    - `summary` (total/valides/rejetees/importees/fusionnees/quantite totale)
+    - `appliedRows`
+    - `rejectedRows`
+- Ajout de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/approvisionnement/[id]/LotCsvImportDialog.tsx`:
+  - UI `Importer CSV` avec 2 modes:
+    - import fichier `.csv`
+    - collage de contenu CSV
+  - affichage d'un rapport detaille post-import:
+    - lignes appliquees (ajoutees/fusionnees)
+    - lignes rejetees (motif + numero de ligne)
+  - message explicite et verrou UI si lot `confirmed`
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/approvisionnement/[id]/page.tsx`:
+  - integration du bouton/dialog `Importer CSV` dans l'entete des pieces du lot
+- Documentation:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/ROADMAP.md` (`F5.0.1` passe a `FAIT`)
+
+### Verifications executees
+
+- Pre-check local:
+  - `npx supabase --version`: OK (`2.65.10`)
+  - `docker info --format '{{.ServerVersion}}'`: OK (`29.2.0`)
+  - `npx supabase status`: OK
+- Rejouabilite locale:
+  - `npx supabase start`: OK
+  - `npx supabase db reset --local`: OK (migrations F1.1 -> F1.7 + seed)
+- Scenarios F5.0.1 (server action, local-only):
+  - `S1` import fichier CSV A/B: OK
+  - `S2` import collage CSV: OK
+  - `S3` piece inconnue catalogue acceptee: OK
+  - `S4` doublons internes CSV additionnes: OK
+  - `S5` lot `confirmed` bloque cote serveur: OK
+  - `S6` ajout manuel existant conserve/verrouille sur lot `confirmed`: OK
+- Gates techniques:
+  - `npm ci`: OK
+  - `npm run lint`: OK
+  - `npm run typecheck`: OK
+  - `npm run build`: OK
+  - `npm run test:f2.0`: OK
+- Verifications SQL post-implementation (lecture seule locale):
+  - `stock_balance.quantity < 0`: `[]` (aucune ligne negative)
+  - vues `stock_per_piece`, `stock_journal`, `piece_movements`: HTTP `200`
+  - `healthcheck_business_anomalies_v1`: `[]`
+  - coherence lots confirmes (`inventory` vs `PURCHASE/IN`): OK via `npm run test:f2.0`
+
+### Perimetre / limites
+
+- Scope strict F5.0.1 respecte (pas de F5.0.2/F5.0.3/F6+).
+- Aucun changement SQL/migration.
+- Aucune ecriture DB distante.
+
 ## 2026-02-20 - F4.4 Extensions analytiques avancees (phase B)
 
 Statut: `FAIT`

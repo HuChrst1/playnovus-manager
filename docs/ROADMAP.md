@@ -837,15 +837,19 @@ Objectif: ajouter des fonctions operationnelles dans le detail lot et la numerot
 
 #### F5.0.1 - Import CSV pieces depuis detail lot
 
-Statut: `A FAIRE`
+Statut: `FAIT`
 Objectif: depuis `/approvisionnement/[id]`, permettre import/collage CSV (Excel/Sheets) pour alimenter les lignes pieces/quantites d'un lot comme une saisie manuelle.
-Livrables:
+Livrables realises:
 - bouton `Importer CSV` + zone `coller CSV`
 - mapping attendu:
   - colonne A: `Numero de piece`
   - colonne B: `Quantite de piece`
 - import applique sur le lot courant comme une saisie utilisateur standard
 - pas de blocage si la piece n'existe pas encore au catalogue
+- parsing tolerant `;` et `,` + entete optionnelle (`Numero de piece`, `Quantite de piece`)
+- import partiel: lignes valides appliquees, lignes invalides rejetees avec rapport detaille
+- doublons internes CSV agreges (addition des quantites) avant application
+- verrou lot `confirmed` applique cote UI et cote serveur avec message explicite
 Definition of done:
 - un CSV valide ajoute/met a jour les lignes du lot
 - les pieces inconnues catalogue sont acceptees (catalogue complete plus tard)

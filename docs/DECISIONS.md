@@ -464,6 +464,28 @@ Derniere mise a jour: 2026-02-20
     - query params `preset/from/to` inchanges
     - aucune migration SQL imposee par F4.4
 
+### D-031 - F5.0.1 import CSV lot: traitement partiel + aggregation doublons + rapport detaille
+
+- Statut: validee
+- Constat:
+  - l'import CSV de detail lot doit accelerer la saisie sans perdre la robustesse metier existante
+  - les exports terrain (Excel/Sheets) peuvent contenir des lignes invalides et des doublons de references
+  - bloquer tout le fichier pour quelques lignes incorrectes degrade fortement l'UX operationnelle
+- Impact:
+  - import partiel retenu:
+    - lignes valides appliquees
+    - lignes invalides rejetees avec motif explicite
+  - doublons internes CSV agreges par `piece_ref` (addition des quantites) avant ecriture
+  - application alignee strictement sur la saisie manuelle existante (`addPieceToLot`):
+    - fusion `(lot_id, piece_ref)`
+    - recalcul `lots.total_pieces`
+    - recalcul `inventory.unit_cost`
+  - verrou metier confirme:
+    - lot `draft` autorise
+    - lot `confirmed` refuse cote UI et cote serveur
+  - pieces absentes du catalogue acceptees sans blocage
+  - aucun changement SQL/migration requis pour F5.0.1
+
 ## Hypothèses / décisions en attente
 
 ### H-002 - Politique d'authentification applicative

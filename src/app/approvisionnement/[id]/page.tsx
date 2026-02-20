@@ -7,6 +7,7 @@ import { EditLotDialog, LotForEdit } from "../EditLotDialog";
 import { QuickAddPieceForm } from "./QuickAddPieceForm";
 import { EditInventoryLineDialog } from "./EditInventoryLineDialog";
 import { DeleteInventoryLineButton } from "./DeleteInventoryLineButton";
+import { LotCsvImportDialog } from "./LotCsvImportDialog";
 
 export const dynamic = "force-dynamic";
 
@@ -247,10 +248,16 @@ export default async function LotDetailPage({
                 </p>
                 </div>
 
-                <QuickAddPieceForm
-                lotId={lot.id}
-                isDraft={lot.status === "draft"}
-                />
+                <div className="flex items-center gap-3">
+                  <LotCsvImportDialog
+                    lotId={lot.id}
+                    isDraft={lot.status === "draft"}
+                  />
+                  <QuickAddPieceForm
+                    lotId={lot.id}
+                    isDraft={lot.status === "draft"}
+                  />
+                </div>
                 </div>
             </div>
 

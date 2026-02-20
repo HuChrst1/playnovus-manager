@@ -1,6 +1,7 @@
 "use server";
 
 import { supabase } from "@/lib/supabase";
+import { parse } from "csv-parse/sync";
 import { revalidatePath } from "next/cache";
 import type { TablesUpdate } from "@/types/supabase";
 
@@ -110,6 +111,67 @@ type RenumberLotsResult =
       error: string;
     };
 
+type CsvDelimiter = "," | ";";
+
+type ParsedCsvLine = {
+  lineNumber: number;
+  pieceRefRaw: string;
+  quantityRaw: string;
+};
+
+export type ImportLotPiecesFromCsvReason =
+  | "LOT_NOT_FOUND"
+  | "LOT_NOT_DRAFT"
+  | "EMPTY_CSV"
+  | "CSV_PARSE_ERROR"
+  | "NO_VALID_ROWS"
+  | "IMPORT_FAILED";
+
+export type CsvImportRejectedRow = {
+  lineNumber: number;
+  pieceRef: string;
+  quantity: string;
+  reason: string;
+};
+
+export type CsvImportAppliedRow = {
+  pieceRef: string;
+  quantity: number;
+  action: "added" | "merged";
+  lineNumbers: number[];
+};
+
+export type CsvImportSummary = {
+  totalRows: number;
+  validRows: number;
+  rejectedRows: number;
+  aggregatedRows: number;
+  importedRows: number;
+  mergedRows: number;
+  appliedRows: number;
+  totalImportedQuantity: number;
+};
+
+type ImportLotPiecesFromCsvFailure = {
+  success: false;
+  error: string;
+  reason: ImportLotPiecesFromCsvReason;
+  summary?: CsvImportSummary;
+  rejectedRows?: CsvImportRejectedRow[];
+};
+
+type ImportLotPiecesFromCsvSuccess = {
+  success: true;
+  summary: CsvImportSummary;
+  appliedRows: CsvImportAppliedRow[];
+  rejectedRows: CsvImportRejectedRow[];
+  warning?: string;
+};
+
+export type ImportLotPiecesFromCsvResult =
+  | ImportLotPiecesFromCsvSuccess
+  | ImportLotPiecesFromCsvFailure;
+
 const extractLotSequence = (lotCode: string | null): number | null => {
   if (!lotCode) {
     return null;
@@ -137,6 +199,91 @@ const isLotCodeUniqueViolation = (error: {
   }
 
   return (error.message ?? "").includes("lots_lot_code_key");
+};
+
+const normalizeCsvHeader = (value: string): string => {
+  return value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .replace(/[_-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+};
+
+const isExpectedCsvHeaderRow = (colA: string, colB: string): boolean => {
+  const headerA = normalizeCsvHeader(colA);
+  const headerB = normalizeCsvHeader(colB);
+  const isPieceHeader =
+    headerA === "numero de piece" || headerA === "numero piece";
+  const isQuantityHeader =
+    headerB === "quantite de piece" ||
+    headerB === "quantite piece" ||
+    headerB === "quantite";
+
+  return isPieceHeader && isQuantityHeader;
+};
+
+const countDelimiter = (line: string, delimiter: CsvDelimiter): number => {
+  return line.split(delimiter).length - 1;
+};
+
+const detectCsvDelimiter = (csvContent: string): CsvDelimiter => {
+  const lines = csvContent
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .slice(0, 20);
+
+  if (lines.length === 0) {
+    return ",";
+  }
+
+  let semicolonScore = 0;
+  let commaScore = 0;
+  for (const line of lines) {
+    semicolonScore += countDelimiter(line, ";");
+    commaScore += countDelimiter(line, ",");
+  }
+
+  return semicolonScore > commaScore ? ";" : ",";
+};
+
+const parseCsvLinesForLotImport = (csvContent: string): ParsedCsvLine[] => {
+  const delimiter = detectCsvDelimiter(csvContent);
+  const rows = parse(csvContent, {
+    bom: true,
+    delimiter,
+    relax_column_count: true,
+    skip_empty_lines: false,
+    trim: false,
+  }) as string[][];
+
+  const parsedLines: ParsedCsvLine[] = [];
+
+  for (const [index, row] of rows.entries()) {
+    const values = Array.isArray(row) ? row : [];
+    const hasAnyCell = values.some((cell) => String(cell ?? "").trim() !== "");
+    if (!hasAnyCell) {
+      continue;
+    }
+
+    const pieceRefRaw = String(values[0] ?? "");
+    const quantityRaw = String(values[1] ?? "");
+    if (isExpectedCsvHeaderRow(pieceRefRaw, quantityRaw)) {
+      continue;
+    }
+
+    parsedLines.push({
+      lineNumber: index + 1,
+      pieceRefRaw,
+      quantityRaw,
+    });
+  }
+
+  return parsedLines;
 };
 
 async function computeNextLotCode(): Promise<NextLotCodeResult> {
@@ -1356,6 +1503,288 @@ export async function addPieceToLot(
   revalidatePath(`/approvisionnement/${lotId}`);
 
   return { success: true as const };
+}
+
+export async function importLotPiecesFromCsv(
+  lotId: number,
+  payload: {
+    csvContent: string;
+  }
+): Promise<ImportLotPiecesFromCsvResult> {
+  if (!lotId || Number.isNaN(lotId)) {
+    return {
+      success: false,
+      error: "Lot invalide.",
+      reason: "IMPORT_FAILED",
+    };
+  }
+
+  const csvContent = payload.csvContent ?? "";
+  if (!csvContent.trim()) {
+    return {
+      success: false,
+      error:
+        "Le contenu CSV est vide. Ajoute des lignes avant de lancer l'import.",
+      reason: "EMPTY_CSV",
+    };
+  }
+
+  const { data: lotRow, error: lotError } = await supabase
+    .from("lots")
+    .select("status")
+    .eq("id", lotId)
+    .maybeSingle();
+
+  if (lotError) {
+    console.error("importLotPiecesFromCsv - lot lookup error:", lotError);
+    return {
+      success: false,
+      error: "Impossible de vérifier le statut du lot avant import.",
+      reason: "IMPORT_FAILED",
+    };
+  }
+
+  if (!lotRow) {
+    return {
+      success: false,
+      error: "Lot introuvable.",
+      reason: "LOT_NOT_FOUND",
+    };
+  }
+
+  if (lotRow.status !== "draft") {
+    return {
+      success: false,
+      error:
+        "Ce lot est confirmé. L'import CSV est interdit. Repasse le lot en brouillon si tu dois le modifier.",
+      reason: "LOT_NOT_DRAFT",
+    };
+  }
+
+  let parsedLines: ParsedCsvLine[];
+  try {
+    parsedLines = parseCsvLinesForLotImport(csvContent);
+  } catch (error) {
+    console.error("importLotPiecesFromCsv - CSV parse error:", error);
+    return {
+      success: false,
+      error:
+        "Le CSV n'a pas pu être lu. Vérifie le format et réessaie (colonnes A/B attendues).",
+      reason: "CSV_PARSE_ERROR",
+    };
+  }
+
+  if (parsedLines.length === 0) {
+    return {
+      success: false,
+      error:
+        "Aucune ligne exploitable trouvée dans le CSV. Vérifie les colonnes A/B puis réessaie.",
+      reason: "EMPTY_CSV",
+    };
+  }
+
+  const rejectedRows: CsvImportRejectedRow[] = [];
+  const aggregatedRowsByPiece = new Map<
+    string,
+    { pieceRef: string; quantity: number; lineNumbers: number[] }
+  >();
+
+  let totalRows = 0;
+  let validRows = 0;
+
+  for (const row of parsedLines) {
+    const pieceRef = row.pieceRefRaw.trim();
+    const quantityRaw = row.quantityRaw.trim();
+
+    totalRows += 1;
+
+    if (!pieceRef) {
+      rejectedRows.push({
+        lineNumber: row.lineNumber,
+        pieceRef,
+        quantity: quantityRaw,
+        reason: "Référence de pièce vide.",
+      });
+      continue;
+    }
+
+    if (!quantityRaw) {
+      rejectedRows.push({
+        lineNumber: row.lineNumber,
+        pieceRef,
+        quantity: quantityRaw,
+        reason: "Quantité vide.",
+      });
+      continue;
+    }
+
+    const quantity = Number(quantityRaw.replace(",", "."));
+    if (!Number.isFinite(quantity) || !Number.isInteger(quantity) || quantity <= 0) {
+      rejectedRows.push({
+        lineNumber: row.lineNumber,
+        pieceRef,
+        quantity: quantityRaw,
+        reason: "Quantité invalide (entier strictement positif attendu).",
+      });
+      continue;
+    }
+
+    validRows += 1;
+
+    const current = aggregatedRowsByPiece.get(pieceRef);
+    if (current) {
+      current.quantity += quantity;
+      current.lineNumbers.push(row.lineNumber);
+      continue;
+    }
+
+    aggregatedRowsByPiece.set(pieceRef, {
+      pieceRef,
+      quantity,
+      lineNumbers: [row.lineNumber],
+    });
+  }
+
+  const aggregatedRows = Array.from(aggregatedRowsByPiece.values());
+  if (aggregatedRows.length === 0) {
+    const summary: CsvImportSummary = {
+      totalRows,
+      validRows,
+      rejectedRows: rejectedRows.length,
+      aggregatedRows: 0,
+      importedRows: 0,
+      mergedRows: 0,
+      appliedRows: 0,
+      totalImportedQuantity: 0,
+    };
+
+    return {
+      success: false,
+      error:
+        "Toutes les lignes ont été rejetées. Corrige le CSV puis relance l'import.",
+      reason: "NO_VALID_ROWS",
+      summary,
+      rejectedRows,
+    };
+  }
+
+  const pieceRefs = aggregatedRows.map((row) => row.pieceRef);
+  const existingRefSet = new Set<string>();
+  const { data: existingRows, error: existingRowsError } = await supabase
+    .from("inventory")
+    .select("piece_ref")
+    .eq("lot_id", lotId)
+    .in("piece_ref", pieceRefs);
+
+  if (existingRowsError) {
+    console.error(
+      "importLotPiecesFromCsv - existing rows lookup error:",
+      existingRowsError
+    );
+    return {
+      success: false,
+      error:
+        "Impossible de vérifier les lignes existantes du lot avant import.",
+      reason: "IMPORT_FAILED",
+    };
+  }
+
+  for (const row of existingRows ?? []) {
+    const pieceRef = row.piece_ref?.trim();
+    if (pieceRef) {
+      existingRefSet.add(pieceRef);
+    }
+  }
+
+  const appliedRows: CsvImportAppliedRow[] = [];
+  const importWarnings: string[] = [];
+
+  let importedRows = 0;
+  let mergedRows = 0;
+  let totalImportedQuantity = 0;
+
+  for (const row of aggregatedRows) {
+    const action: CsvImportAppliedRow["action"] = existingRefSet.has(row.pieceRef)
+      ? "merged"
+      : "added";
+    const addResult = await addPieceToLot(lotId, {
+      pieceRef: row.pieceRef,
+      quantity: row.quantity,
+    });
+
+    if (!addResult.success) {
+      for (const lineNumber of row.lineNumbers) {
+        rejectedRows.push({
+          lineNumber,
+          pieceRef: row.pieceRef,
+          quantity: String(row.quantity),
+          reason:
+            addResult.error ??
+            "Impossible d'importer cette référence pour le moment.",
+        });
+      }
+      continue;
+    }
+
+    if (typeof addResult.warning === "string" && addResult.warning.length > 0) {
+      importWarnings.push(`${row.pieceRef}: ${addResult.warning}`);
+    }
+
+    appliedRows.push({
+      pieceRef: row.pieceRef,
+      quantity: row.quantity,
+      action,
+      lineNumbers: row.lineNumbers,
+    });
+
+    if (action === "merged") {
+      mergedRows += 1;
+    } else {
+      importedRows += 1;
+    }
+
+    totalImportedQuantity += row.quantity;
+  }
+
+  const summary: CsvImportSummary = {
+    totalRows,
+    validRows,
+    rejectedRows: rejectedRows.length,
+    aggregatedRows: aggregatedRows.length,
+    importedRows,
+    mergedRows,
+    appliedRows: appliedRows.length,
+    totalImportedQuantity,
+  };
+
+  if (appliedRows.length === 0) {
+    return {
+      success: false,
+      error:
+        "Aucune ligne n'a pu être importée. Consulte les rejets pour corriger le CSV.",
+      reason: "NO_VALID_ROWS",
+      summary,
+      rejectedRows,
+    };
+  }
+
+  const warnings: string[] = [];
+  if (rejectedRows.length > 0) {
+    warnings.push(
+      "Certaines lignes ont été rejetées. Vérifie le rapport pour les corriger."
+    );
+  }
+  if (importWarnings.length > 0) {
+    warnings.push(importWarnings.join(" "));
+  }
+
+  return {
+    success: true,
+    summary,
+    appliedRows,
+    rejectedRows,
+    warning: warnings.length > 0 ? warnings.join(" ") : undefined,
+  };
 }
 
 export async function deleteInventoryLine(lotId: number, lineId: number) {
