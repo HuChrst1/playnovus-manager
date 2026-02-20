@@ -486,6 +486,32 @@ Derniere mise a jour: 2026-02-20
   - pieces absentes du catalogue acceptees sans blocage
   - aucun changement SQL/migration requis pour F5.0.1
 
+### D-032 - F5.0.2 piece jointe facture lot: cardinalite unique + remplacement auto + confirmed autorise
+
+- Statut: validee
+- Constat:
+  - le detail lot devait integrer une preuve documentaire facture sans impacter les flux stock/ledger existants
+  - le besoin operationnel retenu est une gestion simple "1 lot = 1 piece jointe facture", avec remplacement automatique
+  - la consultation doit rester immediate depuis l'UI lot via lien securise, sans ouvrir un sous-parcours additionnel
+- Impact:
+  - cardinalite retenue:
+    - une seule piece jointe facture par lot
+    - si une piece existe deja, le nouvel upload la remplace automatiquement
+  - regle statut lot:
+    - upload autorise sur lot `draft` et `confirmed`
+    - suppression autorisee sur lot `draft` et `confirmed`
+  - validation fichier stricte:
+    - formats autorises: `PDF`, `JPG/JPEG`, `PNG`, `WEBP`, `HEIC`
+    - taille maximale: `15 Mo`
+    - rejet bloquant avec message actionnable si non conforme
+  - architecture retenue:
+    - stockage via bucket Supabase prive dedie
+    - ouverture via URL signee
+    - pas de table metadata `public` additionnelle
+  - invariants:
+    - aucun impact sur `stock_movements`, `stock_balance`, `PURCHASE/SALE/SALE_CANCEL`
+    - aucun changement SQL/migration requis pour F5.0.2
+
 ## Hypothèses / décisions en attente
 
 ### H-002 - Politique d'authentification applicative

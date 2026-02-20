@@ -8,6 +8,8 @@ import { QuickAddPieceForm } from "./QuickAddPieceForm";
 import { EditInventoryLineDialog } from "./EditInventoryLineDialog";
 import { DeleteInventoryLineButton } from "./DeleteInventoryLineButton";
 import { LotCsvImportDialog } from "./LotCsvImportDialog";
+import { LotInvoiceAttachmentPanel } from "./LotInvoiceAttachmentPanel";
+import { getLotInvoiceAttachment } from "../action";
 
 export const dynamic = "force-dynamic";
 
@@ -100,6 +102,8 @@ export default async function LotDetailPage({
   }
 
   const lot = lotData as LotRow;
+  const lotStatus: "draft" | "confirmed" =
+    lot.status === "confirmed" ? "confirmed" : "draft";
 
   // 2. Charge les lignes d'inventaire liées au lot
   const { data: inventoryData, error: inventoryError } = await supabase
@@ -117,6 +121,16 @@ export default async function LotDetailPage({
   }
 
   const lines = (inventoryData ?? []) as InventoryLine[];
+  const invoiceAttachmentResult = await getLotInvoiceAttachment(lot.id);
+  const invoiceAttachment = invoiceAttachmentResult.success
+    ? invoiceAttachmentResult.attachment
+    : null;
+  const invoiceAttachmentWarning = invoiceAttachmentResult.success
+    ? invoiceAttachmentResult.warning
+    : null;
+  const invoiceAttachmentError = invoiceAttachmentResult.success
+    ? null
+    : invoiceAttachmentResult.error;
 
   const totalCostNumber = Number(lot.total_cost ?? 0);
   const totalPieces = lot.total_pieces ?? 0;
@@ -167,71 +181,81 @@ export default async function LotDetailPage({
       {/* LAYOUT PRINCIPAL : résumé + pièces du lot */}
       <div className="grid gap-6 lg:grid-cols-[minmax(320px,360px)_1fr]">
         {/* COLONNE GAUCHE : résumé du lot */}
-        <Card className="border-0 shadow-[0_18px_50px_rgba(15,23,42,0.16)] rounded-[28px] overflow-hidden bg-white/95">
-          <CardHeader className="flex items-center justify-between py-3 px-5 border-b border-slate-100 bg-white/90">
-            <CardTitle className="text-xs font-semibold text-slate-500 uppercase tracking-[0.22em]">
-              Résumé du lot
-            </CardTitle>
+        <div className="space-y-6">
+          <Card className="border-0 shadow-[0_18px_50px_rgba(15,23,42,0.16)] rounded-[28px] overflow-hidden bg-white/95">
+            <CardHeader className="flex items-center justify-between py-3 px-5 border-b border-slate-100 bg-white/90">
+              <CardTitle className="text-xs font-semibold text-slate-500 uppercase tracking-[0.22em]">
+                Résumé du lot
+              </CardTitle>
 
-            {/* Petit bouton crayon dans l’en-tête de la card */}
-            <EditLotDialog lot={lotForEdit} variant="card" />
-          </CardHeader>
+              {/* Petit bouton crayon dans l’en-tête de la card */}
+              <EditLotDialog lot={lotForEdit} variant="card" />
+            </CardHeader>
 
-          <CardContent className="p-0 bg-white text-sm divide-y divide-slate-100">
-            <div className="flex items-center justify-between px-5 py-4">
-              <span className="text-slate-500 font-medium">LotID</span>
-              <span className="font-mono text-xs">{displayCode}</span>
-            </div>
+            <CardContent className="p-0 bg-white text-sm divide-y divide-slate-100">
+              <div className="flex items-center justify-between px-5 py-4">
+                <span className="text-slate-500 font-medium">LotID</span>
+                <span className="font-mono text-xs">{displayCode}</span>
+              </div>
 
-            <div className="flex items-center justify-between px-5 py-4">
-              <span className="text-slate-500 font-medium">Date</span>
-              <span>{formatDate(lot.purchase_date)}</span>
-            </div>
+              <div className="flex items-center justify-between px-5 py-4">
+                <span className="text-slate-500 font-medium">Date</span>
+                <span>{formatDate(lot.purchase_date)}</span>
+              </div>
 
-            <div className="flex items-center justify-between px-5 py-4">
-              <span className="text-slate-500 font-medium">Fournisseur</span>
-              <span className="max-w-[180px] truncate text-right">
-                {lot.supplier || "—"}
-              </span>
-            </div>
+              <div className="flex items-center justify-between px-5 py-4">
+                <span className="text-slate-500 font-medium">Fournisseur</span>
+                <span className="max-w-[180px] truncate text-right">
+                  {lot.supplier || "—"}
+                </span>
+              </div>
 
-            <div className="flex items-center justify-between px-5 py-4">
-              <span className="text-slate-500 font-medium">Nb pièces</span>
-              <span className="tabular-nums font-semibold">
-                {totalPieces}
-              </span>
-            </div>
+              <div className="flex items-center justify-between px-5 py-4">
+                <span className="text-slate-500 font-medium">Nb pièces</span>
+                <span className="tabular-nums font-semibold">
+                  {totalPieces}
+                </span>
+              </div>
 
-            <div className="flex items-center justify-between px-5 py-4">
-              <span className="text-slate-500 font-medium">Coût total</span>
-              <span className="tabular-nums font-semibold">
-                {euro.format(totalCostNumber)}
-              </span>
-            </div>
+              <div className="flex items-center justify-between px-5 py-4">
+                <span className="text-slate-500 font-medium">Coût total</span>
+                <span className="tabular-nums font-semibold">
+                  {euro.format(totalCostNumber)}
+                </span>
+              </div>
 
-            <div className="flex items-center justify-between px-5 py-4">
-              <span className="text-slate-500 font-medium">
-                Coût / pièce
-              </span>
-              <span className="tabular-nums">
-                {totalPieces > 0 ? euro.format(costPerPiece) : "—"}
-              </span>
-            </div>
+              <div className="flex items-center justify-between px-5 py-4">
+                <span className="text-slate-500 font-medium">
+                  Coût / pièce
+                </span>
+                <span className="tabular-nums">
+                  {totalPieces > 0 ? euro.format(costPerPiece) : "—"}
+                </span>
+              </div>
 
-            <div className="flex items-center justify-between px-5 py-4">
-              <span className="text-slate-500 font-medium">Statut</span>
-              <span
-                className={
-                  lot.status === "confirmed"
-                    ? "inline-flex rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-medium text-emerald-700"
-                    : "inline-flex rounded-full bg-slate-100 px-3 py-1 text-[11px] font-medium text-slate-600"
-                }
-              >
-                {lot.status === "confirmed" ? "Confirmé" : "Brouillon"}
-              </span>
-            </div>
-          </CardContent>
-        </Card>
+              <div className="flex items-center justify-between px-5 py-4">
+                <span className="text-slate-500 font-medium">Statut</span>
+                <span
+                  className={
+                    lot.status === "confirmed"
+                      ? "inline-flex rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-medium text-emerald-700"
+                      : "inline-flex rounded-full bg-slate-100 px-3 py-1 text-[11px] font-medium text-slate-600"
+                  }
+                >
+                  {lot.status === "confirmed" ? "Confirmé" : "Brouillon"}
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+
+          <LotInvoiceAttachmentPanel
+            lotId={lot.id}
+            lotStatus={lotStatus}
+            initialAttachment={invoiceAttachment}
+            initialWarning={invoiceAttachmentWarning}
+            initialError={invoiceAttachmentError}
+          />
+        </div>
 
         {/* COLONNE DROITE : pièces du lot */}
         <Card className="border-0 shadow-[0_18px_50px_rgba(15,23,42,0.16)] rounded-[28px] flex flex-col overflow-hidden bg-white/95">
@@ -251,11 +275,11 @@ export default async function LotDetailPage({
                 <div className="flex items-center gap-3">
                   <LotCsvImportDialog
                     lotId={lot.id}
-                    isDraft={lot.status === "draft"}
+                    isDraft={lotStatus === "draft"}
                   />
                   <QuickAddPieceForm
                     lotId={lot.id}
-                    isDraft={lot.status === "draft"}
+                    isDraft={lotStatus === "draft"}
                   />
                 </div>
                 </div>

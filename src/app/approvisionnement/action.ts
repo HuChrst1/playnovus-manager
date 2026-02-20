@@ -1,9 +1,10 @@
 "use server";
 
 import { supabase } from "@/lib/supabase";
+import { createClient } from "@supabase/supabase-js";
 import { parse } from "csv-parse/sync";
 import { revalidatePath } from "next/cache";
-import type { TablesUpdate } from "@/types/supabase";
+import type { Database, TablesUpdate } from "@/types/supabase";
 
 type LotStatus = "draft" | "confirmed";
 const DIRECT_CONFIRMED_CREATE_ERROR =
@@ -172,6 +173,119 @@ export type ImportLotPiecesFromCsvResult =
   | ImportLotPiecesFromCsvSuccess
   | ImportLotPiecesFromCsvFailure;
 
+const LOT_INVOICE_BUCKET = "lot-invoice-attachments";
+const LOT_INVOICE_FILE_BASENAME = "invoice";
+const LOT_INVOICE_MAX_SIZE_BYTES = 15 * 1024 * 1024;
+const LOT_INVOICE_SIGNED_URL_TTL_SECONDS = 60 * 60;
+const LOT_INVOICE_ALLOWED_FORMATS_LABEL = "PDF, JPG/JPEG, PNG, WEBP, HEIC";
+const LOT_INVOICE_MAX_SIZE_LABEL = "15 Mo";
+
+const LOT_INVOICE_ALLOWED_EXTENSIONS = new Set([
+  "pdf",
+  "jpg",
+  "jpeg",
+  "png",
+  "webp",
+  "heic",
+]);
+
+const LOT_INVOICE_ALLOWED_MIME_TYPES = new Set([
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+]);
+
+const LOT_INVOICE_MIME_BY_EXTENSION: Record<string, string> = {
+  pdf: "application/pdf",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+  heic: "image/heic",
+};
+
+export type LotInvoiceAttachment = {
+  path: string;
+  fileName: string;
+  mimeType: string | null;
+  sizeBytes: number | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+  signedUrl: string;
+};
+
+export type LotInvoiceAttachmentReason =
+  | "LOT_NOT_FOUND"
+  | "MISSING_SERVICE_ROLE_KEY"
+  | "INVALID_FILE"
+  | "INVALID_FILE_TYPE"
+  | "INVALID_FILE_SIZE"
+  | "ATTACHMENT_NOT_FOUND"
+  | "READ_FAILED"
+  | "UPLOAD_FAILED"
+  | "DELETE_FAILED";
+
+type LotInvoiceAttachmentFailure = {
+  success: false;
+  error: string;
+  reason: LotInvoiceAttachmentReason;
+};
+
+type LotInvoiceAttachmentReadSuccess = {
+  success: true;
+  attachment: LotInvoiceAttachment | null;
+  warning?: string;
+};
+
+type LotInvoiceAttachmentUploadSuccess = {
+  success: true;
+  attachment: LotInvoiceAttachment;
+  warning?: string;
+};
+
+type LotInvoiceAttachmentDeleteSuccess = {
+  success: true;
+  warning?: string;
+};
+
+export type GetLotInvoiceAttachmentResult =
+  | LotInvoiceAttachmentReadSuccess
+  | LotInvoiceAttachmentFailure;
+
+export type UploadLotInvoiceAttachmentResult =
+  | LotInvoiceAttachmentUploadSuccess
+  | LotInvoiceAttachmentFailure;
+
+export type DeleteLotInvoiceAttachmentResult =
+  | LotInvoiceAttachmentDeleteSuccess
+  | LotInvoiceAttachmentFailure;
+
+type LotInvoiceStorageObject = {
+  path: string;
+  fileName: string;
+  createdAt: string | null;
+  updatedAt: string | null;
+  mimeType: string | null;
+  sizeBytes: number | null;
+};
+
+type LotInvoiceFileValidationResult =
+  | {
+      success: true;
+      extension: string;
+      mimeType: string;
+    }
+  | {
+      success: false;
+      error: string;
+      reason: "INVALID_FILE" | "INVALID_FILE_TYPE" | "INVALID_FILE_SIZE";
+    };
+
+type SupabaseServiceClient = ReturnType<typeof createClient<Database>>;
+
 const extractLotSequence = (lotCode: string | null): number | null => {
   if (!lotCode) {
     return null;
@@ -284,6 +398,357 @@ const parseCsvLinesForLotImport = (csvContent: string): ParsedCsvLine[] => {
   }
 
   return parsedLines;
+};
+
+const getLotInvoiceFolderPath = (lotId: number): string => {
+  return `lot-${lotId}`;
+};
+
+const getLotInvoiceObjectPath = (
+  lotId: number,
+  extension: string
+): string => {
+  return `${getLotInvoiceFolderPath(lotId)}/${LOT_INVOICE_FILE_BASENAME}.${extension}`;
+};
+
+const getFileExtension = (fileName: string): string | null => {
+  const normalized = fileName.trim().toLowerCase();
+  const lastDotIndex = normalized.lastIndexOf(".");
+  if (lastDotIndex === -1 || lastDotIndex === normalized.length - 1) {
+    return null;
+  }
+
+  return normalized.slice(lastDotIndex + 1);
+};
+
+const inferMimeTypeFromExtension = (extension: string | null): string | null => {
+  if (!extension) {
+    return null;
+  }
+  return LOT_INVOICE_MIME_BY_EXTENSION[extension] ?? null;
+};
+
+const normalizeStorageMetadata = (
+  metadata: unknown
+): Record<string, unknown> | null => {
+  if (typeof metadata !== "object" || metadata === null) {
+    return null;
+  }
+  return metadata as Record<string, unknown>;
+};
+
+const createSupabaseServiceClient = () => {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    return {
+      success: false as const,
+      reason: "MISSING_SERVICE_ROLE_KEY" as const,
+      error:
+        "La clé service role Supabase est manquante. Configure SUPABASE_SERVICE_ROLE_KEY pour gérer les pièces jointes.",
+    };
+  }
+
+  return {
+    success: true as const,
+    client: createClient<Database>(supabaseUrl, serviceRoleKey, {
+      auth: { persistSession: false },
+    }),
+  };
+};
+
+const ensureLotExistsForInvoice = async (
+  lotId: number
+): Promise<{ success: true } | LotInvoiceAttachmentFailure> => {
+  if (!Number.isFinite(lotId) || lotId <= 0) {
+    return {
+      success: false,
+      reason: "LOT_NOT_FOUND",
+      error: "Lot invalide.",
+    };
+  }
+
+  const { data: lotRow, error: lotError } = await supabase
+    .from("lots")
+    .select("id")
+    .eq("id", lotId)
+    .maybeSingle();
+
+  if (lotError) {
+    console.error("ensureLotExistsForInvoice - lot lookup error:", lotError);
+    return {
+      success: false,
+      reason: "READ_FAILED",
+      error: "Impossible de vérifier l'existence du lot pour les pièces jointes.",
+    };
+  }
+
+  if (!lotRow) {
+    return {
+      success: false,
+      reason: "LOT_NOT_FOUND",
+      error: "Lot introuvable.",
+    };
+  }
+
+  return { success: true };
+};
+
+const ensureLotInvoiceBucket = async (
+  storageClient: SupabaseServiceClient
+): Promise<{ success: true } | LotInvoiceAttachmentFailure> => {
+  const { data: buckets, error: bucketsError } =
+    await storageClient.storage.listBuckets();
+
+  if (bucketsError) {
+    console.error("ensureLotInvoiceBucket - listBuckets error:", bucketsError);
+    return {
+      success: false,
+      reason: "READ_FAILED",
+      error: "Impossible de vérifier le bucket de pièces jointes facture.",
+    };
+  }
+
+  const hasBucket = (buckets ?? []).some(
+    (bucket) => bucket.name === LOT_INVOICE_BUCKET
+  );
+  if (hasBucket) {
+    return { success: true };
+  }
+
+  const { error: createBucketError } = await storageClient.storage.createBucket(
+    LOT_INVOICE_BUCKET,
+    {
+      public: false,
+      fileSizeLimit: LOT_INVOICE_MAX_SIZE_BYTES,
+      allowedMimeTypes: Array.from(LOT_INVOICE_ALLOWED_MIME_TYPES),
+    }
+  );
+
+  if (
+    createBucketError &&
+    !createBucketError.message.toLowerCase().includes("already")
+  ) {
+    console.error(
+      "ensureLotInvoiceBucket - createBucket error:",
+      createBucketError
+    );
+    return {
+      success: false,
+      reason: "UPLOAD_FAILED",
+      error: "Impossible de préparer le stockage des pièces jointes facture.",
+    };
+  }
+
+  return { success: true };
+};
+
+const listLotInvoiceStorageObjects = async (
+  storageClient: SupabaseServiceClient,
+  lotId: number
+): Promise<
+  | { success: true; objects: LotInvoiceStorageObject[] }
+  | LotInvoiceAttachmentFailure
+> => {
+  const bucketResult = await ensureLotInvoiceBucket(storageClient);
+  if (!bucketResult.success) {
+    return bucketResult;
+  }
+
+  const folderPath = getLotInvoiceFolderPath(lotId);
+  const { data, error } = await storageClient.storage
+    .from(LOT_INVOICE_BUCKET)
+    .list(folderPath, {
+      limit: 100,
+      sortBy: { column: "updated_at", order: "desc" },
+    });
+
+  if (error) {
+    console.error("listLotInvoiceStorageObjects - list error:", error);
+    return {
+      success: false,
+      reason: "READ_FAILED",
+      error: "Impossible de charger les pièces jointes facture de ce lot.",
+    };
+  }
+
+  const objects = (data ?? [])
+    .filter((row) => typeof row.name === "string" && row.name.trim().length > 0)
+    .map((row) => {
+      const metadata = normalizeStorageMetadata(row.metadata);
+      const rawMimeType = metadata?.mimetype;
+      const rawSize = metadata?.size;
+      const extension = getFileExtension(row.name);
+      const mimeType =
+        typeof rawMimeType === "string"
+          ? rawMimeType
+          : inferMimeTypeFromExtension(extension);
+      const sizeBytes =
+        typeof rawSize === "number" && Number.isFinite(rawSize) ? rawSize : null;
+
+      return {
+        path: `${folderPath}/${row.name}`,
+        fileName: row.name,
+        createdAt:
+          typeof row.created_at === "string" && row.created_at.length > 0
+            ? row.created_at
+            : null,
+        updatedAt:
+          typeof row.updated_at === "string" && row.updated_at.length > 0
+            ? row.updated_at
+            : null,
+        mimeType,
+        sizeBytes,
+      };
+    })
+    .sort((a, b) => {
+      const aDate = a.updatedAt ?? a.createdAt ?? "";
+      const bDate = b.updatedAt ?? b.createdAt ?? "";
+      return bDate.localeCompare(aDate);
+    });
+
+  return {
+    success: true,
+    objects,
+  };
+};
+
+const deleteLotInvoiceStorageObjects = async (
+  storageClient: SupabaseServiceClient,
+  objectPaths: string[]
+): Promise<{ success: true } | LotInvoiceAttachmentFailure> => {
+  if (objectPaths.length === 0) {
+    return { success: true };
+  }
+
+  const { error } = await storageClient.storage
+    .from(LOT_INVOICE_BUCKET)
+    .remove(objectPaths);
+
+  if (error) {
+    console.error("deleteLotInvoiceStorageObjects - remove error:", error);
+    return {
+      success: false,
+      reason: "DELETE_FAILED",
+      error: "Impossible de supprimer la pièce jointe facture existante.",
+    };
+  }
+
+  return { success: true };
+};
+
+const buildLotInvoiceAttachmentWithSignedUrl = async (
+  storageClient: SupabaseServiceClient,
+  object: LotInvoiceStorageObject
+): Promise<
+  | { success: true; attachment: LotInvoiceAttachment }
+  | LotInvoiceAttachmentFailure
+> => {
+  const { data, error } = await storageClient.storage
+    .from(LOT_INVOICE_BUCKET)
+    .createSignedUrl(object.path, LOT_INVOICE_SIGNED_URL_TTL_SECONDS);
+
+  if (error || !data?.signedUrl) {
+    console.error(
+      "buildLotInvoiceAttachmentWithSignedUrl - createSignedUrl error:",
+      error
+    );
+    return {
+      success: false,
+      reason: "READ_FAILED",
+      error:
+        "Impossible de générer le lien sécurisé de consultation de la pièce jointe.",
+    };
+  }
+
+  return {
+    success: true,
+    attachment: {
+      path: object.path,
+      fileName: object.fileName,
+      mimeType: object.mimeType,
+      sizeBytes: object.sizeBytes,
+      createdAt: object.createdAt,
+      updatedAt: object.updatedAt,
+      signedUrl: data.signedUrl,
+    },
+  };
+};
+
+const validateLotInvoiceFile = (
+  fileValue: FormDataEntryValue | null
+): LotInvoiceFileValidationResult => {
+  if (!(fileValue instanceof File)) {
+    return {
+      success: false,
+      reason: "INVALID_FILE",
+      error: "Aucun fichier sélectionné. Ajoute une facture photo/PDF puis réessaie.",
+    };
+  }
+
+  if (!fileValue.name || !fileValue.name.trim()) {
+    return {
+      success: false,
+      reason: "INVALID_FILE",
+      error:
+        "Nom de fichier invalide. Renomme le fichier puis relance l'upload.",
+    };
+  }
+
+  if (!Number.isFinite(fileValue.size) || fileValue.size <= 0) {
+    return {
+      success: false,
+      reason: "INVALID_FILE",
+      error:
+        "Le fichier est vide. Sélectionne un fichier valide puis réessaie.",
+    };
+  }
+
+  if (fileValue.size > LOT_INVOICE_MAX_SIZE_BYTES) {
+    return {
+      success: false,
+      reason: "INVALID_FILE_SIZE",
+      error: `Fichier trop volumineux. Taille maximale autorisée: ${LOT_INVOICE_MAX_SIZE_LABEL}.`,
+    };
+  }
+
+  const extension = getFileExtension(fileValue.name);
+  if (!extension || !LOT_INVOICE_ALLOWED_EXTENSIONS.has(extension)) {
+    return {
+      success: false,
+      reason: "INVALID_FILE_TYPE",
+      error: `Format invalide. Formats autorisés: ${LOT_INVOICE_ALLOWED_FORMATS_LABEL}.`,
+    };
+  }
+
+  const normalizedMimeType = fileValue.type.trim().toLowerCase();
+  if (
+    normalizedMimeType &&
+    !LOT_INVOICE_ALLOWED_MIME_TYPES.has(normalizedMimeType)
+  ) {
+    return {
+      success: false,
+      reason: "INVALID_FILE_TYPE",
+      error: `Type MIME invalide (${normalizedMimeType}). Formats autorisés: ${LOT_INVOICE_ALLOWED_FORMATS_LABEL}.`,
+    };
+  }
+
+  const inferredMimeType = inferMimeTypeFromExtension(extension);
+  const mimeType = normalizedMimeType || inferredMimeType;
+  if (!mimeType || !LOT_INVOICE_ALLOWED_MIME_TYPES.has(mimeType)) {
+    return {
+      success: false,
+      reason: "INVALID_FILE_TYPE",
+      error: `Type de fichier non reconnu. Formats autorisés: ${LOT_INVOICE_ALLOWED_FORMATS_LABEL}.`,
+    };
+  }
+
+  return {
+    success: true,
+    extension,
+    mimeType,
+  };
 };
 
 async function computeNextLotCode(): Promise<NextLotCodeResult> {
@@ -1784,6 +2249,195 @@ export async function importLotPiecesFromCsv(
     appliedRows,
     rejectedRows,
     warning: warnings.length > 0 ? warnings.join(" ") : undefined,
+  };
+}
+
+export async function getLotInvoiceAttachment(
+  lotId: number
+): Promise<GetLotInvoiceAttachmentResult> {
+  const lotCheck = await ensureLotExistsForInvoice(lotId);
+  if (!lotCheck.success) {
+    return lotCheck;
+  }
+
+  const serviceClientResult = createSupabaseServiceClient();
+  if (!serviceClientResult.success) {
+    return {
+      success: false,
+      reason: serviceClientResult.reason,
+      error: serviceClientResult.error,
+    };
+  }
+
+  const listResult = await listLotInvoiceStorageObjects(
+    serviceClientResult.client,
+    lotId
+  );
+  if (!listResult.success) {
+    return listResult;
+  }
+
+  const latestObject = listResult.objects[0] ?? null;
+  if (!latestObject) {
+    return {
+      success: true,
+      attachment: null,
+    };
+  }
+
+  const attachmentResult = await buildLotInvoiceAttachmentWithSignedUrl(
+    serviceClientResult.client,
+    latestObject
+  );
+  if (!attachmentResult.success) {
+    return attachmentResult;
+  }
+
+  return {
+    success: true,
+    attachment: attachmentResult.attachment,
+    warning:
+      listResult.objects.length > 1
+        ? "Plusieurs fichiers facture détectés pour ce lot. Le plus récent est affiché."
+        : undefined,
+  };
+}
+
+export async function uploadLotInvoiceAttachment(
+  lotId: number,
+  formData: FormData
+): Promise<UploadLotInvoiceAttachmentResult> {
+  const lotCheck = await ensureLotExistsForInvoice(lotId);
+  if (!lotCheck.success) {
+    return lotCheck;
+  }
+
+  const validation = validateLotInvoiceFile(formData.get("attachment"));
+  if (!validation.success) {
+    return {
+      success: false,
+      reason: validation.reason,
+      error: validation.error,
+    };
+  }
+
+  const serviceClientResult = createSupabaseServiceClient();
+  if (!serviceClientResult.success) {
+    return {
+      success: false,
+      reason: serviceClientResult.reason,
+      error: serviceClientResult.error,
+    };
+  }
+
+  const existingObjectsResult = await listLotInvoiceStorageObjects(
+    serviceClientResult.client,
+    lotId
+  );
+  if (!existingObjectsResult.success) {
+    return existingObjectsResult;
+  }
+
+  const deleteExistingResult = await deleteLotInvoiceStorageObjects(
+    serviceClientResult.client,
+    existingObjectsResult.objects.map((object) => object.path)
+  );
+  if (!deleteExistingResult.success) {
+    return deleteExistingResult;
+  }
+
+  const fileValue = formData.get("attachment");
+  if (!(fileValue instanceof File)) {
+    return {
+      success: false,
+      reason: "INVALID_FILE",
+      error: "Aucun fichier reçu côté serveur. Réessaie l'upload.",
+    };
+  }
+
+  const uploadPath = getLotInvoiceObjectPath(lotId, validation.extension);
+  const { error: uploadError } = await serviceClientResult.client.storage
+    .from(LOT_INVOICE_BUCKET)
+    .upload(uploadPath, fileValue, {
+      upsert: true,
+      contentType: validation.mimeType,
+      cacheControl: "3600",
+    });
+
+  if (uploadError) {
+    console.error("uploadLotInvoiceAttachment - upload error:", uploadError);
+    return {
+      success: false,
+      reason: "UPLOAD_FAILED",
+      error:
+        "Impossible de déposer la pièce jointe facture pour ce lot. Merci de réessayer.",
+    };
+  }
+
+  revalidatePath(`/approvisionnement/${lotId}`);
+
+  const attachmentResult = await getLotInvoiceAttachment(lotId);
+  if (!attachmentResult.success || !attachmentResult.attachment) {
+    return {
+      success: false,
+      reason: "UPLOAD_FAILED",
+      error:
+        "Le fichier a été déposé, mais la consultation n'a pas pu être préparée. Recharge la page.",
+    };
+  }
+
+  return {
+    success: true,
+    attachment: attachmentResult.attachment,
+    warning: attachmentResult.warning,
+  };
+}
+
+export async function deleteLotInvoiceAttachment(
+  lotId: number
+): Promise<DeleteLotInvoiceAttachmentResult> {
+  const lotCheck = await ensureLotExistsForInvoice(lotId);
+  if (!lotCheck.success) {
+    return lotCheck;
+  }
+
+  const serviceClientResult = createSupabaseServiceClient();
+  if (!serviceClientResult.success) {
+    return {
+      success: false,
+      reason: serviceClientResult.reason,
+      error: serviceClientResult.error,
+    };
+  }
+
+  const listResult = await listLotInvoiceStorageObjects(
+    serviceClientResult.client,
+    lotId
+  );
+  if (!listResult.success) {
+    return listResult;
+  }
+
+  if (listResult.objects.length === 0) {
+    return {
+      success: false,
+      reason: "ATTACHMENT_NOT_FOUND",
+      error: "Aucune pièce jointe facture à supprimer pour ce lot.",
+    };
+  }
+
+  const deleteResult = await deleteLotInvoiceStorageObjects(
+    serviceClientResult.client,
+    listResult.objects.map((object) => object.path)
+  );
+  if (!deleteResult.success) {
+    return deleteResult;
+  }
+
+  revalidatePath(`/approvisionnement/${lotId}`);
+
+  return {
+    success: true,
   };
 }
 

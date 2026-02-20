@@ -857,12 +857,22 @@ Definition of done:
 
 #### F5.0.2 - Pieces jointes facture (photo/pdf) sur detail lot
 
-Statut: `A FAIRE`
+Statut: `FAIT`
 Objectif: depuis `/approvisionnement/[id]`, permettre depot de factures en `photo` ou `pdf`.
-Livrables:
-- upload de piece jointe depuis le detail lot
-- affichage des pieces jointes associees au lot
-- suppression manuelle d'une piece jointe
+Livrables realises:
+- section dediee "piece jointe facture" sur le detail lot (`/approvisionnement/[id]`)
+- upload d'une piece jointe facture avec validation stricte:
+  - formats autorises: PDF, JPG/JPEG, PNG, WEBP, HEIC
+  - taille maximale: 15 Mo
+- cardinalite lot: 1 piece jointe (remplacement automatique de l'existante)
+- consultation depuis le detail lot:
+  - informations fichier (nom, type, taille, date)
+  - ouverture via URL signee
+- suppression manuelle de la piece jointe depuis l'UI lot
+- politique statut lot:
+  - upload autorise sur lot `draft` et `confirmed`
+  - suppression autorisee sur lot `draft` et `confirmed`
+- aucun impact sur les mouvements de stock (`PURCHASE`/`SALE`/`SALE_CANCEL`)
 Definition of done:
 - une piece jointe (photo/pdf) peut etre ajoutee et rattachee au lot
 - une piece jointe peut etre supprimee depuis l'UI du lot

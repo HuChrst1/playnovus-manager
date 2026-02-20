@@ -2,6 +2,80 @@
 
 Ce fichier consigne les changements du projet, etapes par etapes.
 
+## 2026-02-20 - F5.0.2 Pieces jointes facture (photo/pdf) sur detail lot
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/approvisionnement/action.ts`:
+  - ajout de la lecture server-side des pieces jointes facture lot: `getLotInvoiceAttachment(lotId)`
+  - ajout de l'upload/remplacement server-side: `uploadLotInvoiceAttachment(lotId, formData)`
+  - ajout de la suppression server-side: `deleteLotInvoiceAttachment(lotId)`
+  - creation/verification automatique du bucket storage prive `lot-invoice-attachments`
+  - politique cardinalite lot:
+    - 1 piece jointe par lot
+    - upload suivant = remplacement automatique de l'ancienne piece
+  - validation stricte upload:
+    - formats autorises: `PDF`, `JPG/JPEG`, `PNG`, `WEBP`, `HEIC`
+    - taille max: `15 Mo`
+    - rejet bloque avec message actionnable si invalide
+  - consultation via URL signee (TTL 1h) pour ouverture depuis l'UI lot
+  - aucun impact sur les flux stock (`stock_movements`/`stock_balance`) ou inventory existants
+- Ajout de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/approvisionnement/[id]/LotInvoiceAttachmentPanel.tsx`:
+  - composant UI dedie "piece jointe facture"
+  - upload fichier (photo/pdf) avec feedback simple succes/erreur
+  - affichage meta piece jointe (nom/type/taille/date)
+  - action `Ouvrir` (lien signe) + suppression manuelle
+  - lot `confirmed` autorise (upload + suppression) selon decision produit
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/approvisionnement/[id]/page.tsx`:
+  - chargement server-side de la piece jointe facture du lot
+  - integration du composant facture dans la colonne gauche du detail lot
+  - conservation du flux pieces existant (ajout rapide, import CSV, edition/suppression lignes)
+- Documentation:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/ROADMAP.md` (`F5.0.2` passe a `FAIT`)
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/DECISIONS.md` (D-032)
+
+### Verifications executees
+
+- Pre-check local:
+  - `npx supabase --version`: OK (`2.65.10`)
+  - `docker info --format '{{.ServerVersion}}'`: OK (`29.2.0`)
+  - `npx supabase status`: OK
+- Rejouabilite locale:
+  - `npx supabase start`: OK
+  - `npx supabase db reset --local`: OK (migrations F1.1 -> F1.7 + seed)
+- Scenarios F5.0.2 validates en local (S1 -> S9): OK
+  - `S1` lot draft upload photo valide
+  - `S2` lot draft upload PDF valide
+  - `S3` consultation de la piece jointe apres refresh
+  - `S4` suppression manuelle depuis detail lot
+  - `S5` lot confirmed upload autorise
+  - `S6` lot confirmed suppression autorisee
+  - `S7` fichier invalide bloque (format/taille)
+  - `S8` remplacement automatique de la piece jointe existante
+  - `S9` non-regression inventory (ajout/import/edition/suppression)
+- Gates techniques:
+  - `npm ci`: OK
+  - `npm run lint`: OK
+  - `npm run typecheck`: OK
+  - `npm run build`: OK
+  - `npm run test:f2.0`: OK
+- Verifications SQL post-implementation (lecture seule locale):
+  - `stock_balance.quantity < 0`: `0`
+  - vues `stock_per_piece`, `stock_journal`, `piece_movements`: lisibles (`2` / `4` / `4` lignes seed)
+  - `healthcheck_business_anomalies_v1`: `0`
+  - mouvements coeur (`PURCHASE`/`SALE`/`SALE_CANCEL`): inchanges par le flux documentaire
+- Verifications storage locales:
+  - bucket `lot-invoice-attachments`: present, prive (`public = false`)
+  - objets restants `storage.objects` sur ce bucket apres nettoyage tests: `0`
+
+### Perimetre / limites
+
+- Scope strict F5.0.2 respecte (pas de F5.0.1/F5.0.3/F6+).
+- Aucun changement SQL/migration.
+- Aucune ecriture DB distante.
+
 ## 2026-02-20 - F5.0.1 Import CSV pieces depuis detail lot
 
 Statut: `FAIT`
