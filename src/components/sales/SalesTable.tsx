@@ -137,7 +137,7 @@ export function SalesTable({
         <table className="min-w-full text-sm">
           <thead className="app-table-head">
           <tr>
-            {renderSortableHeader("ID", "sale_id", "left")}
+            {renderSortableHeader("N° vente", "sale_id", "left")}
             {renderSortableHeader("Date", "paid_at", "left")}
             {renderSortableHeader("Canal", "sales_channel", "left")}
             {renderSortableHeader("Type", "sale_type", "left")}
@@ -166,7 +166,9 @@ export function SalesTable({
 
                 return (
                   <ClickableRow key={r.sale_id} href={href}>
-                    <td className="px-4 py-3 font-mono text-xs">#{r.sale_id}</td>
+                    <td className="px-4 py-3">
+                      <div className="font-mono text-xs font-semibold">{r.sale_number_display}</div>
+                    </td>
 
                     <td className="px-4 py-3">{formatDate(r.paid_at)}</td>
 

@@ -2,6 +2,186 @@
 
 Ce fichier consigne les changements du projet, etapes par etapes.
 
+## 2026-02-20 - ROADMAP auth pre-prod (F6.5/F6.6) + trajectoire reports
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/ROADMAP.md`:
+  - ajout de `F6.5 - Authentification applicative multi-session admin` en Phase 6
+  - ajout de `F6.6 - Reglages comptes essentiels + attribution des reports` en Phase 6
+  - remplacement de la note F5.0.4 "auth/session reportee" par une reference explicite vers `F6.5` et `F6.6`
+  - ajout du cadrage futur associe:
+    - impacts API/interfaces/types publics (session requise + attribution utilisateur reports + surface `Reglages > Comptes`)
+    - scenarios de test cibles auth/reglages/reports
+    - hypotheses/defaults explicites (email+mot de passe, role `ADMIN` unique au demarrage, modele extensible)
+  - enrichissement des scenarios d'acceptation globaux:
+    - blocage d'acces si utilisateur non connecte
+    - multi-session admin avec memes donnees/permissions et tracabilite auteur+cloture sur reports
+  - ordre recommande des features mis a jour avec:
+    - `42. F6.5`
+    - `43. F6.6`
+
+### Verifications executees
+
+- Verification documentaire locale:
+  - sections F5.0.4, F6.5, F6.6 coherentes et reliees entre elles
+  - scenarios d'acceptation globaux mis a jour
+  - ordre recommande mis a jour avec les nouveaux items
+
+### Perimetre / limites
+
+- Changement strictement documentaire (ROADMAP uniquement).
+- Aucun changement code applicatif.
+- Aucune commande Supabase/DB executee.
+
+## 2026-02-20 - F5.0.4 Report tickets internes (sidebar desktop + modale partagee)
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Ajout de la migration SQL `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/supabase/migrations/20260220143000_f5_0_4_report_tickets.sql`:
+  - creation de `public.report_tickets`
+  - colonnes: `id`, `target_scope`, `category`, `description`, `status`, `created_at`, `closed_at`
+  - contraintes metier:
+    - `status in ('OPEN','RESOLVED','IGNORED')`
+    - `category in ('BUG','FEATURE','IMPROVEMENT')`
+    - `target_scope in ('GLOBAL','HOME','APPROVISIONNEMENT','VENTES','STOCK','CATALOGUE','HISTORIQUE_STOCK')`
+    - description non vide
+  - index:
+    - `idx_report_tickets_status_created_at`
+    - `idx_report_tickets_target_scope_created_at`
+  - RLS active + policy compat `p_report_tickets_compat_all`
+  - grants CRUD `anon/authenticated` + grants sequence `report_tickets_id_seq`
+- Ajout de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/lib/report-types.ts`:
+  - constantes/types partages pour `target_scope`, `category`, `status`
+  - labels UI + garde-fous de validation
+- Ajout de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/actions/report.ts`:
+  - `createReportTicketAction(input)`
+  - `listReportTicketsAction()`
+  - `updateReportTicketAction(input)` (regles checkbox/statut + `closed_at`)
+  - `deleteReportTicketAction(id)`
+  - validations serveur: cible/categorie obligatoires, description trim non vide et `<= 2000`
+- Ajout de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/report/ReportDialog.tsx`:
+  - modale centree 2 onglets:
+    - `Report`: creation ticket (`cible`, `categorie`, `description`)
+    - `Tickets`: tableau (`ID`, `Cible`, `Categorie`, `Description`, `Date depot`, `Statut`, `Cloture ?`, `Date cloture`, `Actions`)
+  - tri applique via action serveur: tickets `OPEN` d'abord, puis plus recents
+  - cloture:
+    - coche -> ticket clos (`RESOLVED/IGNORED`) + date de cloture auto
+    - decoche -> ticket re-ouvert (`OPEN`) + `closed_at = null`
+  - suppression ticket avec confirmation explicite
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/AppSidebar.tsx`:
+  - remplacement du bouton `?` par le trigger `Report` sous `⚙️` (desktop sidebar)
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/types/supabase.ts`:
+  - ajout du typage `public.report_tickets`
+- Documentation:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/ROADMAP.md`: ajout section F5.0.4 et passage a `FAIT`
+
+### Verifications executees
+
+- Pre-check local:
+  - `npx supabase --version`: OK (`2.65.10`)
+  - `docker info --format '{{.ServerVersion}}'`: OK (`29.2.0`)
+  - `npx supabase status`: OK
+- Rejouabilite locale:
+  - `npx supabase start`: OK
+  - `npx supabase db reset --local`: OK (migrations F1.1 -> F1.7 + F5.0.4 + seed)
+- Verifications SQL F5.0.4 (local):
+  - table/policy/index/contraintes `report_tickets`: OK
+  - CRUD SQL de controle (insert -> cloture -> reouverture -> suppression): OK
+  - `stock_balance.quantity < 0`: `0`
+  - vues `stock_per_piece`, `stock_journal`, `piece_movements`: lisibles
+  - `healthcheck_business_anomalies_v1`: `0`
+- Gates techniques:
+  - `npm ci`: OK
+  - `npm run lint`: OK
+  - `npm run typecheck`: OK
+  - `npm run build`: OK
+  - `npm run test:f2.0`: OK (non-regression F1.3/F1.4/F2.x)
+
+### Perimetre / limites
+
+- Scope strict F5.0.4 respecte (pas de refacto hors feature).
+- Aucune ecriture DB distante (local only).
+- Champ auteur/reporteur non implemente en V1 (prevu en phase auth ulterieure).
+
+## 2026-02-20 - F5.0.3 Numerotation metier des ventes (MAX+1 avec reset si vide)
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Ajout de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/lib/sale-number.ts`:
+  - `parseBusinessSaleNumber(value)` pour parser `#123` / `123` (et ignorer les formats non numeriques)
+  - `formatBusinessSaleNumberDisplay(rawSaleNumber, fallbackId)` pour l'affichage UI (`#N` + fallback legacy)
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/actions/sales.ts`:
+  - attribution automatique du numero metier dans `createSaleAction` via `computeNextBusinessSaleNumber()`:
+    - lecture de `sales.sale_number`
+    - calcul `MAX + 1` sur valeurs numeriques
+    - retour `1` si aucune valeur numerique
+  - insertion `sale_number` en valeur brute numerique string (`"1"`, `"2"`, ...)
+  - retry court (3 tentatives) en cas de collision unique `sales_sale_number_key`
+  - verrouillage edition manuelle:
+    - `sale_number` retire de `UpdateSaleMetaPayload`
+    - rejet explicite si payload legacy contient `sale_number`:
+      - `Le numéro métier est attribué automatiquement et ne peut pas être modifié manuellement.`
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/lib/sales.ts`:
+  - `listSalesForTable` charge maintenant `sale_number`
+  - `SalesListRow` expose:
+    - `sale_number_raw`
+    - `sale_number_display`
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/sales/SalesTable.tsx`:
+  - colonne principale `N° vente`
+  - affichage `sale_number_display` en principal et `ID {sale_id}` en secondaire
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/ventes/[id]/page.tsx`:
+  - titre detail `Vente {saleNumberDisplay}`
+  - `ID technique: {id}` en information secondaire
+- Documentation:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/ROADMAP.md` (`F5.0` et `F5.0.3` passes a `FAIT`)
+
+### Verifications executees
+
+- Pre-check local:
+  - `npx supabase --version`: OK (`2.65.10`)
+  - `docker info --format '{{.ServerVersion}}'`: OK (`29.2.0`)
+  - `npx supabase status`: OK
+- Rejouabilite locale:
+  - `npx supabase start`: OK
+  - `npx supabase db reset --local`: OK (migrations F1.1 -> F1.7 + seed)
+- Scenarios F5.0.3 valides en local (script temporaire d'execution automatique):
+  - `S1` table ventes vide -> premiere vente `#1`: OK
+  - `S2` vente suivante -> `#2` (`MAX+1`): OK
+  - `S3` annulation de `#1` -> suivante `#2`: OK
+  - `S4` suppression de la seule vente -> suivante `#1`: OK
+  - `S5` suppression d'une vente intermediaire -> pas de renumerotation, suivante `#4`: OK
+  - `S6` affichage UI (liste + detail) du numero metier en principal: OK
+  - `S7` edition manuelle du numero metier verrouillee (contrat TS + garde runtime): OK
+  - `S8` creation/edition/annulation/suppression sans regression des flux stock attendus: OK
+- Verifications SQL post-implementation:
+  - unicite `sale_number`: OK (pas de doublon)
+  - `stock_balance.quantity < 0`: `0`
+  - vues `stock_per_piece`, `stock_journal`, `piece_movements`: lisibles
+  - `healthcheck_business_anomalies_v1`: lisible, `0` anomalie locale
+  - aucun `source_type` parasite lie a la numerotation des ventes
+- Gates techniques:
+  - `npm ci`: OK
+  - `npm run lint`: OK
+  - `npm run typecheck`: OK
+  - `npm run build`: OK
+  - `npm run test:f2.0`: OK
+
+### Perimetre / limites
+
+- Scope strict F5.0.3 respecte (pas de F5.1+/F6+).
+- Aucun changement SQL/migration.
+- Aucune ecriture DB distante.
+- Note technique legacy (hors scope F5.0.3):
+  - la fonction `reset_sales_id_sequence` peut retourner `setval ... out of bounds` sur table `sales` vide (ID technique).
+  - non bloquant pour la numerotation metier `sale_number` et non traite dans cette feature.
+
 ## 2026-02-20 - F5.0.2 Pieces jointes facture (photo/pdf) sur detail lot
 
 Statut: `FAIT`

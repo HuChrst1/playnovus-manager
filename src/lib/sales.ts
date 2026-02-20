@@ -7,6 +7,7 @@ import type {
 } from "@/lib/sales-types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Tables } from "@/types/supabase";
+import { formatBusinessSaleNumberDisplay } from "@/lib/sale-number";
 
 // Helper: nettoie/valide overrides (attendu: { [piece_ref]: number })
 function normalizeOverrides(v: unknown): Record<string, number> | null {
@@ -187,6 +188,8 @@ export type SalesListParams = {
 
 export type SalesListRow = {
   sale_id: number;
+  sale_number_raw: string | null;
+  sale_number_display: string;
   paid_at: string;
   sales_channel: string;
   sale_type: "SET" | "PIECE" | "MIXED";
@@ -205,6 +208,7 @@ export type SalesListRow = {
 type SalesDbRow = Pick<
   Tables<"sales">,
   | "id"
+  | "sale_number"
   | "paid_at"
   | "sales_channel"
   | "sale_type"
@@ -266,6 +270,7 @@ export async function listSalesForTable(
     .select(
       `
         id,
+        sale_number,
         paid_at,
         sales_channel,
         sale_type,
@@ -344,6 +349,8 @@ export async function listSalesForTable(
     const paid_at = typeof s.paid_at === "string" ? s.paid_at : "";
     const sales_channel =
       typeof s.sales_channel === "string" ? s.sales_channel : "";
+    const saleNumberRaw = typeof s.sale_number === "string" ? s.sale_number : null;
+    const saleNumberDisplay = formatBusinessSaleNumberDisplay(saleNumberRaw, s.id);
 
     const statusSafe =
       s.status === "CONFIRMED" || s.status === "CANCELLED"
@@ -352,6 +359,8 @@ export async function listSalesForTable(
 
     return {
       sale_id: s.id,
+      sale_number_raw: saleNumberRaw,
+      sale_number_display: saleNumberDisplay,
       paid_at,
       sales_channel,
       sale_type: saleTypeFromDb ?? derivedType,

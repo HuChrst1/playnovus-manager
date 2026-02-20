@@ -13,6 +13,7 @@ import type {
 } from "@/lib/sales-types";
 import type { Tables, TablesInsert } from "@/types/supabase";
 import type { PostgrestError } from "@supabase/supabase-js";
+import { parseBusinessSaleNumber } from "@/lib/sale-number";
 type SaleItemDbRow = Tables<"sale_items">;
 type SaleItemInsertDb = TablesInsert<"sale_items"> & {
   overrides?: unknown | null;
@@ -22,6 +23,7 @@ type StockMovementInsertDb = TablesInsert<"stock_movements">;
 type SaleItemPiecesInsertDb = TablesInsert<"sale_item_pieces">;
 type SaleItemIdRow = Pick<SaleItemDbRow, "id">;
 type SaleItemPieceQtyRow = Pick<Tables<"sale_item_pieces">, "piece_ref" | "quantity">;
+type SaleNumberRow = Pick<SaleRow, "sale_number">;
 import { getPiecesForSaleItem } from "@/lib/sales";
 import { allocateFifoForPiece } from "@/lib/stock";
 
@@ -53,6 +55,8 @@ type SaleTotalsSnapshot = Pick<
   | "margin_rate"
   | "net_seller_amount"
 >;
+
+const SALE_NUMBER_INSERT_RETRY_MAX = 3;
 
 function normalizeOverrides(v: unknown): Record<string, number> | null {
   if (!v || typeof v !== "object" || Array.isArray(v)) return null;
@@ -123,6 +127,38 @@ function serializeUnknownError(error: unknown): Record<string, unknown> {
     message: typeof error === "string" ? error : "Erreur inconnue.",
     value: error,
   };
+}
+
+function isSaleNumberUniqueViolation(error: PostgrestError | null | undefined): boolean {
+  if (!error) return false;
+  if (error.code !== "23505") return false;
+
+  const haystack = `${error.message ?? ""} ${error.details ?? ""} ${error.hint ?? ""}`
+    .toLowerCase();
+  return haystack.includes("sales_sale_number_key") || haystack.includes("sale_number");
+}
+
+async function computeNextBusinessSaleNumber(): Promise<number> {
+  const { data, error } = await supabase
+    .from("sales")
+    .select("sale_number")
+    .returns<SaleNumberRow[]>();
+
+  if (error) {
+    console.error("computeNextBusinessSaleNumber - erreur lecture sales:", error);
+    throw new Error("Impossible de calculer le prochain numéro métier de vente.");
+  }
+
+  let maxBusinessNumber = 0;
+
+  for (const row of data ?? []) {
+    const parsed = parseBusinessSaleNumber(row.sale_number);
+    if (parsed !== null && parsed > maxBusinessNumber) {
+      maxBusinessNumber = parsed;
+    }
+  }
+
+  return Math.max(maxBusinessNumber + 1, 1);
 }
 
 /**
@@ -331,33 +367,56 @@ export async function createSaleAction(
       };
     }
 
-    // 1) Insertion dans sales
     const currency = draft.currency ?? "EUR";
     const net = Number(draft.net_seller_amount);
 
-    const saleInsert: SaleInsert = {
-      sale_type: draft.sale_type,
-      sales_channel: String(draft.sales_channel),
-      net_seller_amount: net,
-      paid_at: draft.paid_at,
-      status: "CONFIRMED",
-      currency,
-      comment: draft.comment ?? null,
+    // 1) Insertion dans sales avec retry court en cas de collision sale_number
+    let sale: SaleRow | null = null;
+    let saleError: PostgrestError | null = null;
 
-      total_cost_amount: 0,
-      total_margin_amount: 0,
-      margin_rate: null,
+    for (let attempt = 1; attempt <= SALE_NUMBER_INSERT_RETRY_MAX; attempt += 1) {
+      const nextBusinessSaleNumber = await computeNextBusinessSaleNumber();
 
-      buyer_paid_total: null,
-      vat_rate: null,
-      sale_number: null,
-    };
+      const saleInsert: SaleInsert = {
+        sale_type: draft.sale_type,
+        sales_channel: String(draft.sales_channel),
+        net_seller_amount: net,
+        paid_at: draft.paid_at,
+        status: "CONFIRMED",
+        currency,
+        comment: draft.comment ?? null,
 
-    const { data: sale, error: saleError } = await supabase
-      .from("sales")
-      .insert(saleInsert)
-      .select("*")
-      .single();
+        total_cost_amount: 0,
+        total_margin_amount: 0,
+        margin_rate: null,
+
+        buyer_paid_total: null,
+        vat_rate: null,
+        sale_number: String(nextBusinessSaleNumber),
+      };
+
+      const insertAttempt = await supabase
+        .from("sales")
+        .insert(saleInsert)
+        .select("*")
+        .single();
+
+      sale = (insertAttempt.data as SaleRow | null) ?? null;
+      saleError = insertAttempt.error ?? null;
+
+      if (!saleError && sale) {
+        break;
+      }
+
+      if (
+        attempt < SALE_NUMBER_INSERT_RETRY_MAX &&
+        isSaleNumberUniqueViolation(saleError)
+      ) {
+        continue;
+      }
+
+      break;
+    }
 
     if (saleError || !sale) {
       console.error(
@@ -951,7 +1010,6 @@ export type UpdateSaleMetaPayload = {
   net_seller_amount?: number;
   buyer_paid_total?: number | null;
   vat_rate?: number | null;
-  sale_number?: string | null;
 };
 
 export type UpdateSaleMetaResult =
@@ -963,10 +1021,20 @@ function validateUpdateSaleMetaInput(
   payload: UpdateSaleMetaPayload
 ): CreateSaleValidationError[] {
   const errors: CreateSaleValidationError[] = [];
+  const legacySaleNumber = (payload as Record<string, unknown>)["sale_number"];
 
   const id = Number(saleId);
   if (!Number.isFinite(id) || id <= 0) {
     errors.push({ field: "saleId", message: "Identifiant de vente invalide." });
+  }
+
+  if (legacySaleNumber !== undefined) {
+    errors.push({
+      field: "sale_number",
+      message:
+        "Le numéro métier est attribué automatiquement et ne peut pas être modifié manuellement.",
+    });
+    return errors;
   }
 
   const hasAnyField =
@@ -975,8 +1043,7 @@ function validateUpdateSaleMetaInput(
     payload.paid_at !== undefined ||
     payload.net_seller_amount !== undefined ||
     payload.buyer_paid_total !== undefined ||
-    payload.vat_rate !== undefined ||
-    payload.sale_number !== undefined;
+    payload.vat_rate !== undefined;
 
   if (!hasAnyField) {
     errors.push({
@@ -1038,16 +1105,6 @@ function validateUpdateSaleMetaInput(
         field: "vat_rate",
         message:
           "Le taux de TVA doit être un nombre positif ou nul (ex: 0, 5.5, 20).",
-      });
-    }
-  }
-
-  if (payload.sale_number !== undefined && payload.sale_number !== null) {
-    const num = String(payload.sale_number).trim();
-    if (num.length === 0) {
-      errors.push({
-        field: "sale_number",
-        message: "Le numéro de vente ne peut pas être une chaîne vide.",
       });
     }
   }
@@ -1118,11 +1175,6 @@ export async function updateSaleMetaAction(
     update.vat_rate = Number(payload.vat_rate);
   } else if (payload.vat_rate !== undefined) {
     update.vat_rate = null;
-  }
-
-  if (payload.sale_number !== undefined) {
-    update.sale_number =
-      payload.sale_number !== null ? String(payload.sale_number) : null;
   }
 
   if (netChanged && newNet !== undefined) {

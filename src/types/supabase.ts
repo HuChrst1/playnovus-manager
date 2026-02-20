@@ -91,6 +91,36 @@ export type Database = {
         }
         Relationships: []
       }
+      report_tickets: {
+        Row: {
+          category: string
+          closed_at: string | null
+          created_at: string
+          description: string
+          id: number
+          status: string
+          target_scope: string
+        }
+        Insert: {
+          category: string
+          closed_at?: string | null
+          created_at?: string
+          description: string
+          id?: number
+          status?: string
+          target_scope: string
+        }
+        Update: {
+          category?: string
+          closed_at?: string | null
+          created_at?: string
+          description?: string
+          id?: number
+          status?: string
+          target_scope?: string
+        }
+        Relationships: []
+      }
       sale_item_pieces: {
         Row: {
           created_at: string

@@ -5,6 +5,7 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { Home, Truck, ShoppingCart, Boxes, BookOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ReportDialog } from "@/components/report/ReportDialog";
 
 export function AppSidebar() {
   const pathname = usePathname();
@@ -83,7 +84,7 @@ export function AppSidebar() {
         </nav>
       </div>
 
-      {/* Bas : paramètres / aide */}
+      {/* Bas : paramètres / report */}
       <div className="flex flex-col items-center gap-3">
         <button
           type="button"
@@ -92,13 +93,7 @@ export function AppSidebar() {
         >
           <span className="text-[16px]">⚙️</span>
         </button>
-        <button
-          type="button"
-          className={itemClass}
-          aria-label="Aide"
-        >
-          <span className="text-[16px]">?</span>
-        </button>
+        <ReportDialog triggerClassName={itemClass} />
       </div>
     </aside>
   );

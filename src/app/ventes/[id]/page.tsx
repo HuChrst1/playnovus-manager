@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { SalesStatCard } from "@/components/sales/SalesStatCard";
 import type { SaleRow, SaleItemRow } from "@/lib/sales-types";
 import type { ReactNode } from "react";
+import { formatBusinessSaleNumberDisplay } from "@/lib/sale-number";
 
 export const dynamic = "force-dynamic";
 
@@ -65,6 +66,10 @@ export default async function VenteDetailPage({ params }: VentesDetailPageProps)
       : null;
 
   const isCancelled = saleRow.status === "CANCELLED";
+  const saleNumberDisplay = formatBusinessSaleNumberDisplay(
+    saleRow.sale_number,
+    saleRow.id
+  );
 
   const renderHeader = (
     label: string,
@@ -88,7 +93,7 @@ export default async function VenteDetailPage({ params }: VentesDetailPageProps)
       <div className="flex items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">
-            Vente #{saleRow.id}
+            Vente {saleNumberDisplay}
           </h1>
           <p className="text-sm text-muted-foreground">
             {saleRow.sale_type === "SET"
@@ -110,6 +115,7 @@ export default async function VenteDetailPage({ params }: VentesDetailPageProps)
               {isCancelled ? "Annulée" : "Confirmée"}
             </span>
           </p>
+          <p className="mt-1 text-xs text-muted-foreground">ID technique: {saleRow.id}</p>
         </div>
 
         <div className="flex items-center gap-2">

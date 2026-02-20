@@ -832,8 +832,8 @@ Statut global: `A FAIRE`
 
 ### F5.0 - Operations lots et ventes
 
-Statut: `A FAIRE`
-Objectif: ajouter des fonctions operationnelles dans le detail lot et la numerotation metier des ventes.
+Statut: `FAIT`
+Objectif: ajouter des fonctions operationnelles dans le detail lot, la numerotation metier des ventes et la remontee de tickets internes.
 
 #### F5.0.1 - Import CSV pieces depuis detail lot
 
@@ -880,21 +880,59 @@ Definition of done:
 
 #### F5.0.3 - Numerotation metier des ventes (MAX+1 avec reset si vide)
 
-Statut: `A FAIRE`
+Statut: `FAIT`
 Objectif: implementer une numerotation metier visible des ventes (et non une contrainte sur l'ID SQL technique).
-Livrables:
-- numero de vente calcule en `MAX + 1`
-- si aucune vente existante (apres suppression), la prochaine vente repart a `1`
-- une vente annulee conserve son numero, la suivante continue a `+1`
+Livrables realises:
+- attribution serveur du numero metier a la creation (`sale_number` stocke en numerique string: `"1"`, `"2"`, ...)
+- calcul `MAX + 1` sur les valeurs numeriques existantes de `sale_number` (fallback legacy non numerique ignore)
+- reset metier automatique a `1` si la table `sales` est vide
+- conservation du numero metier sur annulation, sans renumerotation retroactive
+- verrouillage de l'edition manuelle du numero metier dans `updateSaleMetaAction`
+- affichage prioritaire du numero metier en UI ventes:
+  - liste `/ventes`: colonne principale `N° vente` (`#N`), ID technique en secondaire
+  - detail `/ventes/[id]`: titre `Vente #N`, ID technique affiche en information secondaire
 Definition of done:
 - premiere vente visible = `n°1`
 - suppression de la seule vente existante -> prochaine vente = `n°1`
 - annulation de `n°1` -> vente suivante = `n°2`
+- suppression d'une vente intermediaire -> pas de renumerotation retroactive, prochaine vente = `MAX + 1`
+- numero metier visible sur `/ventes` et `/ventes/[id]`
+- numero metier non modifiable manuellement via l'action d'edition meta
 
-Impacts API/interfaces/types publics (futurs):
+#### F5.0.4 - Report tickets internes
+
+Statut: `FAIT`
+Objectif: permettre aux utilisateurs V1 de remonter des incidents et demandes d'evolution depuis la sidebar desktop via une modale partagee.
+Livrables realises:
+- remplacement du bouton `?` par un bouton `Report` dans la sidebar desktop (sous `⚙️`)
+- modale `Report` centree avec 2 onglets:
+  - `Report`: creation d'un ticket (`cible`, `categorie`, `description`)
+  - `Tickets`: tableau global des tickets avec mise a jour statut/cloture, date de cloture auto et suppression
+- persistance en base via `public.report_tickets`:
+  - colonnes: `target_scope`, `category`, `description`, `status`, `created_at`, `closed_at`
+  - contraintes metier sur cible/categorie/statut
+  - RLS + policy compat `anon/authenticated`
+  - index `(status, created_at desc)` et `(target_scope, created_at desc)`
+- tri par defaut: tickets ouverts d'abord, puis plus recents
+- regles de cloture:
+  - coche: passe en statut clos (`RESOLVED`/`IGNORED`) + `closed_at` auto
+  - decoche: repasse `OPEN` + `closed_at = null`
+- suppression explicite d'un ticket autorisee
+Definition of done:
+- bouton `Report` visible en sidebar desktop a la place de `?`
+- creation d'un ticket valide depuis la modale
+- tableau tickets affiche et met a jour les statuts/clotures conformement aux regles
+- suppression d'un ticket effective
+- aucune regression des flux existants (`lint/typecheck/build/test:f2.0`)
+- trajectoire auth/session explicite:
+  - authentification multi-session admin planifiee en `F6.5`
+  - attribution utilisateur reports + reglages comptes essentiels planifies en `F6.6`
+
+Impacts API/interfaces/types publics:
 - F5.0.1: entree CSV structuree (`piece_ref`, `quantity`) depuis UI lot
 - F5.0.2: gestion d'attachements lot (upload + suppression)
 - F5.0.3: introduction/usage d'un `numero_vente_metier` distinct de l'ID technique
+- F5.0.4: nouvelle table `public.report_tickets` + server actions CRUD pour tickets internes (sans champ auteur en V1)
 
 ### F5.1 - Normaliser composants de structure
 
@@ -974,6 +1012,61 @@ Livrables:
 Definition of done:
 - runbook de livraison complet et actionnable
 
+### F6.5 - Authentification applicative multi-session admin
+
+Statut: `A FAIRE`
+Objectif: imposer un acces applicatif via identifiant/mot de passe avec sessions separees, tout en conservant des permissions identiques entre admins.
+Livrables:
+- ecran de connexion (email + mot de passe)
+- login/logout et persistance de session
+- protection des routes applicatives metier (acces refuse si non connecte)
+- initialisation de 2 comptes admin de demarrage (modele extensible)
+- autorisations identiques pour les comptes admin (pas de roles differencies dans ce lot)
+Definition of done:
+- compte A et compte B peuvent se connecter chacun de leur cote au meme logiciel
+- les 2 comptes ont la meme visibilite data et les memes actions metier
+- un utilisateur non connecte est redirige vers la connexion
+
+### F6.6 - Reglages comptes essentiels + attribution des reports
+
+Statut: `A FAIRE`
+Objectif: preparer l'evolution multi-utilisateur avec un premier niveau de tracabilite operationnelle.
+Livrables:
+- section `Reglages > Comptes` avec operations essentielles:
+  - vue des comptes admins existants
+  - changement de mot de passe
+  - deconnexion de la session active
+- tickets report enrichis avec attribution utilisateur:
+  - auteur de creation
+  - utilisateur de cloture/ignorance
+- affichage de ces attributions dans l'onglet `Tickets` du module Report
+Definition of done:
+- chaque report affiche qui l'a cree et qui l'a cloture/ignore
+- les reglages comptes essentiels sont operationnels sans administration avancee des utilisateurs
+
+Impacts API/interfaces/types publics (cadrage futur auth):
+- session utilisateur requise pour l'acces UI metier
+- tickets report enrichis de champs d'attribution utilisateur (creation + cloture)
+- surface UI `Reglages > Comptes` pour operations essentielles (hors gestion admin complete)
+
+Scenarios de test cibles (auth + reglages + reports):
+- connexion reussie avec compte A et compte B
+- sessions A et B simultanees sur deux navigateurs/appareils
+- meme visibilite et memes autorisations pour A et B sur ventes/stock/appro/catalogue/dashboard
+- utilisateur non connecte redirige vers login
+- creation de report par A visible par B avec attribution auteur A
+- cloture/ignore d'un report par B met a jour l'attribution de cloture
+- changement de mot de passe via `Reglages > Comptes` sans impact data metier
+- non-regression globale des flux metier existants
+
+Hypotheses et defaults explicites (auth/reglages):
+- identifiant = email + mot de passe (pas de SSO/OAuth dans ce lot)
+- role unique `ADMIN` au demarrage pour les comptes A et B
+- modele extensible a plus de 2 admins (sans contrainte "strictement 2")
+- pas d'audit complet ventes/lots/stock dans ce lot
+- priorite a l'attribution utilisateur des reports
+- gestion avancee comptes (creation/desactivation/reset via UI) hors scope initial
+
 ## Scenarios d'acceptation globaux (gate final)
 
 1. confirmer un lot vide echoue en UI, serveur et DB
@@ -987,6 +1080,8 @@ Definition of done:
 9. DB bloque les doublons de mouvements selon la contrainte d'unicite
 10. healthcheck DB retourne 0 anomalie avant validation finale
 11. transition `confirmed -> draft` retire les mouvements `PURCHASE` si aucune vente liee, sinon echoue explicitement
+12. auth bloquante: utilisateur non connecte ne peut pas acceder a l'app metier
+13. multi-session admin: A et B voient les memes donnees et les reports tracent auteur + cloture
 
 ## Ordre recommande de lancement des agents Codex (feature par feature)
 
@@ -1023,10 +1118,13 @@ Definition of done:
 31. F5.0.1
 32. F5.0.2
 33. F5.0.3
-34. F5.1
-35. F5.2
-36. F5.3
-37. F6.1
-38. F6.2
-39. F6.3
-40. F6.4
+34. F5.0.4
+35. F5.1
+36. F5.2
+37. F5.3
+38. F6.1
+39. F6.2
+40. F6.3
+41. F6.4
+42. F6.5
+43. F6.6
