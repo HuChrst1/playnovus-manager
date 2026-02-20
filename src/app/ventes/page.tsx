@@ -10,6 +10,8 @@ import {
 import { SalesTable } from "@/components/sales/SalesTable";
 import { SalesStatCard } from "@/components/sales/SalesStatCard";
 import { NewSaleDialog } from "@/components/sales/NewSaleDialog";
+import { PageHeader } from "@/components/ui/page-header";
+import { FilterPopover } from "@/components/ui/filter-bar";
 
 export const dynamic = "force-dynamic";
 
@@ -242,63 +244,56 @@ export default async function VentesPage({ searchParams }: SalesPageProps) {
 
   return (
     <main className="space-y-6">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Ventes</h1>
-          <p className="text-sm text-muted-foreground">
-            Suivi des ventes de sets et de pièces au détail.
-          </p>
-          {totalSalesCount > 0 && (
-            <p className="mt-1 text-xs text-muted-foreground">
+      <PageHeader
+        title="Ventes"
+        description="Suivi des ventes de sets et de pièces au détail."
+        meta={
+          totalSalesCount > 0 ? (
+            <p className="text-xs text-muted-foreground">
               {totalSalesCount.toLocaleString("fr-FR")} commandes
               {" • "}
               <span className="text-emerald-700">
                 {headerCounts.confirmedCount.toLocaleString("fr-FR")} confirmées
               </span>
-              {normalized.includeCancelled && (
+              {normalized.includeCancelled ? (
                 <>
                   {" • "}
                   <span className="text-rose-700">
                     {headerCounts.cancelledCount.toLocaleString("fr-FR")} annulées
                   </span>
                 </>
-              )}
+              ) : null}
             </p>
-          )}
-        </div>
+          ) : null
+        }
+        actions={
+          <>
+            <div className="inline-flex items-center rounded-full border border-slate-200 bg-white p-1 shadow-[0_8px_20px_rgba(15,23,42,0.08)]">
+              <Link
+                href={includeCancelledHref}
+                className={cn(
+                  "inline-flex h-7 items-center rounded-full px-3 text-[11px] font-medium transition-colors",
+                  normalized.includeCancelled
+                    ? "bg-slate-900 text-white"
+                    : "text-slate-600 hover:bg-slate-50"
+                )}
+              >
+                Inclure annulées
+              </Link>
+              <Link
+                href={excludeCancelledHref}
+                className={cn(
+                  "inline-flex h-7 items-center rounded-full px-3 text-[11px] font-medium transition-colors",
+                  !normalized.includeCancelled
+                    ? "bg-slate-900 text-white"
+                    : "text-slate-600 hover:bg-slate-50"
+                )}
+              >
+                Exclure annulées
+              </Link>
+            </div>
 
-        <div className="flex items-center gap-2">
-          <div className="inline-flex items-center rounded-full border border-slate-200 bg-white p-1 shadow-[0_8px_20px_rgba(15,23,42,0.08)]">
-            <Link
-              href={includeCancelledHref}
-              className={cn(
-                "inline-flex h-7 items-center rounded-full px-3 text-[11px] font-medium transition-colors",
-                normalized.includeCancelled
-                  ? "bg-slate-900 text-white"
-                  : "text-slate-600 hover:bg-slate-50"
-              )}
-            >
-              Inclure annulées
-            </Link>
-            <Link
-              href={excludeCancelledHref}
-              className={cn(
-                "inline-flex h-7 items-center rounded-full px-3 text-[11px] font-medium transition-colors",
-                !normalized.includeCancelled
-                  ? "bg-slate-900 text-white"
-                  : "text-slate-600 hover:bg-slate-50"
-              )}
-            >
-              Exclure annulées
-            </Link>
-          </div>
-
-          <details className="group relative">
-            <summary className="list-none inline-flex h-9 cursor-pointer items-center rounded-full border border-slate-200 bg-white px-4 text-xs font-medium text-slate-700 shadow-[0_8px_20px_rgba(15,23,42,0.08)] transition-colors hover:bg-slate-50 [&::-webkit-details-marker]:hidden">
-              Filtrer
-            </summary>
-
-            <div className="absolute right-0 z-20 mt-2 w-80 rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_16px_40px_rgba(15,23,42,0.18)]">
+            <FilterPopover>
               <form method="GET" className="space-y-3">
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
@@ -327,15 +322,13 @@ export default async function VentesPage({ searchParams }: SalesPageProps) {
                   name="include_cancelled"
                   value={normalized.includeCancelled ? "true" : "false"}
                 />
-                {normalized.newIntent && (
-                  <input type="hidden" name="new" value="1" />
-                )}
-                {normalized.channel && (
+                {normalized.newIntent && <input type="hidden" name="new" value="1" />}
+                {normalized.channel ? (
                   <input type="hidden" name="channel" value={normalized.channel} />
-                )}
-                {normalized.saleType && (
+                ) : null}
+                {normalized.saleType ? (
                   <input type="hidden" name="sale_type" value={normalized.saleType} />
-                )}
+                ) : null}
                 <input type="hidden" name="sort" value={normalized.sort} />
                 <input type="hidden" name="dir" value={normalized.dir} />
                 <input type="hidden" name="page" value="1" />
@@ -355,12 +348,12 @@ export default async function VentesPage({ searchParams }: SalesPageProps) {
                   </button>
                 </div>
               </form>
-            </div>
-          </details>
+            </FilterPopover>
 
-          <NewSaleDialog openFromIntent={normalized.newIntent} />
-        </div>
-      </div>
+            <NewSaleDialog openFromIntent={normalized.newIntent} />
+          </>
+        }
+      />
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5 items-start">
         <SalesStatCard

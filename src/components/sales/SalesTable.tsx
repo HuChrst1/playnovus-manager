@@ -1,13 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { cn } from "@/lib/utils";
 import type { SalesListRow } from "@/lib/sales";
-import { ClickableRow } from "@/app/catalogue/ClickableRow";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { DeleteSaleDialog } from "@/components/sales/DeleteSaleDialog";
 import { EditSaleDialog } from "@/components/sales/EditSaleDialog";
+import { ClickableTableRow } from "@/components/ui/clickable-table-row";
+import {
+  SortableTableHeader,
+  TableCard,
+  TableOverflow,
+  TablePagination,
+  TableStatusBadge,
+} from "@/components/ui/data-table";
 
 export type SalesTableSortDir = "asc" | "desc";
 
@@ -47,7 +53,6 @@ export function SalesTable({
   baseQuery,
   pagination,
 }: SalesTableProps) {
-
   const makeSortHref = (columnKey: string) => {
     const params = new URLSearchParams(baseQuery);
 
@@ -79,75 +84,85 @@ export function SalesTable({
     return qs ? `/ventes?${qs}` : "/ventes";
   };
 
-  const renderSortableHeader = (
-    label: string,
-    columnKey: string,
-    align: "left" | "right" | "center" = "left"
-    ) => {
-    const isActive = activeSortKey === columnKey;
-    const isAsc = sortDir === "asc";
-
-    const alignClass =
-      align === "right"
-        ? "text-right"
-        : align === "center"
-        ? "text-center"
-        : "text-left";
-
-    return (
-      <th key={columnKey} className={cn("px-4 py-3 font-medium", alignClass)}>
-        <Link
-          href={makeSortHref(columnKey)}
-          className={cn(
-            "inline-flex items-center gap-1 hover:text-primary",
-            isActive && "text-primary"
-          )}
-        >
-          <span>{label}</span>
-          <span className="text-[10px]">
-            {isActive ? (isAsc ? "▲" : "▼") : "⇅"}
-          </span>
-        </Link>
-      </th>
-    );
-  };
-
   const renderStatusBadge = (status: string | null | undefined) => {
     const s = String(status ?? "CONFIRMED").toUpperCase();
-
     const isCancelled = s === "CANCELLED";
-
     return (
-      <span
-        className={cn(
-          "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold",
-          isCancelled
-            ? "bg-rose-50 text-rose-700 ring-1 ring-rose-200"
-            : "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
-        )}
-      >
-        {isCancelled ? "Annulée" : "Confirmée"}
-      </span>
+      <TableStatusBadge
+        label={isCancelled ? "Annulée" : "Confirmée"}
+        tone={isCancelled ? "danger" : "success"}
+      />
     );
   };
 
   return (
-    <div className="app-card overflow-hidden">
-      <div className="overflow-x-auto">
+    <TableCard>
+      <TableOverflow>
         <table className="min-w-full text-sm">
           <thead className="app-table-head">
-          <tr>
-            {renderSortableHeader("N° vente", "sale_id", "left")}
-            {renderSortableHeader("Date", "paid_at", "left")}
-            {renderSortableHeader("Canal", "sales_channel", "left")}
-            {renderSortableHeader("Type", "sale_type", "left")}
-            {renderSortableHeader("Statut", "status", "left")}
-            {renderSortableHeader("CA net", "net_seller_amount", "right")}
-            {renderSortableHeader("Coût total", "total_cost_amount", "right")}
-            {renderSortableHeader("Marge net", "total_margin_amount", "right")}
+            <tr>
+              <SortableTableHeader
+                label="N° vente"
+                columnKey="sale_id"
+                activeSortKey={activeSortKey}
+                sortDir={sortDir}
+                href={makeSortHref("sale_id")}
+              />
+              <SortableTableHeader
+                label="Date"
+                columnKey="paid_at"
+                activeSortKey={activeSortKey}
+                sortDir={sortDir}
+                href={makeSortHref("paid_at")}
+              />
+              <SortableTableHeader
+                label="Canal"
+                columnKey="sales_channel"
+                activeSortKey={activeSortKey}
+                sortDir={sortDir}
+                href={makeSortHref("sales_channel")}
+              />
+              <SortableTableHeader
+                label="Type"
+                columnKey="sale_type"
+                activeSortKey={activeSortKey}
+                sortDir={sortDir}
+                href={makeSortHref("sale_type")}
+              />
+              <SortableTableHeader
+                label="Statut"
+                columnKey="status"
+                activeSortKey={activeSortKey}
+                sortDir={sortDir}
+                href={makeSortHref("status")}
+              />
+              <SortableTableHeader
+                label="CA net"
+                columnKey="net_seller_amount"
+                activeSortKey={activeSortKey}
+                sortDir={sortDir}
+                href={makeSortHref("net_seller_amount")}
+                align="right"
+              />
+              <SortableTableHeader
+                label="Coût total"
+                columnKey="total_cost_amount"
+                activeSortKey={activeSortKey}
+                sortDir={sortDir}
+                href={makeSortHref("total_cost_amount")}
+                align="right"
+              />
+              <SortableTableHeader
+                label="Marge net"
+                columnKey="total_margin_amount"
+                activeSortKey={activeSortKey}
+                sortDir={sortDir}
+                href={makeSortHref("total_margin_amount")}
+                align="right"
+              />
 
-            <th className="px-4 py-3 text-right font-medium">Actions</th>
-          </tr>
+              <th className="px-4 py-3 text-right font-medium">Actions</th>
+            </tr>
           </thead>
 
           <tbody>
@@ -165,7 +180,7 @@ export function SalesTable({
                 const href = `/ventes/${r.sale_id}`;
 
                 return (
-                  <ClickableRow key={r.sale_id} href={href}>
+                  <ClickableTableRow key={r.sale_id} href={href}>
                     <td className="px-4 py-3">
                       <div className="font-mono text-xs font-semibold">{r.sale_number_display}</div>
                     </td>
@@ -224,75 +239,28 @@ export function SalesTable({
                         />
                       </div>
                     </td>
-                  </ClickableRow>
+                  </ClickableTableRow>
                 );
               })
             )}
           </tbody>
         </table>
-      </div>
-                {/* Pagination — même design que /catalogue */}
-                {pagination && pagination.totalPages > 1 && (
-        <div className="flex flex-col gap-3 border-t border-border bg-muted/40 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="text-xs text-muted-foreground">
-            Affichage {pagination.pageFrom}–{pagination.pageTo} sur{" "}
-            {pagination.totalCount.toLocaleString("fr-FR")} commandes
-          </div>
-
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1 rounded-full bg-background px-2 py-1 shadow-sm">
-              <Button
-                variant="ghost"
-                size="icon"
-                asChild
-                disabled={pagination.currentPage === 1}
-                className="h-7 w-7 rounded-full"
-              >
-                <Link href={makePageHref(pagination.currentPage - 1)}>
-                  <ChevronLeft className="h-4 w-4" />
-                </Link>
-              </Button>
-
-              {pagination.pageNumbers.map((item, index) =>
-                item === "dots" ? (
-                  <span
-                    key={`dots-${index}`}
-                    className="h-7 px-2 flex items-center justify-center text-xs text-muted-foreground"
-                  >
-                    …
-                  </span>
-                ) : (
-                  <Link
-                    key={item}
-                    href={makePageHref(item)}
-                    className={cn(
-                      "h-7 w-7 flex items-center justify-center rounded-full text-xs transition-colors",
-                      item === pagination.currentPage
-                        ? "bg-primary text-primary-foreground shadow-sm"
-                        : "text-muted-foreground hover:bg-muted/80"
-                    )}
-                  >
-                    {item}
-                  </Link>
-                )
-              )}
-
-              <Button
-                variant="ghost"
-                size="icon"
-                asChild
-                disabled={pagination.currentPage === pagination.totalPages}
-                className="h-7 w-7 rounded-full"
-              >
-                <Link href={makePageHref(pagination.currentPage + 1)}>
-                  <ChevronRight className="h-4 w-4" />
-                </Link>
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+      </TableOverflow>
+      {pagination ? (
+        <TablePagination
+          currentPage={pagination.currentPage}
+          totalPages={pagination.totalPages}
+          pageNumbers={pagination.pageNumbers}
+          summary={
+            <>
+              Affichage {pagination.pageFrom}–{pagination.pageTo} sur{" "}
+              {pagination.totalCount.toLocaleString("fr-FR")} commandes
+            </>
+          }
+          makePageHref={makePageHref}
+        />
+      ) : null}
+    </TableCard>
   );
 }
 

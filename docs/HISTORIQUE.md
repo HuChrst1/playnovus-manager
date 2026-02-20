@@ -2,6 +2,65 @@
 
 Ce fichier consigne les changements du projet, etapes par etapes.
 
+## 2026-02-20 - F5.1 Normalisation des composants de structure (5 pages)
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Audit prealable confirme sur le perimetre documentaire/code:
+  - verification des livraisons `F4.2 -> F5.0.4` deja presentes dans `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/HISTORIQUE.md` et `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/ROADMAP.md`
+  - cartographie des patterns structures dupliques sur `/ventes`, `/approvisionnement`, `/stock`, `/historique-stock`, `/catalogue`
+- Ajout des composants shared de structure dans `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/ui/`:
+  - `page-header.tsx`
+  - `filter-bar.tsx`
+  - `kpi-card.tsx`
+  - `data-table.tsx`
+  - `clickable-table-row.tsx`
+- Unification KPI en compat stricte:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/sales/SalesStatCard.tsx` -> wrapper `kpi-card`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/dashboard/DashboardStatCard.tsx` -> wrapper `kpi-card`
+- Suppression de duplication de ligne cliquable:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/approvisionnement/ClickableRow.tsx` -> re-export shared
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/catalogue/ClickableRow.tsx` -> re-export shared
+- Standardisation structurelle des tableaux / headers / filtres sur les 5 pages cibles:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/ventes/page.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/approvisionnement/page.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/stock/page.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/historique-stock/page.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/catalogue/page.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/sales/SalesTable.tsx`
+- Scope F5.1 respecte:
+  - aucune migration SQL ajoutee
+  - aucun changement schema metier Supabase
+  - aucune ecriture distante Supabase
+
+### Verifications executees
+
+- Pre-check local:
+  - `npx supabase --version`: OK (`2.65.10`)
+  - `docker info --format '{{.ServerVersion}}'`: OK (`29.2.0`)
+  - `npx supabase status`: OK
+- Rejouabilite locale:
+  - `npx supabase start --ignore-health-check`: OK (migrations + seed rejoues)
+  - `npx supabase db reset --local --yes`: OK (`Finished supabase db reset on branch feat/F5.1.`)
+- Gates techniques:
+  - `npm ci`: OK
+  - `npm run lint`: OK
+  - `npm run typecheck`: OK
+  - `npm run build`: OK
+  - `npm run test:f2.0`: OK
+- Verifications SQL post-implementation (local):
+  - `stock_balance.quantity < 0`: `0`
+  - vues `stock_per_piece`, `stock_journal`, `piece_movements`: lisibles
+  - `healthcheck_business_anomalies_v1`: `0`
+
+### Perimetre / limites
+
+- Feature strictement UI/structure (F5.1), sans extension F5.2/F5.3/F6+.
+- Comportements metier preserves (query params, tri, pagination, actions de ligne, navigation).
+- Observation environnement local: health-check `supabase_storage` parfois instable, resolu pendant la validation via relance propre `supabase stop --no-backup` puis `supabase start --ignore-health-check`.
+
 ## 2026-02-20 - ROADMAP auth pre-prod (F6.5/F6.6) + trajectoire reports
 
 Statut: `FAIT`

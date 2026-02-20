@@ -2,9 +2,11 @@
 
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
-import { cn } from "@/lib/utils";
 import { History } from "lucide-react";
 import { SalesStatCard } from "@/components/sales/SalesStatCard";
+import { PageHeader } from "@/components/ui/page-header";
+import { SortableTableHeader, TableCard, TableOverflow } from "@/components/ui/data-table";
+import { FilterBar } from "@/components/ui/filter-bar";
 
 export const dynamic = "force-dynamic";
 
@@ -139,37 +141,6 @@ export default async function StockPage({ searchParams }: StockPageProps) {
     return qs ? `/stock?${qs}` : "/stock";
   };
 
-  const renderSortableHeader = (
-    label: string,
-    columnKey: string,
-    align: "left" | "right" = "left"
-  ) => {
-    const isActive = activeSortKey === columnKey;
-    const isAsc = dir === "asc";
-
-    const alignClass = align === "right" ? "text-right" : "text-left";
-
-    return (
-      <th
-        key={columnKey}
-        className={cn("px-4 py-3 font-medium", alignClass)}
-      >
-        <Link
-          href={makeSortHref(columnKey)}
-          className={cn(
-            "inline-flex items-center gap-1 hover:text-primary",
-            isActive && "text-primary"
-          )}
-        >
-          <span>{label}</span>
-          <span className="text-[10px]">
-            {isActive ? (isAsc ? "▲" : "▼") : "⇅"}
-          </span>
-        </Link>
-      </th>
-    );
-  };
-
   // --------- RENDER ---------
   if (error) {
     return (
@@ -188,51 +159,42 @@ export default async function StockPage({ searchParams }: StockPageProps) {
 
   return (
     <main className="space-y-6">
-            {/* HEADER PAGE */}
-            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Stock de pièces
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Vue agrégée par numéro de pièce à partir des lots confirmés.
-          </p>
-        </div>
+      <PageHeader
+        title="Stock de pièces"
+        description="Vue agrégée par numéro de pièce à partir des lots confirmés."
+      />
 
-        {/* Recherche + bouton historique */}
-        <div className="flex w-full max-w-xs items-center gap-2 justify-end">
-        {/* Formulaire de recherche (GET) */}
-        <form method="GET" className="flex flex-1 items-center gap-2">
+      <FilterBar className="p-3">
+        <div className="flex w-full flex-col items-stretch gap-2 md:flex-row md:items-center md:justify-end">
+          <form method="GET" className="flex flex-1 items-center gap-2">
             <input
-            type="text"
-            name="q"
-            placeholder="Filtrer par réf. pièce..."
-            defaultValue={searchQuery}
-            className="w-full rounded-full border border-border bg-white px-3 py-2 text-sm shadow-[0_8px_20px_rgba(15,23,42,0.08)] outline-none focus:border-primary"
+              type="text"
+              name="q"
+              placeholder="Filtrer par réf. pièce..."
+              defaultValue={searchQuery}
+              className="w-full rounded-full border border-border bg-white px-3 py-2 text-sm shadow-[0_8px_20px_rgba(15,23,42,0.08)] outline-none focus:border-primary"
             />
 
-            {/* On garde le tri actuel quand on applique la recherche */}
             <input type="hidden" name="sort" value={activeSortKey} />
             <input type="hidden" name="dir" value={dir} />
 
             <button
-            type="submit"
-            className="inline-flex h-9 items-center rounded-full bg-slate-900 px-4 text-xs font-medium text-white shadow-[0_10px_25px_rgba(15,23,42,0.35)] hover:bg-slate-800 transition-colors"
+              type="submit"
+              className="inline-flex h-9 items-center rounded-full bg-slate-900 px-4 text-xs font-medium text-white shadow-[0_10px_25px_rgba(15,23,42,0.35)] transition-colors hover:bg-slate-800"
             >
-            Rechercher
+              Rechercher
             </button>
-        </form>
+          </form>
 
-        {/* Bouton historique global */}
-        <Link
+          <Link
             href="/historique-stock"
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-white shadow-[0_10px_25px_rgba(15,23,42,0.35)] hover:bg-slate-800 transition-colors"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-white shadow-[0_10px_25px_rgba(15,23,42,0.35)] transition-colors hover:bg-slate-800"
             aria-label="Voir l'historique des mouvements de stock"
-        >
+          >
             <History className="h-4 w-4" />
-        </Link>
+          </Link>
         </div>
-      </div>
+      </FilterBar>
 
       {/* CARDS DE TOTAUX STOCK */}
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -260,15 +222,42 @@ export default async function StockPage({ searchParams }: StockPageProps) {
       </section>
 
       {/* TABLEAU STOCK */}
-      <div className="app-card overflow-hidden">
-        <div className="overflow-x-auto">
+      <TableCard>
+        <TableOverflow>
           <table className="min-w-full text-sm">
             <thead className="app-table-head">
               <tr>
-                {renderSortableHeader("Réf. pièce", "piece_ref", "left")}
-                {renderSortableHeader("Quantité", "total_quantity", "right")}
-                {renderSortableHeader("PUMP (moyen)", "avg_unit_cost", "right")}
-                {renderSortableHeader("Valeur totale", "total_value", "right")}
+                <SortableTableHeader
+                  label="Réf. pièce"
+                  columnKey="piece_ref"
+                  activeSortKey={activeSortKey}
+                  sortDir={dir as "asc" | "desc"}
+                  href={makeSortHref("piece_ref")}
+                />
+                <SortableTableHeader
+                  label="Quantité"
+                  columnKey="total_quantity"
+                  activeSortKey={activeSortKey}
+                  sortDir={dir as "asc" | "desc"}
+                  href={makeSortHref("total_quantity")}
+                  align="right"
+                />
+                <SortableTableHeader
+                  label="PUMP (moyen)"
+                  columnKey="avg_unit_cost"
+                  activeSortKey={activeSortKey}
+                  sortDir={dir as "asc" | "desc"}
+                  href={makeSortHref("avg_unit_cost")}
+                  align="right"
+                />
+                <SortableTableHeader
+                  label="Valeur totale"
+                  columnKey="total_value"
+                  activeSortKey={activeSortKey}
+                  sortDir={dir as "asc" | "desc"}
+                  href={makeSortHref("total_value")}
+                  align="right"
+                />
               </tr>
             </thead>
 
@@ -330,8 +319,8 @@ export default async function StockPage({ searchParams }: StockPageProps) {
               )}
             </tbody>
           </table>
-        </div>
-      </div>
+        </TableOverflow>
+      </TableCard>
     </main>
   );
 }

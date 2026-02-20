@@ -5,8 +5,15 @@ import { DeleteLotButton } from "./DeleteLotButton";
 import { EditLotDialog, LotForEdit } from "./EditLotDialog";
 import { ClickableRow } from "./ClickableRow";
 import Link from "next/link";
-import { cn } from "@/lib/utils";
 import { SalesStatCard } from "@/components/sales/SalesStatCard";
+import { PageHeader } from "@/components/ui/page-header";
+import { FilterPopover } from "@/components/ui/filter-bar";
+import {
+  SortableTableHeader,
+  TableCard,
+  TableOverflow,
+  TableStatusBadge,
+} from "@/components/ui/data-table";
 
 export const dynamic = "force-dynamic";
 
@@ -263,37 +270,6 @@ export default async function ApprovisionnementPage({
     return qs ? `/approvisionnement?${qs}` : "/approvisionnement";
   };
 
-  const renderSortableHeader = (
-    label: string,
-    columnKey: string,
-    align: "left" | "right" | "center" = "left"
-  ) => {
-    const isActive = normalized.sort === columnKey;
-    const isAsc = normalized.dir === "asc";
-
-    const alignClass =
-      align === "right"
-        ? "text-right"
-        : align === "center"
-          ? "text-center"
-          : "text-left";
-
-    return (
-      <th key={columnKey} className={cn("px-4 py-3 font-medium", alignClass)}>
-        <Link
-          href={makeSortHref(columnKey)}
-          className={cn(
-            "inline-flex items-center gap-1 hover:text-primary",
-            isActive && "text-primary"
-          )}
-        >
-          <span>{label}</span>
-          <span className="text-[10px]">{isActive ? (isAsc ? "▲" : "▼") : "⇅"}</span>
-        </Link>
-      </th>
-    );
-  };
-
   const resetDateParams = new URLSearchParams();
   resetDateParams.set("sort", normalized.sort);
   resetDateParams.set("dir", normalized.dir);
@@ -301,21 +277,12 @@ export default async function ApprovisionnementPage({
 
   return (
     <main className="space-y-6">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Approvisionnements</h1>
-          <p className="text-sm text-muted-foreground">
-            Gestion des lots d&apos;achat et du stock initial.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <details className="group relative">
-            <summary className="list-none inline-flex h-9 cursor-pointer items-center rounded-full border border-slate-200 bg-white px-4 text-xs font-medium text-slate-700 shadow-[0_8px_20px_rgba(15,23,42,0.08)] transition-colors hover:bg-slate-50 [&::-webkit-details-marker]:hidden">
-              Filtrer
-            </summary>
-
-            <div className="absolute right-0 z-20 mt-2 w-80 rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_16px_40px_rgba(15,23,42,0.18)]">
+      <PageHeader
+        title="Approvisionnements"
+        description="Gestion des lots d&apos;achat et du stock initial."
+        actions={
+          <>
+            <FilterPopover>
               <form method="GET" className="space-y-3">
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
@@ -357,12 +324,12 @@ export default async function ApprovisionnementPage({
                   </button>
                 </div>
               </form>
-            </div>
-          </details>
+            </FilterPopover>
 
-          <NewLotDialog />
-        </div>
-      </div>
+            <NewLotDialog />
+          </>
+        }
+      />
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 items-start">
         <SalesStatCard
@@ -392,19 +359,64 @@ export default async function ApprovisionnementPage({
         />
       </section>
 
-      <div className="app-card overflow-hidden">
-        <div className="overflow-x-auto">
+      <TableCard>
+        <TableOverflow>
           <table className="min-w-full text-sm">
             <thead className="app-table-head">
               <tr>
-                {renderSortableHeader("LotID", "id", "left")}
-                {renderSortableHeader("Date", "purchase_date", "left")}
-                {renderSortableHeader("Libellé", "label", "left")}
-                {renderSortableHeader("Fournisseur", "supplier", "left")}
-                {renderSortableHeader("Nb pièces", "total_pieces", "right")}
-                {renderSortableHeader("Coût total", "total_cost", "right")}
+                <SortableTableHeader
+                  label="LotID"
+                  columnKey="id"
+                  activeSortKey={normalized.sort}
+                  sortDir={normalized.dir}
+                  href={makeSortHref("id")}
+                />
+                <SortableTableHeader
+                  label="Date"
+                  columnKey="purchase_date"
+                  activeSortKey={normalized.sort}
+                  sortDir={normalized.dir}
+                  href={makeSortHref("purchase_date")}
+                />
+                <SortableTableHeader
+                  label="Libellé"
+                  columnKey="label"
+                  activeSortKey={normalized.sort}
+                  sortDir={normalized.dir}
+                  href={makeSortHref("label")}
+                />
+                <SortableTableHeader
+                  label="Fournisseur"
+                  columnKey="supplier"
+                  activeSortKey={normalized.sort}
+                  sortDir={normalized.dir}
+                  href={makeSortHref("supplier")}
+                />
+                <SortableTableHeader
+                  label="Nb pièces"
+                  columnKey="total_pieces"
+                  activeSortKey={normalized.sort}
+                  sortDir={normalized.dir}
+                  href={makeSortHref("total_pieces")}
+                  align="right"
+                />
+                <SortableTableHeader
+                  label="Coût total"
+                  columnKey="total_cost"
+                  activeSortKey={normalized.sort}
+                  sortDir={normalized.dir}
+                  href={makeSortHref("total_cost")}
+                  align="right"
+                />
                 <th className="px-4 py-3 text-right font-medium">Coût / pièce</th>
-                {renderSortableHeader("Statut", "status", "center")}
+                <SortableTableHeader
+                  label="Statut"
+                  columnKey="status"
+                  activeSortKey={normalized.sort}
+                  sortDir={normalized.dir}
+                  href={makeSortHref("status")}
+                  align="center"
+                />
                 <th className="px-4 py-3 text-right font-medium">Actions</th>
               </tr>
             </thead>
@@ -469,15 +481,11 @@ export default async function ApprovisionnementPage({
                       </td>
 
                       <td className="px-4 py-3 text-center">
-                        <span
-                          className={
-                            lot.status === "confirmed"
-                              ? "inline-flex rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-medium text-emerald-700"
-                              : "inline-flex rounded-full bg-slate-100 px-3 py-1 text-[11px] font-medium text-slate-600"
-                          }
-                        >
-                          {lot.status === "confirmed" ? "Confirmé" : "Brouillon"}
-                        </span>
+                        <TableStatusBadge
+                          label={lot.status === "confirmed" ? "Confirmé" : "Brouillon"}
+                          tone={lot.status === "confirmed" ? "success" : "muted"}
+                          className="px-3 py-1 font-medium"
+                        />
                       </td>
 
                       <td className="px-4 py-3 text-right" data-row-action="true">
@@ -497,8 +505,8 @@ export default async function ApprovisionnementPage({
               )}
             </tbody>
           </table>
-        </div>
-      </div>
+        </TableOverflow>
+      </TableCard>
     </main>
   );
 }

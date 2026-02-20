@@ -2,13 +2,20 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { ClickableRow } from "./ClickableRow";
 import { AddSetDialog } from "./AddSetDialog";
 import { createSet, deleteSet } from "./actions";
 import { DeleteSetButton } from "./DeleteSetButton";
 import type { PostgrestError } from "@supabase/supabase-js";
+import { PageHeader } from "@/components/ui/page-header";
+import { FilterSidebar } from "@/components/ui/filter-bar";
+import {
+  SortableTableHeader,
+  TableCard,
+  TableOverflow,
+  TablePagination,
+} from "@/components/ui/data-table";
 
 export const dynamic = "force-dynamic";
 
@@ -317,28 +324,6 @@ const setsForDisplay: SetRow[] = setsWithCompletion;
     return qs ? `/catalogue?${qs}` : "/catalogue";
   };
 
-  const renderSortableHeader = (label: string, columnKey: string) => {
-    const isActive = activeSortKey === columnKey;
-    const isAsc = dir === "asc";
-
-    return (
-      <th key={columnKey} className="px-4 py-3 text-left font-medium">
-        <Link
-          href={makeSortHref(columnKey)}
-          className={cn(
-            "inline-flex items-center gap-1 hover:text-primary",
-            isActive && "text-primary"
-          )}
-        >
-          <span>{label}</span>
-          <span className="text-[10px]">
-            {isActive ? (isAsc ? "▲" : "▼") : "⇅"}
-          </span>
-        </Link>
-      </th>
-    );
-  };
-
   // Pastille de complétion (fond coloré + texte centré)
   const renderCompletionPill = (set: SetRow) => {
     const raw = typeof set.completion_percent === "number"
@@ -437,15 +422,10 @@ const setsForDisplay: SetRow[] = setsWithCompletion;
     return (
       <main className="space-y-6">
         <div className="w-full space-y-6">
-          {/* Titre de page collé en haut, comme "Order list" */}
-          <div className="flex flex-col gap-1">
-            <h1 className="text-2xl font-semibold tracking-tight">
-              Catalogue PlayNovus
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Liste des sets présents dans la base.
-            </p>
-          </div>
+          <PageHeader
+            title="Catalogue PlayNovus"
+            description="Liste des sets présents dans la base."
+          />
   
           {/* Barre de recherche + actions alignées comme sur la maquette */}
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -518,19 +498,61 @@ const setsForDisplay: SetRow[] = setsWithCompletion;
           <div className="flex gap-4 items-start justify-between">
             {/* Colonne tableau – prend toute la largeur dispo */}
             <div className="flex-1">
-              <div className="app-card overflow-hidden">
-                <div className="overflow-x-auto">
+              <TableCard>
+                <TableOverflow>
                   <table className="min-w-full text-sm">
                     <thead className="app-table-head">
                       <tr>
                         <th className="px-4 py-3 text-left font-medium">Photo</th>
-                        {renderSortableHeader("SetID", "display_ref")}
-                        {renderSortableHeader("Nom du set", "name")}
-                        {renderSortableHeader("Version", "version")}
-                        {renderSortableHeader("Début prod.", "year_start")}
-                        {renderSortableHeader("Fin prod.", "year_end")}
-                        {renderSortableHeader("Thème", "theme")}
-                        {renderSortableHeader("Complétion", "completion")}
+                        <SortableTableHeader
+                          label="SetID"
+                          columnKey="display_ref"
+                          activeSortKey={activeSortKey}
+                          sortDir={dir as "asc" | "desc"}
+                          href={makeSortHref("display_ref")}
+                        />
+                        <SortableTableHeader
+                          label="Nom du set"
+                          columnKey="name"
+                          activeSortKey={activeSortKey}
+                          sortDir={dir as "asc" | "desc"}
+                          href={makeSortHref("name")}
+                        />
+                        <SortableTableHeader
+                          label="Version"
+                          columnKey="version"
+                          activeSortKey={activeSortKey}
+                          sortDir={dir as "asc" | "desc"}
+                          href={makeSortHref("version")}
+                        />
+                        <SortableTableHeader
+                          label="Début prod."
+                          columnKey="year_start"
+                          activeSortKey={activeSortKey}
+                          sortDir={dir as "asc" | "desc"}
+                          href={makeSortHref("year_start")}
+                        />
+                        <SortableTableHeader
+                          label="Fin prod."
+                          columnKey="year_end"
+                          activeSortKey={activeSortKey}
+                          sortDir={dir as "asc" | "desc"}
+                          href={makeSortHref("year_end")}
+                        />
+                        <SortableTableHeader
+                          label="Thème"
+                          columnKey="theme"
+                          activeSortKey={activeSortKey}
+                          sortDir={dir as "asc" | "desc"}
+                          href={makeSortHref("theme")}
+                        />
+                        <SortableTableHeader
+                          label="Complétion"
+                          columnKey="completion"
+                          activeSortKey={activeSortKey}
+                          sortDir={dir as "asc" | "desc"}
+                          href={makeSortHref("completion")}
+                        />
                         <th className="px-4 py-3 text-right font-medium">
                           Actions
                         </th>
@@ -622,70 +644,20 @@ const setsForDisplay: SetRow[] = setsWithCompletion;
                       )}
                     </tbody>
                   </table>
-                </div>
+                </TableOverflow>
   
-                {/* Pagination */}
-                {totalPages > 1 && (
-                  <div className="flex flex-col gap-3 border-t border-border bg-muted/40 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="text-xs text-muted-foreground">
-                      Affichage {from + 1}–{Math.min(to + 1, totalCount)} sur{" "}
-                      {totalCount} sets
-                    </div>
-  
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-1 rounded-full bg-background px-2 py-1 shadow-sm">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          asChild
-                          disabled={currentPage === 1}
-                          className="h-7 w-7 rounded-full"
-                        >
-                          <Link href={makePageHref(currentPage - 1)}>
-                            <ChevronLeft className="h-4 w-4" />
-                          </Link>
-                        </Button>
-  
-                        {pageNumbers.map((item, index) =>
-                          item === "dots" ? (
-                            <span
-                              key={`dots-${index}`}
-                              className="h-7 px-2 flex items-center justify-center text-xs text-muted-foreground"
-                            >
-                              …
-                            </span>
-                          ) : (
-                            <Link
-                              key={item}
-                              href={makePageHref(item)}
-                              className={cn(
-                                "h-7 w-7 flex items-center justify-center rounded-full text-xs transition-colors",
-                                item === currentPage
-                                  ? "bg-primary text-primary-foreground shadow-sm"
-                                  : "text-muted-foreground hover:bg-muted/80"
-                              )}
-                            >
-                              {item}
-                            </Link>
-                          )
-                        )}
-  
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          asChild
-                          disabled={currentPage === totalPages}
-                          className="h-7 w-7 rounded-full"
-                        >
-                          <Link href={makePageHref(currentPage + 1)}>
-                            <ChevronRight className="h-4 w-4" />
-                          </Link>
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
+                <TablePagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  pageNumbers={pageNumbers}
+                  summary={
+                    <>
+                      Affichage {from + 1}–{Math.min(to + 1, totalCount)} sur {totalCount} sets
+                    </>
+                  }
+                  makePageHref={makePageHref}
+                />
+              </TableCard>
             </div>
   
           {/* Toggle caché qui contrôle l’aside (frère direct) */}
@@ -697,7 +669,7 @@ const setsForDisplay: SetRow[] = setsWithCompletion;
           />
 
           {/* Panneau filtres : formulaire GET séparé */}
-          <aside className="hidden w-[280px] shrink-0 peer-checked:block transition-all duration-200">
+          <FilterSidebar className="peer-checked:block">
             <form
               method="GET"
               className="app-card sticky top-24 text-xs px-4 py-4 lg:px-5 lg:py-5 space-y-6"
@@ -831,7 +803,7 @@ const setsForDisplay: SetRow[] = setsWithCompletion;
                 </div>
               </div>
             </form>
-          </aside>
+          </FilterSidebar>
           </div>
         </div>
       </main>

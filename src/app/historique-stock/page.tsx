@@ -3,9 +3,11 @@
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DashboardStatCard } from "@/components/dashboard/DashboardStatCard";
+import { PageHeader } from "@/components/ui/page-header";
+import { FilterBar } from "@/components/ui/filter-bar";
+import { TableCard, TableOverflow } from "@/components/ui/data-table";
 
 export const dynamic = "force-dynamic";
 
@@ -200,36 +202,21 @@ export default async function StockHistoryPage({
 
   return (
     <main className="space-y-6 min-w-[1024px]">
-      {/* HEADER PAGE */}
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Historique de stock
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Journal global des mouvements de stock (entrées, sorties,
-            ajustements).
-          </p>
-        </div>
-
-        {/* Bouton retour vers vue agrégée */}
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            asChild
-            className="rounded-full px-4"
-          >
+      <PageHeader
+        title="Historique de stock"
+        description="Journal global des mouvements de stock (entrées, sorties, ajustements)."
+        actions={
+          <Button variant="outline" size="sm" asChild className="rounded-full px-4">
             <Link href="/stock">
               <ArrowLeft className="mr-2 h-4 w-4" />
               Vue stock par pièce
             </Link>
           </Button>
-        </div>
-      </div>
+        }
+      />
 
       {/* FILTRES */}
-      <Card className="app-card p-4 md:p-5 rounded-3xl">
+      <FilterBar>
         <form
           method="GET"
           className="grid gap-3 md:grids-cols-5 items-end"
@@ -317,7 +304,7 @@ export default async function StockHistoryPage({
             </Button>
           </div>
         </form>
-      </Card>
+      </FilterBar>
 
       {/* Stats rapides */}
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -344,8 +331,8 @@ export default async function StockHistoryPage({
       </section>
 
       {/* TABLEAU JOURNAL */}
-      <div className="app-card overflow-hidden">
-        <div className="overflow-x-auto">
+      <TableCard>
+        <TableOverflow>
           <table className="min-w-full text-sm">
             <thead className="app-table-head">
               <tr>
@@ -462,8 +449,8 @@ export default async function StockHistoryPage({
               )}
             </tbody>
           </table>
-        </div>
-      </div>
+        </TableOverflow>
+      </TableCard>
     </main>
   );
 }

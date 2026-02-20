@@ -936,15 +936,26 @@ Impacts API/interfaces/types publics:
 
 ### F5.1 - Normaliser composants de structure
 
-Statut: `A FAIRE`
-Objectif: uniformiser les patterns de page.
-Livrables:
-- header de page shared
-- barre de filtres shared
-- cartes KPI shared
-- tableau standardise (head, badges, actions, pagination)
+Statut: `FAIT`
+Objectif: uniformiser les patterns de page sur `/ventes`, `/approvisionnement`, `/stock`, `/historique-stock`, `/catalogue` sans regression metier.
+Livrables realises:
+- nouveaux composants shared dans `src/components/ui/`:
+  - `page-header.tsx`
+  - `filter-bar.tsx`
+  - `kpi-card.tsx`
+  - `data-table.tsx`
+  - `clickable-table-row.tsx`
+- compatibilite preservee:
+  - `SalesStatCard` et `DashboardStatCard` convertis en wrappers de `kpi-card.tsx`
+  - `src/app/approvisionnement/ClickableRow.tsx` et `src/app/catalogue/ClickableRow.tsx` convertis en wrappers/re-exports de `clickable-table-row.tsx`
+- migration des 5 pages cibles vers le socle shared (variantes legeres par page) avec conservation des colonnes/actions existantes
+- standardisation structurelle du tableau (head, tri, badges, actions, pagination) sur les pages cibles sans changer les comportements metier
+- reduction des styles ad hoc repetes via reutilisation des classes globales existantes (`app-card`, `app-table-head`, `app-table-row`)
 Definition of done:
-- reduction nette des styles ad hoc
+- header/filtres/KPI/table shared utilises sur les 5 pages cibles
+- query params, tri, pagination, actions de ligne et navigation conserves fonctionnellement
+- aucune migration SQL ajoutee
+- non-regression validee via `npm run lint`, `npm run typecheck`, `npm run build`, `npm run test:f2.0`
 
 ### F5.2 - Harmoniser styles globaux et tokens
 
