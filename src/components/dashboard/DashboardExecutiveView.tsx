@@ -410,7 +410,7 @@ function FilterTimeline({
   onSelect: (preset: Exclude<DashboardPreset, "custom">) => void;
 }) {
   return (
-    <div className="app-segmented shrink-0 whitespace-nowrap">
+    <div className="app-segmented max-w-full shrink-0 overflow-x-auto whitespace-nowrap">
       {FILTER_TIMELINE.map((item) => {
         const isActive = selectedPreset === item.preset;
         return (
@@ -1384,26 +1384,30 @@ export function DashboardExecutiveView({ dashboard }: { dashboard: DashboardExec
   return (
     <main className="space-y-6">
       <header className="px-1 md:px-2">
-        <div className="flex items-start justify-between gap-3">
-          <h1 className="whitespace-nowrap text-3xl font-medium tracking-tight text-slate-900 md:text-[42px] md:leading-none">
+        <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <h1 className="text-3xl font-medium tracking-tight text-slate-900 md:text-[42px] md:leading-none">
             Dashboard
           </h1>
 
-          <div className="flex flex-col items-end gap-2">
-            <button type="button" onClick={openDesktopFilterPanel} className="app-filter-trigger h-10 text-sm">
+          <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:items-end">
+            <button
+              type="button"
+              onClick={openDesktopFilterPanel}
+              className="app-filter-trigger h-10 justify-center text-sm sm:justify-start"
+            >
               <Filter className="h-4 w-4" />
               Filtrer
             </button>
 
             {isDesktopFilterOpen ? (
-              <div className="inline-flex max-w-[min(96vw,980px)] flex-nowrap items-center gap-2 overflow-x-auto whitespace-nowrap rounded-[24px] border border-white/75 bg-white/92 px-2.5 py-2 shadow-[0_16px_36px_rgba(15,23,42,0.1)] backdrop-blur-md">
+              <div className="flex w-[min(96vw,980px)] max-w-full flex-wrap items-end gap-2 rounded-[24px] border border-white/75 bg-white/92 px-2.5 py-2 shadow-[0_16px_36px_rgba(15,23,42,0.1)] backdrop-blur-md">
                 <FilterTimeline selectedPreset={draftPreset} onSelect={applyPresetInstant} />
 
                 <button
                   type="button"
                   onClick={() => setDraftPreset("custom")}
                   className={cn(
-                    "app-segmented-item h-8 shrink-0",
+                    "app-segmented-item h-8 w-full shrink-0 sm:w-auto",
                     draftPreset === "custom"
                       ? "app-segmented-item--active"
                       : "app-segmented-item--inactive border border-border bg-white"
@@ -1412,25 +1416,25 @@ export function DashboardExecutiveView({ dashboard }: { dashboard: DashboardExec
                   Personnalise
                 </button>
 
-                <label className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-slate-500">
+                <label className="inline-flex min-w-0 basis-full items-center gap-1 text-[11px] font-medium text-slate-500 sm:basis-auto">
                   <span>Du</span>
                   <input
                     type="date"
                     value={draftFrom}
                     onChange={(event) => setDraftFrom(event.target.value)}
                     disabled={draftPreset !== "custom"}
-                    className="app-control h-8 w-[132px] px-3 text-[11px] disabled:cursor-not-allowed disabled:opacity-60"
+                    className="app-control h-8 w-full px-3 text-[11px] disabled:cursor-not-allowed disabled:opacity-60 sm:w-[132px]"
                   />
                 </label>
 
-                <label className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-slate-500">
+                <label className="inline-flex min-w-0 basis-full items-center gap-1 text-[11px] font-medium text-slate-500 sm:basis-auto">
                   <span>Au</span>
                   <input
                     type="date"
                     value={draftTo}
                     onChange={(event) => setDraftTo(event.target.value)}
                     disabled={draftPreset !== "custom"}
-                    className="app-control h-8 w-[132px] px-3 text-[11px] disabled:cursor-not-allowed disabled:opacity-60"
+                    className="app-control h-8 w-full px-3 text-[11px] disabled:cursor-not-allowed disabled:opacity-60 sm:w-[132px]"
                   />
                 </label>
 
@@ -1439,7 +1443,7 @@ export function DashboardExecutiveView({ dashboard }: { dashboard: DashboardExec
                   size="sm"
                   onClick={applyFilters}
                   disabled={draftPreset !== "custom"}
-                  className="shrink-0 text-[11px] font-semibold"
+                  className="w-full shrink-0 text-[11px] font-semibold sm:w-auto"
                 >
                   Appliquer
                 </Button>
@@ -1452,7 +1456,7 @@ export function DashboardExecutiveView({ dashboard }: { dashboard: DashboardExec
                     router.push("/?preset=total");
                     setIsDesktopFilterOpen(false);
                   }}
-                  className="shrink-0 text-[11px]"
+                  className="w-full shrink-0 text-[11px] sm:w-auto"
                 >
                   Reinitialiser
                 </Button>

@@ -204,7 +204,10 @@ export default async function StockPage({ searchParams }: StockPageProps) {
       </section>
 
       <section className="grid gap-2 px-1 md:grid-cols-2 md:items-center md:px-2 xl:grid-cols-3">
-        <form method="GET" className="col-span-1 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+        <form
+          method="GET"
+          className="col-span-1 grid grid-cols-1 items-center gap-2 sm:grid-cols-[minmax(0,1fr)_auto]"
+        >
           <input
             type="text"
             name="q"
@@ -216,15 +219,15 @@ export default async function StockPage({ searchParams }: StockPageProps) {
           <input type="hidden" name="sort" value={activeSortKey} />
           <input type="hidden" name="dir" value={dir} />
 
-          <Button type="submit" className="h-9 px-4 text-xs font-medium">
+          <Button type="submit" className="h-9 w-full px-4 text-xs font-medium sm:w-auto">
             Rechercher
           </Button>
         </form>
 
-        <div className="col-span-1 flex items-start justify-end md:col-start-2 xl:col-start-3">
+        <div className="col-span-1 flex items-start justify-start md:col-start-2 md:justify-end xl:col-start-3">
           <Button
             asChild
-            className="h-9 gap-2 px-4 text-xs font-medium"
+            className="h-9 w-full gap-2 px-4 text-xs font-medium sm:w-auto"
           >
             <Link href="/historique-stock">
               <History className="h-4 w-4" />

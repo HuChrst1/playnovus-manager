@@ -122,14 +122,14 @@ export function TablePagination({
     >
       <div className="text-xs text-muted-foreground">{summary}</div>
 
-      <div className="flex items-center gap-3">
-        <div className="app-segmented bg-white">
+      <div className="min-w-0 max-w-full overflow-x-auto">
+        <div className="app-segmented max-w-full bg-white">
           <Button
             variant="ghost"
             size="icon"
             asChild
             disabled={currentPage === 1}
-            className="h-7 w-7 rounded-full"
+            className="h-9 w-9 rounded-full sm:h-7 sm:w-7"
           >
             <Link href={makePageHref(currentPage - 1)}>
               <ChevronLeft className="h-4 w-4" />
@@ -140,7 +140,7 @@ export function TablePagination({
             item === "dots" ? (
               <span
                 key={`dots-${index}`}
-                className="flex h-7 items-center justify-center px-2 text-xs text-muted-foreground"
+                className="flex h-9 items-center justify-center px-2 text-xs text-muted-foreground sm:h-7"
               >
                 …
               </span>
@@ -149,7 +149,7 @@ export function TablePagination({
                 key={item}
                 href={makePageHref(item)}
                 className={cn(
-                  "flex h-7 w-7 items-center justify-center rounded-full text-xs transition-colors",
+                  "flex h-9 w-9 items-center justify-center rounded-full text-xs transition-colors sm:h-7 sm:w-7",
                   item === currentPage
                     ? "bg-slate-900 text-white shadow-sm"
                     : "text-muted-foreground hover:bg-muted/80"
@@ -165,7 +165,7 @@ export function TablePagination({
             size="icon"
             asChild
             disabled={currentPage === totalPages}
-            className="h-7 w-7 rounded-full"
+            className="h-9 w-9 rounded-full sm:h-7 sm:w-7"
           >
             <Link href={makePageHref(currentPage + 1)}>
               <ChevronRight className="h-4 w-4" />

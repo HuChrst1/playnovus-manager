@@ -991,7 +991,34 @@ Definition of done:
 
 ### F5.3 - Verification responsive des routes cles
 
-Statut: `A FAIRE`
+Statut: `FAIT`
+Objectif: fiabiliser la responsivite des routes metier principales sans toucher a la logique metier.
+Livrables realises:
+- hardening responsive des 5 routes cibles:
+  - `/`
+  - `/catalogue`
+  - `/approvisionnement`
+  - `/ventes`
+  - `/stock`
+- dashboard (`/`):
+  - header/filtres rendus robustes sur petits ecrans (empilement/wrap des controles)
+- approvisionnement/ventes:
+  - popovers filtres passes en layout flexible (`wrap`) pour eviter les debordements horizontaux
+  - champs dates/statut et actions `Appliquer/Reinitialiser` rendus accessibles en mobile
+- catalogue:
+  - toolbar filtres rendue multi-lignes en mobile
+  - drawers filtres bornes au viewport (suppression des rigidites `min-width` bloquantes)
+  - grilles de filtres compactees en 1 colonne mobile / 2 colonnes desktop
+- stock:
+  - barre recherche/actions rendue plus lisible/actionnable en mobile
+- shared:
+  - cibles tactiles pagination et actions icon-only augmentees en mobile
+  - conservation du scroll horizontal local sur tableaux larges
+- invariants preserves:
+  - aucun changement de logique metier
+  - aucun changement API/DB
+  - aucun changement query params/routes
+  - aucune ecriture DB distante
 Routes:
 - `/`
 - `/catalogue`
@@ -999,7 +1026,13 @@ Routes:
 - `/ventes`
 - `/stock`
 Definition of done:
-- parcours utilisables desktop et mobile sans cassure majeure
+- parcours utilisables desktop/tablette/mobile sans cassure majeure
+- validations techniques vertes:
+  - `npm ci`
+  - `npm run lint`
+  - `npm run typecheck`
+  - `npm run build`
+  - `npm run test:f2.0`
 
 ### F5.5 - Refonte globale UI/UX (Soft UI / Bento)
 

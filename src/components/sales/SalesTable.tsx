@@ -243,7 +243,7 @@ export function SalesTable({
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-8 w-8 rounded-full text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+                              className="h-9 w-9 rounded-full text-slate-700 hover:bg-slate-100 hover:text-slate-900 sm:h-8 sm:w-8"
                               aria-label="Supprimer la vente"
                             >
                               <Trash2 className="h-4 w-4" />

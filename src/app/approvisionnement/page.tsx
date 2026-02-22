@@ -353,11 +353,11 @@ export default async function ApprovisionnementPage({
           <div className="appro-filter-popover-left hidden group-open:block">
             <form
               method="GET"
-              className="inline-flex max-w-[min(96vw,980px)] flex-nowrap items-center gap-2 overflow-x-auto whitespace-nowrap rounded-[24px] border border-white/75 bg-white/92 px-2.5 py-2 shadow-[0_16px_36px_rgba(15,23,42,0.1)] backdrop-blur-md"
+              className="flex w-[min(96vw,760px)] max-w-full flex-wrap items-end gap-2 rounded-[24px] border border-white/75 bg-white/92 px-2.5 py-2 shadow-[0_16px_36px_rgba(15,23,42,0.1)] backdrop-blur-md"
             >
               <label
                 htmlFor="lots-from"
-                className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-slate-500"
+                className="inline-flex min-w-0 basis-full items-center gap-1 text-[11px] font-medium text-slate-500 sm:basis-auto"
               >
                 <span>Du</span>
                 <input
@@ -365,13 +365,13 @@ export default async function ApprovisionnementPage({
                   type="date"
                   name="from"
                   defaultValue={normalized.from ?? ""}
-                  className="app-control h-8 w-[132px] px-3 text-[11px]"
+                  className="app-control h-8 w-full px-3 text-[11px] sm:w-[132px]"
                 />
               </label>
 
               <label
                 htmlFor="lots-to"
-                className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-slate-500"
+                className="inline-flex min-w-0 basis-full items-center gap-1 text-[11px] font-medium text-slate-500 sm:basis-auto"
               >
                 <span>Au</span>
                 <input
@@ -379,17 +379,26 @@ export default async function ApprovisionnementPage({
                   type="date"
                   name="to"
                   defaultValue={normalized.to ?? ""}
-                  className="app-control h-8 w-[132px] px-3 text-[11px]"
+                  className="app-control h-8 w-full px-3 text-[11px] sm:w-[132px]"
                 />
               </label>
 
               <input type="hidden" name="sort" value={normalized.sort} />
               <input type="hidden" name="dir" value={normalized.dir} />
 
-              <Button variant="outline" size="sm" asChild className="shrink-0 text-[11px]">
+              <Button
+                variant="outline"
+                size="sm"
+                asChild
+                className="w-full shrink-0 text-[11px] sm:w-auto"
+              >
                 <Link href={resetDateHref}>Réinitialiser</Link>
               </Button>
-              <Button type="submit" size="sm" className="shrink-0 text-[11px] font-semibold">
+              <Button
+                type="submit"
+                size="sm"
+                className="w-full shrink-0 text-[11px] font-semibold sm:w-auto"
+              >
                 Appliquer
               </Button>
             </form>

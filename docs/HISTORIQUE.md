@@ -2,6 +2,59 @@
 
 Ce fichier consigne les changements du projet, etapes par etapes.
 
+## 2026-02-22 - F5.3 Verification responsive des routes cles
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Corrections responsive/UX visuelle appliquees sur les 5 routes cibles:
+  - `/`
+  - `/catalogue`
+  - `/approvisionnement`
+  - `/ventes`
+  - `/stock`
+- Dashboard (`/`):
+  - header et panneau filtres rendus flexibles en mobile (empilement/wrap)
+  - suppression des collisions titre/filtres sur petits ecrans
+- Approvisionnement / Ventes:
+  - popovers filtres convertis en layout `wrap` (plus de ligne forcee bloquante)
+  - champs et actions (`Appliquer` / `Reinitialiser`) rendus actionnables en mobile
+- Catalogue:
+  - toolbar filtres rendue multi-lignes sur mobile
+  - drawers filtres bornes au viewport (remplacement des rigidites `min-width`)
+  - grilles filtres adaptees mobile/tablette/desktop
+- Stock:
+  - barre recherche + action `Historique` rendue plus lisible et utilisable en mobile
+- Shared UI:
+  - cibles tactiles pagination et actions icon-only augmentees en mobile
+  - conservation du scroll horizontal local des tableaux (non bloquant)
+- Fichiers principaux touches:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/globals.css`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/dashboard/DashboardExecutiveView.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/approvisionnement/page.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/ventes/page.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/stock/page.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/ui/data-table.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/sales/SalesTable.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/ui/button.tsx`
+
+### Verifications executees
+
+- `npm ci`: OK
+- `npm run lint`: OK
+- `npm run typecheck`: OK
+- `npm run build`: OK
+- `npm run test:f2.0`: OK
+
+### Perimetre / limites
+
+- Scope strict F5.3 respecte:
+  - responsive/layout/UX visuelle uniquement
+  - aucun changement metier, API, DB, routes, query params
+  - aucune ecriture DB distante
+- F5.5 et F5.6 restent des lots distincts.
+
 ## 2026-02-22 - F5.5 Post-refonte: audit UI/UX + consolidation documentaire
 
 Statut: `FAIT`

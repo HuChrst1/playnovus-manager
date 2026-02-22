@@ -347,7 +347,7 @@
   }
 
   .appro-actions-bar {
-    @apply flex items-start justify-end gap-2 px-1 md:px-2;
+    @apply flex flex-wrap items-start justify-between gap-2 px-1 md:px-2 sm:justify-end;
   }
 
   .appro-filter-trigger-icon {
@@ -376,13 +376,7 @@
     right: 0;
     top: calc(100% + 8px);
     z-index: 30;
-  }
-
-  @media (min-width: 640px) {
-    .appro-filter-popover-left {
-      right: calc(100% + 8px);
-      top: 0;
-    }
+    max-width: min(96vw, 980px);
   }
 
   .catalogue-toolbar-shell {
@@ -394,12 +388,12 @@
   }
 
   .catalogue-filter-frame {
-    @apply relative z-[2] inline-flex max-w-full items-start overflow-visible rounded-[24px] border border-white/80 bg-white/94 px-1 py-1;
+    @apply relative z-[2] flex w-full max-w-full items-start overflow-visible rounded-[24px] border border-white/80 bg-white/94 px-1 py-1;
     box-shadow: var(--app-shadow-xs), inset 0 1px 0 rgba(255, 255, 255, 0.86);
   }
 
   .catalogue-filter-cluster {
-    @apply inline-flex min-w-max flex-nowrap items-start gap-1;
+    @apply flex w-full flex-wrap items-start gap-1.5;
   }
 
   .catalogue-filter-dropdown {
@@ -430,27 +424,27 @@
   }
 
   .catalogue-filter-drawer--version {
-    min-width: 270px;
+    min-width: min(270px, 86vw);
   }
 
   .catalogue-filter-drawer--years {
-    min-width: 320px;
+    min-width: min(320px, 86vw);
   }
 
   .catalogue-filter-drawer--period {
-    min-width: 230px;
+    min-width: min(230px, 86vw);
   }
 
   .catalogue-filter-drawer--themes {
-    min-width: 320px;
+    min-width: min(320px, 86vw);
   }
 
   .catalogue-filter-check-grid {
-    @apply grid grid-cols-2 gap-2;
+    @apply grid grid-cols-1 gap-2 sm:grid-cols-2;
   }
 
   .catalogue-filter-scroll-grid {
-    @apply grid max-h-60 grid-cols-2 gap-2 overflow-y-auto pr-1;
+    @apply grid max-h-60 grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2;
   }
 
   .catalogue-filter-check-option {
@@ -462,11 +456,11 @@
   }
 
   .catalogue-filter-actions {
-    @apply inline-flex shrink-0 items-center gap-1 pl-0.5;
+    @apply flex w-full flex-wrap items-center justify-end gap-1 pl-0.5 pt-1 sm:w-auto sm:flex-nowrap sm:pt-0;
   }
 
   .catalogue-toolbar-cta {
-    @apply relative z-[2] flex items-center justify-end;
+    @apply relative z-[2] flex w-full items-center justify-end xl:w-auto;
   }
 
   .catalogue-table-shell {
@@ -551,6 +545,12 @@
   @media (max-width: 1279px) {
     .catalogue-toolbar-shell {
       @apply gap-3;
+    }
+  }
+
+  @media (min-width: 1280px) {
+    .catalogue-filter-cluster {
+      @apply w-auto flex-nowrap gap-1;
     }
   }
 
