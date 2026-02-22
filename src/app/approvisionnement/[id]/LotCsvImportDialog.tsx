@@ -266,7 +266,7 @@ export function LotCsvImportDialog({ lotId, isDraft }: LotCsvImportDialogProps) 
         )}
 
         {error && <p className="mt-2 text-sm text-red-500">{error}</p>}
-        {notice && <p className="mt-2 text-sm text-amber-700">{notice}</p>}
+        {notice && <p className="mt-2 text-sm text-sky-700">{notice}</p>}
 
         {summary && (
           <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">

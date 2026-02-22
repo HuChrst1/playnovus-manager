@@ -2,6 +2,57 @@
 
 Ce fichier consigne les changements du projet, etapes par etapes.
 
+## 2026-02-22 - F5.5 Refonte globale UI/UX (Soft UI / Bento)
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Refonte globale du design system dans `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/globals.css`:
+  - tokens visuels Soft UI/Bento (rayons XXL, surfaces douces, ombres diffuses, pills)
+  - fond applicatif avec texture legere (dot-grid) et ambiance pastel
+  - classes utilitaires transverses pour navigation flottante, surfaces, tableaux, progressions et badges
+  - separateurs pointilles discrets privilegies
+- Changement du paradigme de navigation global:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/layout.tsx` adapte au nouveau shell topbar + contenu principal
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/AppSidebar.tsx` refondu en topbar flottante 3 zones (logo, nav centrale, actions/profil) avec menu compact mobile
+- Harmonisation des composants shared UI:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/ui/button.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/ui/badge.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/ui/card.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/ui/progress.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/ui/data-table.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/ui/page-header.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/ui/clickable-table-row.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/ui/kpi-card.tsx`
+- Adaptations transverses dashboard:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/dashboard/DashboardExecutiveView.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/dashboard/DashboardModal.tsx`
+- Ajustements responsive detail routes (suppression des rigidites `min-w-[1024px]`):
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/approvisionnement/[id]/page.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/stock/[piece_ref]/page.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/catalogue/[id]/page.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/historique-stock/page.tsx`
+
+### Verifications executees
+
+- Gates techniques completes:
+  - `npm ci`: OK
+  - `npm run lint`: OK
+  - `npm run typecheck`: OK
+  - `npm run build`: OK
+  - `npm run test:f2.0`: OK
+- Re-execution `test:f2.0` post-install: OK (scenarios F2.0/F1.3/F1.4/F1.5 valides, healthcheck a 0)
+
+### Perimetre / limites
+
+- Scope strict F5.5 respecte:
+  - refonte UI/UX globale uniquement
+  - aucun changement de logique metier et de contrats URL publics
+  - aucune migration SQL ajoutee
+  - aucune ecriture DB distante
+- F5.3 reste distinct et non absorbe dans ce lot (verification responsive globale dediee).
+
 ## 2026-02-20 - F5.2 Harmonisation styles globaux et tokens
 
 Statut: `FAIT`

@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { SalesListRow } from "@/lib/sales";
 import { Button } from "@/components/ui/button";
 import { Trash2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { DeleteSaleDialog } from "@/components/sales/DeleteSaleDialog";
 import { EditSaleDialog } from "@/components/sales/EditSaleDialog";
 import { ClickableTableRow } from "@/components/ui/clickable-table-row";
@@ -37,6 +38,7 @@ export type SalesTableProps = {
    */
   baseQuery: string;
   pagination?: SalesPagination;
+  variant?: "default" | "appro";
 };
 
 const euro = new Intl.NumberFormat("fr-FR", {
@@ -52,7 +54,10 @@ export function SalesTable({
   sortDir,
   baseQuery,
   pagination,
+  variant = "default",
 }: SalesTableProps) {
+  const isApproVariant = variant === "appro";
+
   const makeSortHref = (columnKey: string) => {
     const params = new URLSearchParams(baseQuery);
 
@@ -96,10 +101,10 @@ export function SalesTable({
   };
 
   return (
-    <TableCard>
-      <TableOverflow>
-        <table className="min-w-full text-sm">
-          <thead className="app-table-head">
+    <TableCard className={isApproVariant ? "appro-table-shell" : undefined}>
+      <TableOverflow className={isApproVariant ? "appro-table-scroll" : undefined}>
+        <table className={cn("min-w-full text-sm", isApproVariant && "appro-table")}>
+          <thead className={isApproVariant ? "appro-table-header" : "app-table-head"}>
             <tr>
               <SortableTableHeader
                 label="N° vente"
@@ -130,13 +135,6 @@ export function SalesTable({
                 href={makeSortHref("sale_type")}
               />
               <SortableTableHeader
-                label="Statut"
-                columnKey="status"
-                activeSortKey={activeSortKey}
-                sortDir={sortDir}
-                href={makeSortHref("status")}
-              />
-              <SortableTableHeader
                 label="CA net"
                 columnKey="net_seller_amount"
                 activeSortKey={activeSortKey}
@@ -160,6 +158,13 @@ export function SalesTable({
                 href={makeSortHref("total_margin_amount")}
                 align="right"
               />
+              <SortableTableHeader
+                label="Statut"
+                columnKey="status"
+                activeSortKey={activeSortKey}
+                sortDir={sortDir}
+                href={makeSortHref("status")}
+              />
 
               <th className="px-4 py-3 text-right font-medium">Actions</th>
             </tr>
@@ -180,7 +185,15 @@ export function SalesTable({
                 const href = `/ventes/${r.sale_id}`;
 
                 return (
-                  <ClickableTableRow key={r.sale_id} href={href}>
+                  <ClickableTableRow
+                    key={r.sale_id}
+                    href={href}
+                    className={
+                      isApproVariant
+                        ? "appro-table-row cursor-pointer focus-visible:outline-none"
+                        : undefined
+                    }
+                  >
                     <td className="px-4 py-3">
                       <div className="font-mono text-xs font-semibold">{r.sale_number_display}</div>
                     </td>
@@ -196,9 +209,6 @@ export function SalesTable({
                         ? "PIECE"
                         : "MIXED"}
                     </td>
-                    <td className="px-4 py-3">
-                      {renderStatusBadge(r.status)}
-                    </td>
 
                     <td className="px-4 py-3 text-right tabular-nums">
                       {euro.format(Number(r.net_seller_amount ?? 0))}
@@ -210,6 +220,9 @@ export function SalesTable({
 
                     <td className="px-4 py-3 text-right tabular-nums">
                       {euro.format(Number(r.total_margin_amount ?? 0))}
+                    </td>
+                    <td className="px-4 py-3">
+                      {renderStatusBadge(r.status)}
                     </td>
 
                     {/* Actions */}
@@ -230,7 +243,7 @@ export function SalesTable({
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-8 w-8 rounded-full"
+                              className="h-8 w-8 rounded-full text-slate-700 hover:bg-slate-100 hover:text-slate-900"
                               aria-label="Supprimer la vente"
                             >
                               <Trash2 className="h-4 w-4" />

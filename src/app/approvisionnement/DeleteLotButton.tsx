@@ -82,7 +82,7 @@ export function DeleteLotButton({
       type="button"
       variant="ghost"
       size="icon"
-      className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50"
+      className="h-8 w-8 text-slate-700 hover:bg-slate-100 hover:text-slate-900"
       onClick={handleDelete}
       disabled={isPending}
       aria-label="Supprimer le lot"

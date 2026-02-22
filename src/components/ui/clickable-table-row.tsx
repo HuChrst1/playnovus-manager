@@ -42,7 +42,10 @@ export function ClickableTableRow({ href, children, className }: ClickableTableR
 
   return (
     <tr
-      className={className ?? "app-table-row cursor-pointer"}
+      className={
+        className ??
+        "app-table-row cursor-pointer focus-visible:outline-none focus-visible:[&>td]:bg-sky-100/45"
+      }
       onClick={handleClick}
       onKeyDown={handleKeyDown}
       tabIndex={0}

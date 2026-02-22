@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, Plus } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { createLotFromDialog } from "./action";
 
 const getErrorMessage = (error: unknown) => {
@@ -24,7 +25,11 @@ const getErrorMessage = (error: unknown) => {
   return "Une erreur inattendue est survenue lors de l'enregistrement.";
 };
 
-export function NewLotDialog() {
+type NewLotDialogProps = {
+  triggerClassName?: string;
+};
+
+export function NewLotDialog({ triggerClassName }: NewLotDialogProps) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -75,7 +80,7 @@ export function NewLotDialog() {
     <Dialog open={open} onOpenChange={setOpen}>
       {/* Bouton dans la barre d’actions */}
       <DialogTrigger asChild>
-        <Button className="h-9 px-5 text-sm font-medium gap-2">
+        <Button className={cn("h-9 gap-2 px-5 text-sm font-medium", triggerClassName)}>
           <Plus className="h-4 w-4" />
           Nouveau lot
         </Button>

@@ -78,6 +78,19 @@ type KpiSeriesMetric =
   | "stockRotation"
   | "immobilizationRate";
 
+type DashboardDayTrendPoint = DashboardExecutiveData["trendSeries"]["byBucket"]["day"][number];
+
+const VISIBLE_KPI_KEYS: DashboardFinancialKpiKey[] = [
+  "netRevenue",
+  "netMargin",
+  "salesCount",
+  "averageBasket",
+];
+
+const SQUARE_CARD_CLASS = "min-h-[236px] md:min-h-[248px] xl:aspect-square xl:min-h-0";
+const KPI_COMPARISON_WINDOW_DAYS = 30;
+const KPI_COMPARISON_MIN_POINTS = KPI_COMPARISON_WINDOW_DAYS * 2;
+
 const PROCUREMENT_BLOCK_ISSUE_CODES = new Set<DashboardExecutiveIssueCode>([
   "FORECAST_UNAVAILABLE",
   "FORECAST_DATA_INSUFFICIENT",
@@ -119,7 +132,7 @@ function signalClassName(signal: DashboardActionSignal): string {
   if (signal === "FREINER") {
     return "border-rose-200 bg-rose-50 text-rose-700";
   }
-  return "border-amber-200 bg-amber-50 text-amber-700";
+  return "border-sky-200 bg-sky-50 text-sky-700";
 }
 
 function toPeriodParams(filters: DashboardExecutiveData["filters"]): URLSearchParams {
@@ -167,6 +180,139 @@ function seriesScaleFromKpiKey(key: DashboardFinancialKpiKey): number {
   }
 
   return 1;
+}
+
+function sumMetric(points: DashboardDayTrendPoint[], selector: (point: DashboardDayTrendPoint) => number): number {
+  return points.reduce((total, point) => total + selector(point), 0);
+}
+
+function meanNullableMetric(
+  points: DashboardDayTrendPoint[],
+  selector: (point: DashboardDayTrendPoint) => number | null
+): number | null {
+  let sum = 0;
+  let count = 0;
+
+  for (const point of points) {
+    const value = selector(point);
+    if (value === null || !Number.isFinite(value)) continue;
+    sum += value;
+    count += 1;
+  }
+
+  return count > 0 ? sum / count : null;
+}
+
+function lastNullableMetric(
+  points: DashboardDayTrendPoint[],
+  selector: (point: DashboardDayTrendPoint) => number | null
+): number | null {
+  for (let index = points.length - 1; index >= 0; index -= 1) {
+    const value = selector(points[index]!);
+    if (value !== null && Number.isFinite(value)) return value;
+  }
+  return null;
+}
+
+function computeKpiWindowValue(
+  points: DashboardDayTrendPoint[],
+  key: DashboardFinancialKpiKey
+): number | null {
+  if (points.length === 0) return null;
+
+  switch (key) {
+    case "netRevenue":
+      return sumMetric(points, (point) => point.netRevenue);
+    case "netMargin":
+      return sumMetric(points, (point) => point.netMargin);
+    case "salesCount":
+      return sumMetric(points, (point) => point.salesCount);
+    case "averageBasket": {
+      const revenue = sumMetric(points, (point) => point.netRevenue);
+      const sales = sumMetric(points, (point) => point.salesCount);
+      return sales > 0 ? revenue / sales : null;
+    }
+    case "marginRate": {
+      const revenue = sumMetric(points, (point) => point.netRevenue);
+      const margin = sumMetric(points, (point) => point.netMargin);
+      return revenue > 0 ? (margin / revenue) * 100 : null;
+    }
+    case "stockCurrentValue":
+      return lastNullableMetric(points, (point) => point.stockValue);
+    case "procurementCost":
+      return sumMetric(points, (point) => point.procurementCost);
+    case "avgPurchasePieceCost":
+      return meanNullableMetric(points, (point) => point.avgPurchasePieceCost);
+    case "confirmedLotsCount":
+      return sumMetric(points, (point) => point.confirmedLotsCount);
+    case "stockRotation":
+      return meanNullableMetric(points, (point) => point.stockRotation);
+    case "immobilizationRate":
+      return meanNullableMetric(points, (point) => point.immobilizationRate);
+    default: {
+      const exhaustiveCheck: never = key;
+      throw new Error(`KPI key non supportee: ${exhaustiveCheck}`);
+    }
+  }
+}
+
+function computeKpiDeltaPercent30Days(
+  dayPoints: DashboardDayTrendPoint[],
+  key: DashboardFinancialKpiKey
+): number | null {
+  if (dayPoints.length < KPI_COMPARISON_MIN_POINTS) return null;
+
+  const currentWindow = dayPoints.slice(-KPI_COMPARISON_WINDOW_DAYS);
+  const previousWindow = dayPoints.slice(
+    -KPI_COMPARISON_MIN_POINTS,
+    -KPI_COMPARISON_WINDOW_DAYS
+  );
+
+  if (
+    currentWindow.length < KPI_COMPARISON_WINDOW_DAYS ||
+    previousWindow.length < KPI_COMPARISON_WINDOW_DAYS
+  ) {
+    return null;
+  }
+
+  const currentValue = computeKpiWindowValue(currentWindow, key);
+  const previousValue = computeKpiWindowValue(previousWindow, key);
+
+  if (
+    currentValue === null ||
+    previousValue === null ||
+    !Number.isFinite(currentValue) ||
+    !Number.isFinite(previousValue) ||
+    previousValue === 0
+  ) {
+    return null;
+  }
+
+  const rawDelta = ((currentValue - previousValue) / Math.abs(previousValue)) * 100;
+  if (!Number.isFinite(rawDelta)) return null;
+
+  return Math.abs(rawDelta) < 0.05 ? 0 : rawDelta;
+}
+
+function formatKpiDeltaPercent(deltaPercent: number | null): string {
+  if (deltaPercent === null) return "—";
+  if (deltaPercent === 0) return "0,0%";
+  const sign = deltaPercent > 0 ? "+" : "-";
+  return `${sign}${percent.format(Math.abs(deltaPercent))}%`;
+}
+
+function kpiDeltaPillClasses(deltaPercent: number | null, options?: { active?: boolean }): string {
+  const isActive = options?.active ?? false;
+
+  if (deltaPercent === null || deltaPercent === 0) {
+    return isActive ? "bg-slate-300/20 text-slate-100" : "bg-slate-100 text-slate-600";
+  }
+
+  if (deltaPercent > 0) {
+    return isActive ? "bg-emerald-300/20 text-emerald-200" : "bg-emerald-100 text-emerald-700";
+  }
+
+  return isActive ? "bg-rose-300/20 text-rose-200" : "bg-rose-100 text-rose-700";
 }
 
 function qualityLabel(quality: DashboardFinancialKpi["quality"]): string {
@@ -218,28 +364,44 @@ function MinimalCardButton({
   subtitle,
   children,
   className,
+  contentClassName,
   onClick,
+  tone = "default",
 }: {
   title: string;
   subtitle: string;
   children: React.ReactNode;
   className?: string;
+  contentClassName?: string;
   onClick?: () => void;
+  tone?: "default" | "dark";
 }) {
+  const isDark = tone === "dark";
+
   return (
     <button
       type="button"
       onClick={onClick}
       className={cn(
-        "group flex h-full w-full flex-col rounded-[24px] border border-slate-200 bg-white/95 p-4 text-left shadow-[0_12px_28px_rgba(15,23,42,0.08)] transition-transform hover:-translate-y-0.5",
+        "group flex h-full w-full flex-col rounded-[28px] p-4 text-left transition-transform hover:-translate-y-0.5",
+        isDark
+          ? "border border-slate-800 bg-slate-950 shadow-[0_20px_44px_rgba(2,6,23,0.45)]"
+          : "app-card",
         className
       )}
     >
       <div className="mb-2">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">{title}</p>
-        <p className="text-xs text-slate-500">{subtitle}</p>
+        <p
+          className={cn(
+            "text-[11px] font-semibold uppercase tracking-[0.14em]",
+            isDark ? "text-slate-400" : "text-slate-500"
+          )}
+        >
+          {title}
+        </p>
+        <p className={cn("text-xs", isDark ? "text-slate-300" : "text-slate-500")}>{subtitle}</p>
       </div>
-      <div className="min-h-0 flex-1">{children}</div>
+      <div className={cn("min-h-0", contentClassName)}>{children}</div>
     </button>
   );
 }
@@ -261,7 +423,7 @@ function InsufficientAnalysisNotice({ show }: { show: boolean }) {
   if (!show) return null;
 
   return (
-    <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+    <p className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800">
       {INSUFFICIENT_ANALYSIS_MESSAGE}
     </p>
   );
@@ -352,7 +514,7 @@ function KpiModalBody({
             "inline-flex rounded-full px-3 py-1 font-medium",
             kpi.quality === "ok"
               ? "border border-emerald-200 bg-emerald-50 text-emerald-700"
-              : "border border-amber-200 bg-amber-50 text-amber-700"
+              : "border border-sky-200 bg-sky-50 text-sky-700"
           )}
         >
           Qualite: {qualityLabel(kpi.quality)}
@@ -398,6 +560,92 @@ function KpiModalBody({
       </div>
 
       <KpiSparklineChart points={points} metric={metricFromKpiKey(kpi.key)} scale={scale} />
+    </div>
+  );
+}
+
+function KpiHubModalBody({
+  dashboard,
+  initialKpiKey,
+  kpiTrendByKey,
+}: {
+  dashboard: DashboardExecutiveData;
+  initialKpiKey: DashboardFinancialKpiKey;
+  kpiTrendByKey: Map<DashboardFinancialKpiKey, number | null>;
+}) {
+  const [selectedKpiKey, setSelectedKpiKey] = useState<DashboardFinancialKpiKey>(initialKpiKey);
+
+  useEffect(() => {
+    setSelectedKpiKey(initialKpiKey);
+  }, [initialKpiKey]);
+
+  const selectedKpi =
+    dashboard.kpis.find((kpi) => kpi.key === selectedKpiKey) ?? dashboard.kpis[0] ?? null;
+
+  if (!selectedKpi) {
+    return (
+      <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+        Aucun KPI disponible.
+      </p>
+    );
+  }
+
+  return (
+    <div className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
+      <div className="space-y-2">
+        {dashboard.kpis.map((kpi) => {
+          const isActive = kpi.key === selectedKpi.key;
+          const trendPercent = kpiTrendByKey.get(kpi.key) ?? null;
+          return (
+            <button
+              key={kpi.key}
+              type="button"
+              onClick={() => setSelectedKpiKey(kpi.key)}
+              className={cn(
+                "w-full rounded-2xl border px-3 py-3 text-left transition-colors",
+                isActive
+                  ? "border-slate-900 bg-slate-900 text-white shadow-[0_16px_34px_rgba(15,23,42,0.28)]"
+                  : "border-slate-200 bg-white hover:bg-slate-50"
+              )}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <p
+                  className={cn(
+                    "text-[11px] font-semibold uppercase tracking-[0.14em]",
+                    isActive ? "text-slate-200" : "text-slate-500"
+                  )}
+                >
+                  {kpi.label}
+                </p>
+                <div className="flex flex-col items-end gap-1 text-right">
+                  <span
+                    className={cn(
+                      "inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold",
+                      kpiDeltaPillClasses(trendPercent, { active: isActive })
+                    )}
+                  >
+                    {formatKpiDeltaPercent(trendPercent)}
+                  </span>
+                  <span className={cn("text-[9px]", isActive ? "text-slate-300" : "text-slate-400")}>
+                    vs 30j precedents
+                  </span>
+                </div>
+              </div>
+              <p className={cn("mt-1 text-xl font-semibold tracking-tight", isActive ? "text-white" : "text-slate-900")}>
+                {formatKpiValue(kpi)}
+              </p>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="min-w-0">
+        <KpiModalBody
+          dashboard={dashboard}
+          kpi={selectedKpi}
+          actionHref={getKpiActionHref(selectedKpi.key, dashboard.filters)}
+        />
+      </div>
     </div>
   );
 }
@@ -568,7 +816,7 @@ function SetPieceTablePreview({ dashboard }: { dashboard: DashboardExecutiveData
   const pieces = dashboard.setPieceComparison.totals.pieces;
 
   return (
-    <div className="space-y-2 text-xs">
+    <div className="space-y-1.5 text-xs">
       <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
         <span className="text-slate-500">CA Sets</span>
         <span className="font-semibold text-slate-900">{euro.format(sets.netRevenue)}</span>
@@ -580,6 +828,10 @@ function SetPieceTablePreview({ dashboard }: { dashboard: DashboardExecutiveData
       <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
         <span className="text-slate-500">Marge Sets</span>
         <span className="font-semibold text-slate-900">{euro.format(sets.netMargin)}</span>
+      </div>
+      <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
+        <span className="text-slate-500">Marge Pieces</span>
+        <span className="font-semibold text-slate-900">{euro.format(pieces.netMargin)}</span>
       </div>
     </div>
   );
@@ -974,12 +1226,15 @@ function ProcurementPreview({
   const forecast = dashboard.forecast;
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
-        <span className="text-xs text-slate-500">Signal achat</span>
+    <div className="space-y-2 text-xs">
+      <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-3 py-1.5">
+        <span className="text-slate-500">Signal achat</span>
         <ActionSignalPill signal={forecast.signal} />
       </div>
-      <div className="grid gap-2 sm:grid-cols-3">
+      <p className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-1.5 text-[11px] text-slate-600">
+        {forecast.signalReason}
+      </p>
+      <div className="grid grid-cols-2 gap-2">
         <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
           <p className="text-[11px] text-slate-500">CA 30j</p>
           <p className="text-sm font-semibold text-slate-900">
@@ -992,7 +1247,7 @@ function ProcurementPreview({
             {formatCurrencyOrDash(forecast.projections.d30.projectedNetMargin)}
           </p>
         </div>
-        <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
+        <div className="col-span-2 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
           <p className="text-[11px] text-slate-500">Couverture</p>
           <p className="text-sm font-semibold text-slate-900">
             {formatDecimalOrDash(forecast.stockCoverageDays, " j")}
@@ -1006,29 +1261,34 @@ function ProcurementPreview({
   );
 }
 
-function OpportunitiesPreviewTable({ dashboard }: { dashboard: DashboardExecutiveData }) {
+function OpportunitiesDarkPreview({ dashboard }: { dashboard: DashboardExecutiveData }) {
+  const topRows = dashboard.opportunities.slice(0, 10);
+
+  if (topRows.length === 0) {
+    return (
+      <div className="rounded-[22px] border border-slate-800 bg-slate-900/70 p-4 text-sm text-slate-300">
+        Aucune opportunite detectee.
+      </div>
+    );
+  }
+
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-100">
-      <table className="min-w-full text-xs">
-        <thead className="bg-slate-50 text-slate-500">
-          <tr>
-            <th className="px-2 py-2 text-left">Set</th>
-            <th className="px-2 py-2 text-right">Comp.</th>
-            <th className="px-2 py-2 text-right">Max</th>
-          </tr>
-        </thead>
-        <tbody>
-          {dashboard.opportunities.slice(0, 3).map((row) => (
-            <tr key={row.key} className="border-t border-slate-100 bg-white">
-              <td className="px-2 py-1.5 text-slate-700">{row.displayRef}</td>
-              <td className="px-2 py-1.5 text-right text-slate-700">
-                {percent.format(row.completionPercent)}%
-              </td>
-              <td className="px-2 py-1.5 text-right text-slate-700">{integer.format(row.maxCompleteSets)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="space-y-1.5 rounded-[22px] border border-slate-800 bg-slate-900/70 p-3">
+      {topRows.map((row) => (
+        <div
+          key={row.key}
+          className="flex items-center justify-between gap-3 rounded-full border border-slate-700/80 bg-slate-900/85 px-3 py-1.5 text-xs"
+        >
+          <div className="min-w-0">
+            <p className="truncate font-medium text-slate-100">{row.displayRef}</p>
+            <p className="truncate text-[11px] text-slate-400">{row.name}</p>
+          </div>
+          <div className="shrink-0 text-right">
+            <p className="font-semibold text-sky-300">{percent.format(row.completionPercent)}%</p>
+            <p className="text-[11px] text-slate-400">max {integer.format(row.maxCompleteSets)}</p>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -1038,14 +1298,14 @@ function OpportunitiesModalBody({ dashboard }: { dashboard: DashboardExecutiveDa
   const rows = dashboard.opportunities.slice(0, Number.parseInt(limit, 10));
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 text-slate-200">
       <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
-        <label className="space-y-1 text-xs font-medium text-slate-600">
+        <label className="space-y-1 text-xs font-medium text-slate-300">
           Volume affiche
           <select
             value={limit}
             onChange={(event) => setLimit(event.target.value as "8" | "12" | "20")}
-            className="h-9 w-full rounded-full border border-slate-200 bg-white px-3 text-xs text-slate-700"
+            className="h-9 w-full rounded-full border border-slate-700 bg-slate-900 px-3 text-xs text-slate-100"
           >
             <option value="8">Top 8</option>
             <option value="12">Top 12</option>
@@ -1055,20 +1315,20 @@ function OpportunitiesModalBody({ dashboard }: { dashboard: DashboardExecutiveDa
 
         <Link
           href="/catalogue?sort=completion&dir=desc"
-          className="inline-flex h-9 items-center justify-center rounded-full border border-slate-200 px-4 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50"
+          className="inline-flex h-9 items-center justify-center rounded-full border border-slate-700 bg-slate-900/70 px-4 text-xs font-medium text-slate-100 transition-colors hover:bg-slate-800"
         >
           Ouvrir catalogue
         </Link>
       </div>
 
       {rows.length === 0 ? (
-        <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+        <p className="rounded-2xl border border-dashed border-slate-700 bg-slate-900/70 p-4 text-sm text-slate-300">
           Aucune opportunite detectee.
         </p>
       ) : (
-        <div className="overflow-auto rounded-2xl border border-slate-100">
+        <div className="overflow-auto rounded-2xl border border-slate-700 bg-slate-950/60">
           <table className="min-w-full text-sm">
-            <thead className="bg-slate-50 text-[11px] uppercase tracking-[0.14em] text-slate-500">
+            <thead className="bg-slate-900/80 text-[11px] uppercase tracking-[0.14em] text-slate-400">
               <tr>
                 <th className="px-3 py-2 text-left">Set</th>
                 <th className="px-3 py-2 text-right">Completion</th>
@@ -1077,19 +1337,25 @@ function OpportunitiesModalBody({ dashboard }: { dashboard: DashboardExecutiveDa
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => (
-                <tr key={row.key} className="border-t border-slate-100 bg-white">
+              {rows.map((row, index) => (
+                <tr
+                  key={row.key}
+                  className={cn(
+                    "border-t border-slate-800",
+                    index % 2 === 0 ? "bg-slate-950/85" : "bg-slate-900/65"
+                  )}
+                >
                   <td className="px-3 py-2">
-                    <p className="font-medium text-slate-900">{row.displayRef}</p>
-                    <p className="text-xs text-slate-500">{row.name}</p>
+                    <p className="font-medium text-slate-100">{row.displayRef}</p>
+                    <p className="text-xs text-slate-400">{row.name}</p>
                   </td>
-                  <td className="px-3 py-2 text-right text-slate-700">
+                  <td className="px-3 py-2 text-right text-slate-200">
                     {percent.format(row.completionPercent)} %
                   </td>
-                  <td className="px-3 py-2 text-right text-slate-700">
+                  <td className="px-3 py-2 text-right text-slate-200">
                     {integer.format(row.maxCompleteSets)}
                   </td>
-                  <td className="px-3 py-2 text-right text-slate-700">
+                  <td className="px-3 py-2 text-right text-slate-200">
                     {integer.format(row.totalPartsOwned)} / {integer.format(row.totalPartsNeeded)}
                   </td>
                 </tr>
@@ -1112,11 +1378,30 @@ export function DashboardExecutiveView({ dashboard }: { dashboard: DashboardExec
 
   const [block3ModalOpen, setBlock3ModalOpen] = useState(false);
   const [block3InitialView, setBlock3InitialView] = useState<Block3View>("grouped");
+  const [kpiHubModalOpen, setKpiHubModalOpen] = useState(false);
+  const [kpiHubInitialKey, setKpiHubInitialKey] =
+    useState<DashboardFinancialKpiKey>("netRevenue");
 
+  const dayTrendPoints = dashboard.trendSeries.byBucket.day;
   const activeTrendPoints = dashboard.trendSeries.byBucket[dashboard.filters.activeBucket];
   const stackedPoints = dashboard.stackedSalesSeries.byBucket[dashboard.stackedSalesSeries.defaultBucket];
   const groupedPoints =
     dashboard.setPieceComparison.groupedByBucket[dashboard.setPieceComparison.defaultBucket];
+  const kpiByKey = useMemo(
+    () => new Map(dashboard.kpis.map((kpi) => [kpi.key, kpi])),
+    [dashboard.kpis]
+  );
+  const visibleKpis = VISIBLE_KPI_KEYS.map((key) => kpiByKey.get(key)).filter(
+    (kpi): kpi is DashboardFinancialKpi => Boolean(kpi)
+  );
+  const kpiTrendByKey = useMemo(() => {
+    const trendMap = new Map<DashboardFinancialKpiKey, number | null>();
+    for (const kpi of dashboard.kpis) {
+      trendMap.set(kpi.key, computeKpiDeltaPercent30Days(dayTrendPoints, kpi.key));
+    }
+    return trendMap;
+  }, [dashboard.kpis, dayTrendPoints]);
+  const kpiHubDefaultKey = (visibleKpis[0]?.key ?? dashboard.kpis[0]?.key ?? "netRevenue") as DashboardFinancialKpiKey;
   const isProcurementBlockPartial =
     dashboard.forecast.quality === "partial" ||
     dashboard.salesChannelCohorts.quality === "partial" ||
@@ -1163,19 +1448,27 @@ export function DashboardExecutiveView({ dashboard }: { dashboard: DashboardExec
     setBlock3ModalOpen(true);
   };
 
+  const openKpiHubModal = (initialKey: DashboardFinancialKpiKey) => {
+    setKpiHubInitialKey(initialKey);
+    setKpiHubModalOpen(true);
+  };
+
   return (
     <main className="space-y-6">
-      <header className="rounded-[30px] border border-border bg-gradient-to-br from-white via-slate-50 to-sky-50 px-5 py-3 shadow-[0_20px_48px_rgba(15,23,42,0.1)] md:px-6">
-        <div className="grid items-center gap-3 sm:grid-cols-[auto_minmax(0,1fr)_auto]">
-          <div className="min-w-0">
-            <h1 className="whitespace-nowrap text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
-              DASHBOARD
-            </h1>
-          </div>
+      <header className="px-1 md:px-2">
+        <div className="flex items-start justify-between gap-3">
+          <h1 className="whitespace-nowrap text-3xl font-medium tracking-tight text-slate-900 md:text-[42px] md:leading-none">
+            Dashboard
+          </h1>
 
-          <div className="min-w-0">
+          <div className="flex flex-col items-end gap-2">
+            <button type="button" onClick={openDesktopFilterPanel} className="app-filter-trigger h-10 text-sm">
+              <Filter className="h-4 w-4" />
+              Filtrer
+            </button>
+
             {isDesktopFilterOpen ? (
-              <div className="app-filter-panel flex h-10 w-full max-w-full min-w-0 flex-nowrap items-center gap-2 overflow-x-auto whitespace-nowrap px-2.5 py-0">
+              <div className="inline-flex max-w-[min(96vw,980px)] flex-nowrap items-center gap-2 overflow-x-auto whitespace-nowrap rounded-[24px] border border-white/75 bg-white/92 px-2.5 py-2 shadow-[0_16px_36px_rgba(15,23,42,0.1)] backdrop-blur-md">
                 <FilterTimeline selectedPreset={draftPreset} onSelect={applyPresetInstant} />
 
                 <button
@@ -1238,170 +1531,220 @@ export function DashboardExecutiveView({ dashboard }: { dashboard: DashboardExec
               </div>
             ) : null}
           </div>
-
-          <div className="flex justify-end sm:justify-self-end">
-            <button type="button" onClick={openDesktopFilterPanel} className="app-filter-trigger h-10 text-sm">
-              <Filter className="h-4 w-4" />
-              Filtrer
-            </button>
-          </div>
         </div>
       </header>
 
-      <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-5">
-        {dashboard.kpis.map((kpi) => {
-          const actionHref = getKpiActionHref(kpi.key, dashboard.filters);
-          return (
-            <DashboardModal
-              key={kpi.key}
-              trigger={
-                <button
-                  type="button"
-                  className="group flex min-h-[126px] h-full w-full flex-col rounded-[24px] border border-slate-200 bg-white/95 p-4 text-left shadow-[0_12px_28px_rgba(15,23,42,0.08)] transition-transform hover:-translate-y-0.5"
-                >
-                  <div className="mb-2 flex items-start justify-between gap-2">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                      {kpi.label}
+      <section className="grid grid-cols-1 gap-4 px-1 md:px-2 xl:w-full xl:grid-cols-[minmax(0,3fr)_minmax(0,1.05fr)] xl:items-stretch">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 xl:items-stretch">
+          <DashboardModal
+            open={kpiHubModalOpen}
+            onOpenChange={setKpiHubModalOpen}
+            trigger={
+              <button
+                type="button"
+                onClick={() => openKpiHubModal(kpiHubDefaultKey)}
+                className={cn(
+                  "app-card flex w-full flex-col rounded-[28px] border border-white/85 bg-gradient-to-br from-white via-white to-sky-50/62 p-3.5 text-left shadow-[0_20px_40px_rgba(15,23,42,0.1)] transition-transform hover:-translate-y-0.5",
+                  SQUARE_CARD_CLASS
+                )}
+              >
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                    KPIs essentiels
+                  </p>
+                  <span className="rounded-full border border-slate-200 bg-white/85 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-600">
+                    4 / 11
+                  </span>
+                </div>
+
+                <div className="grid flex-1 auto-rows-fr gap-1.5 sm:grid-cols-2">
+                  {visibleKpis.map((kpi) => {
+                    const trendPercent = kpiTrendByKey.get(kpi.key) ?? null;
+                    return (
+                      <div
+                        key={kpi.key}
+                        className="flex h-full flex-col justify-between rounded-[18px] border border-white/80 bg-white/90 px-2.5 py-2 shadow-[0_8px_18px_rgba(15,23,42,0.06)]"
+                      >
+                        <div className="mb-1 flex items-start justify-between gap-1.5">
+                          <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                            {kpi.label}
+                          </p>
+                          <div className="flex flex-col items-end gap-0.5 text-right">
+                            <span
+                              className={cn(
+                                "inline-flex rounded-full px-1.5 py-0.5 text-[9px] font-semibold",
+                                kpiDeltaPillClasses(trendPercent)
+                              )}
+                            >
+                              {formatKpiDeltaPercent(trendPercent)}
+                            </span>
+                            <span className="text-[8px] text-slate-400">vs 30j precedents</span>
+                          </div>
+                        </div>
+                        <p className="text-[24px] leading-none font-light tracking-tight text-slate-900">
+                          {formatKpiValue(kpi)}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </button>
+            }
+            title="KPIs financiers complets"
+            description="Selectionne une KPI pour afficher son detail et son drilldown metier."
+            contentClassName="w-[min(98vw,1260px)]"
+          >
+            <KpiHubModalBody
+              dashboard={dashboard}
+              initialKpiKey={kpiHubInitialKey}
+              kpiTrendByKey={kpiTrendByKey}
+            />
+          </DashboardModal>
+
+          <DashboardModal
+            trigger={
+              <MinimalCardButton
+                title="Cycles ventes"
+                subtitle="Histogramme empile Sets / Pieces"
+                className={SQUARE_CARD_CLASS}
+                contentClassName="h-full"
+              >
+                <SalesStackedOrdersChart
+                  points={stackedPoints}
+                  height={178}
+                  compact
+                  showLegend={false}
+                />
+              </MinimalCardButton>
+            }
+            title="Bloc 2 - Ventes Sets vs Pieces"
+            description="Cycles hebdo/mensuels des commandes confirmees."
+            contentClassName="w-[min(96vw,1080px)]"
+          >
+            <StackedSalesModalBody dashboard={dashboard} />
+          </DashboardModal>
+
+          <MinimalCardButton
+            title="Comparaison Sets/Pieces"
+            subtitle="Graphique groupe par metrique"
+            className={SQUARE_CARD_CLASS}
+            contentClassName="h-full"
+            onClick={() => openBlock3Modal("grouped")}
+          >
+            <SetPieceGroupedMetricChart
+              points={groupedPoints}
+              metric="revenue"
+              height={178}
+              compact
+              showLegend={false}
+            />
+          </MinimalCardButton>
+
+          <DashboardModal
+            trigger={
+              <MinimalCardButton
+                title="Tendances temporelles"
+                subtitle="Courbes CA net et marge nette"
+                className="min-h-[220px] md:col-span-2 xl:col-span-3 xl:min-h-[236px]"
+                contentClassName="pt-1"
+              >
+                <TrendDualChart points={activeTrendPoints} height={172} compact showLegend={false} />
+              </MinimalCardButton>
+            }
+            title="Bloc 2 - Tendances temporelles"
+            description="Courbe principale avec variables additionnelles et lecture detaillee."
+            contentClassName="w-[min(98vw,1220px)]"
+          >
+            <TrendModalBody dashboard={dashboard} />
+          </DashboardModal>
+
+          <MinimalCardButton
+            title="Comparatif rapide"
+            subtitle="Tableau Sets vs Pieces"
+            className={SQUARE_CARD_CLASS}
+            contentClassName="h-full"
+            onClick={() => openBlock3Modal("table")}
+          >
+            <SetPieceTablePreview dashboard={dashboard} />
+          </MinimalCardButton>
+
+          <MinimalCardButton
+            title="Part de CA"
+            subtitle="Camembert Sets / Pieces"
+            className={SQUARE_CARD_CLASS}
+            contentClassName="h-full"
+            onClick={() => openBlock3Modal("pie")}
+          >
+            <SetPieceRevenuePieChart
+              sets={dashboard.setPieceComparison.pieRevenueShare.sets}
+              pieces={dashboard.setPieceComparison.pieRevenueShare.pieces}
+              height={178}
+              compact
+              showLegend={false}
+            />
+          </MinimalCardButton>
+
+          <DashboardModal
+            trigger={
+              <MinimalCardButton
+                title="Pilotage achats / stock"
+                subtitle="Projection cash/profit et signal achat"
+                className={SQUARE_CARD_CLASS}
+                contentClassName="h-full"
+              >
+                <ProcurementPreview
+                  dashboard={dashboard}
+                  isProcurementBlockPartial={isProcurementBlockPartial}
+                />
+              </MinimalCardButton>
+            }
+            title="Bloc 4 - Pilotage achats et stock"
+            description="Vue mensuelle achats + projections, cohortes, lead-time et rotation theme."
+            contentClassName="w-[min(96vw,1100px)]"
+          >
+            <ProcurementModalBody dashboard={dashboard} />
+          </DashboardModal>
+        </div>
+
+        <div className="min-w-0 xl:h-full">
+          <DashboardModal
+            trigger={
+              <MinimalCardButton
+                title="Opportunites catalogue"
+                subtitle="Top sets par potentiel de completion"
+                tone="dark"
+                className="min-h-[430px] xl:h-full"
+                contentClassName="flex h-full min-h-0 flex-col gap-2"
+              >
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="rounded-2xl border border-slate-700/70 bg-slate-900/80 p-3">
+                    <p className="text-[11px] uppercase tracking-[0.14em] text-slate-400">Top sets</p>
+                    <p className="mt-1 text-3xl leading-none font-light text-slate-100">
+                      {integer.format(dashboard.opportunities.length)}
                     </p>
-                    <span
-                      className={cn(
-                        "inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase",
-                        kpi.quality === "ok"
-                          ? "bg-emerald-100 text-emerald-700"
-                          : "bg-amber-100 text-amber-700"
-                      )}
-                    >
-                      {qualityLabel(kpi.quality)}
-                    </span>
                   </div>
-                  <p className="text-2xl font-semibold tracking-tight text-slate-900">
-                    {formatKpiValue(kpi)}
-                  </p>
-                  <p className="mt-1 line-clamp-2 text-xs text-slate-500">
-                    {kpi.quality === "partial" ? issueText(kpi.issue) : kpi.periodScope}
-                  </p>
-                </button>
-              }
-              title={kpi.label}
-              description="Detail KPI avec mini-serie temporelle et filtres cibles."
-            >
-              <KpiModalBody dashboard={dashboard} kpi={kpi} actionHref={actionHref} />
-            </DashboardModal>
-          );
-        })}
-      </section>
-
-      <section className="grid grid-cols-1 auto-rows-[minmax(176px,auto)] gap-4 md:grid-cols-2 xl:grid-cols-12">
-        <DashboardModal
-          trigger={
-            <MinimalCardButton
-              title="Tendances temporelles"
-              subtitle="Courbes CA net et marge nette"
-              className="md:col-span-2 xl:col-span-8 xl:row-span-2"
-            >
-              <TrendDualChart points={activeTrendPoints} height={220} compact showLegend={false} />
-            </MinimalCardButton>
-          }
-          title="Bloc 2 - Tendances temporelles"
-          description="Courbe principale avec variables additionnelles et lecture detaillee."
-          contentClassName="w-[min(98vw,1220px)]"
-        >
-          <TrendModalBody dashboard={dashboard} />
-        </DashboardModal>
-
-        <DashboardModal
-          trigger={
-            <MinimalCardButton
-              title="Cycles ventes"
-              subtitle="Histogramme empile Sets / Pieces"
-              className="xl:col-span-4"
-            >
-              <SalesStackedOrdersChart points={stackedPoints} height={138} compact showLegend={false} />
-            </MinimalCardButton>
-          }
-          title="Bloc 2 - Ventes Sets vs Pieces"
-          description="Cycles hebdo/mensuels des commandes confirmees."
-          contentClassName="w-[min(96vw,1080px)]"
-        >
-          <StackedSalesModalBody dashboard={dashboard} />
-        </DashboardModal>
-
-        <MinimalCardButton
-          title="Comparaison Sets/Pieces"
-          subtitle="Graphique groupe par metrique"
-          className="xl:col-span-4"
-          onClick={() => openBlock3Modal("grouped")}
-        >
-          <SetPieceGroupedMetricChart
-            points={groupedPoints}
-            metric="revenue"
-            height={138}
-            compact
-            showLegend={false}
-          />
-          <p className="mt-2 text-[11px] text-slate-500">Apercu CA net (detail complet dans la modale).</p>
-        </MinimalCardButton>
-
-        <MinimalCardButton
-          title="Comparatif rapide"
-          subtitle="Tableau Sets vs Pieces"
-          className="xl:col-span-4"
-          onClick={() => openBlock3Modal("table")}
-        >
-          <SetPieceTablePreview dashboard={dashboard} />
-        </MinimalCardButton>
-
-        <MinimalCardButton
-          title="Part de CA"
-          subtitle="Camembert Sets / Pieces"
-          className="xl:col-span-4"
-          onClick={() => openBlock3Modal("pie")}
-        >
-          <SetPieceRevenuePieChart
-            sets={dashboard.setPieceComparison.pieRevenueShare.sets}
-            pieces={dashboard.setPieceComparison.pieRevenueShare.pieces}
-            height={138}
-            compact
-            showLegend={false}
-          />
-        </MinimalCardButton>
-
-        <DashboardModal
-          trigger={
-            <MinimalCardButton
-              title="Pilotage achats / stock"
-              subtitle="Projection cash/profit et signal achat"
-              className="md:col-span-2 xl:col-span-6"
-            >
-              <ProcurementPreview
-                dashboard={dashboard}
-                isProcurementBlockPartial={isProcurementBlockPartial}
-              />
-            </MinimalCardButton>
-          }
-          title="Bloc 4 - Pilotage achats et stock"
-          description="Vue mensuelle achats + projections, cohortes, lead-time et rotation theme."
-          contentClassName="w-[min(96vw,1100px)]"
-        >
-          <ProcurementModalBody dashboard={dashboard} />
-        </DashboardModal>
-
-        <DashboardModal
-          trigger={
-            <MinimalCardButton
-              title="Opportunites catalogue"
-              subtitle="Top sets par potentiel de completion"
-              className="md:col-span-2 xl:col-span-6"
-            >
-              <OpportunitiesPreviewTable dashboard={dashboard} />
-            </MinimalCardButton>
-          }
-          title="Bloc 5 - Opportunites catalogue"
-          description="Tableau detaille des sets exploitables par completion."
-          contentClassName="w-[min(96vw,1080px)]"
-        >
-          <OpportunitiesModalBody dashboard={dashboard} />
-        </DashboardModal>
+                  <div className="rounded-2xl border border-slate-700/70 bg-slate-900/80 p-3">
+                    <p className="text-[11px] uppercase tracking-[0.14em] text-slate-400">Best completion</p>
+                    <p className="mt-1 text-3xl leading-none font-light text-sky-300">
+                      {dashboard.opportunities[0]
+                        ? `${percent.format(dashboard.opportunities[0].completionPercent)}%`
+                        : "0%"}
+                    </p>
+                  </div>
+                </div>
+                <div className="min-h-0 flex-1 overflow-auto pr-1">
+                  <OpportunitiesDarkPreview dashboard={dashboard} />
+                </div>
+              </MinimalCardButton>
+            }
+            title="Bloc 5 - Opportunites catalogue"
+            description="Tableau detaille des sets exploitables par completion."
+            contentClassName="w-[min(96vw,1080px)]"
+            tone="dark"
+          >
+            <OpportunitiesModalBody dashboard={dashboard} />
+          </DashboardModal>
+        </div>
       </section>
 
       <DashboardModal

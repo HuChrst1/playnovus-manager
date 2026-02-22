@@ -1,101 +1,143 @@
 "use client";
 
-import Link from "next/link";
 import Image from "next/image";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Truck, ShoppingCart, Boxes, BookOpen } from "lucide-react";
+import { useEffect, useState, type ComponentType } from "react";
+import {
+  BookOpen,
+  Boxes,
+  Home,
+  Menu,
+  ShoppingCart,
+  Truck,
+  UserRound,
+  X,
+} from "lucide-react";
+
 import { cn } from "@/lib/utils";
 import { ReportDialog } from "@/components/report/ReportDialog";
 
+type NavItem = {
+  href: string;
+  label: string;
+  icon: ComponentType<{ className?: string }>;
+  match: (pathname: string) => boolean;
+};
+
+const NAV_ITEMS: NavItem[] = [
+  {
+    href: "/",
+    label: "Dashboard",
+    icon: Home,
+    match: (pathname) => pathname === "/",
+  },
+  {
+    href: "/approvisionnement",
+    label: "Appro",
+    icon: Truck,
+    match: (pathname) => pathname.startsWith("/approvisionnement"),
+  },
+  {
+    href: "/ventes",
+    label: "Ventes",
+    icon: ShoppingCart,
+    match: (pathname) => pathname.startsWith("/ventes"),
+  },
+  {
+    href: "/stock",
+    label: "Stock",
+    icon: Boxes,
+    match: (pathname) => pathname.startsWith("/stock") || pathname.startsWith("/historique-stock"),
+  },
+  {
+    href: "/catalogue",
+    label: "Catalogue",
+    icon: BookOpen,
+    match: (pathname) => pathname.startsWith("/catalogue"),
+  },
+];
+
 export function AppSidebar() {
   const pathname = usePathname();
+  const [mobileOpen, setMobileOpen] = useState(false);
 
-  const isHome = pathname === "/";
-  const isAppro = pathname.startsWith("/approvisionnement");
-  const isSales = pathname.startsWith("/ventes");
-  const isCatalogue = pathname.startsWith("/catalogue");
-  const isStock = pathname.startsWith("/stock");
-  
-
-  const itemClass = "app-sidebar-item";
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
 
   return (
-    <aside className="hidden md:flex app-sidebar">
-      {/* Haut : logo + icônes principales */}
-      <div className="flex flex-col items-center gap-4">
-        {/* Logo PlayNovus minimal */}
-        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white shadow-[0_10px_25px_rgba(15,23,42,0.25)]">
+    <header className="app-topbar">
+      <div className="relative flex min-w-0 items-center gap-3">
+        <Link href="/" className="app-topbar-brand">
           <Image
             src="/playnovus-logo.svg"
             alt="PlayNovus"
-            width={50}
-            height={50}
-            className="object-contain"
+            width={22}
+            height={22}
+            className="h-5 w-5 object-contain"
             priority
           />
-        </div>
+          <span className="truncate">PlayNovus</span>
+        </Link>
 
-        {/* Navigation principale */}
-        <nav className="mt-6 flex flex-col items-center gap-3">
-          {/* 1. Home (placeholder pour l’instant) */}
-          <Link
-            href="/"
-            aria-label="Accueil"
-            className={cn(itemClass, isHome && "app-sidebar-item--active")}
-          >
-            <Home className="h-4 w-4" />
-          </Link>
-
-          {/* 2. Approvisionnements */}
-          <Link
-            href="/approvisionnement"
-            aria-label="Approvisionnements"
-            className={cn(itemClass, isAppro && "app-sidebar-item--active")}
-          >
-            <Truck className="h-4 w-4" />
-          </Link>
-
-          {/* 3. Ventes */}
-          <Link
-            href="/ventes"
-            aria-label="Ventes"
-            className={cn(itemClass, isSales && "app-sidebar-item--active")}
-          >
-            <ShoppingCart className="h-4 w-4" />
-          </Link>
-
-          {/* 4. Stock */}
-          <Link
-            href="/stock"
-            aria-label="Stock"
-            className={cn(itemClass, isStock && "app-sidebar-item--active")}
-          >
-            <Boxes className="h-4 w-4" />
-          </Link>
-
-          {/* 5. Catalogue */}
-          <Link
-            href="/catalogue"
-            aria-label="Catalogue"
-            className={cn(itemClass, isCatalogue && "app-sidebar-item--active")}
-          >
-            <BookOpen className="h-4 w-4" />
-          </Link>
-        </nav>
-      </div>
-
-      {/* Bas : paramètres / report */}
-      <div className="flex flex-col items-center gap-3">
         <button
           type="button"
-          className={itemClass}
-          aria-label="Paramètres"
+          onClick={() => setMobileOpen((previous) => !previous)}
+          className="app-topbar-icon sm:hidden"
+          aria-label={mobileOpen ? "Fermer le menu" : "Ouvrir le menu"}
         >
-          <span className="text-[16px]">⚙️</span>
+          {mobileOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
         </button>
-        <ReportDialog triggerClassName={itemClass} />
+
+        {mobileOpen ? (
+          <nav className="app-topbar-mobile-menu space-y-1">
+            {NAV_ITEMS.map((item) => {
+              const isActive = item.match(pathname);
+              const Icon = item.icon;
+
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    "inline-flex w-full items-center justify-between rounded-full px-3 py-2 text-sm",
+                    isActive ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"
+                  )}
+                >
+                  <span>{item.label}</span>
+                  <Icon className="h-4 w-4" />
+                </Link>
+              );
+            })}
+          </nav>
+        ) : null}
       </div>
-    </aside>
+
+      <nav className="app-topbar-nav">
+        {NAV_ITEMS.map((item) => {
+          const isActive = item.match(pathname);
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className="app-topbar-nav-item"
+              data-active={isActive}
+            >
+              {item.label}
+            </Link>
+          );
+        })}
+      </nav>
+
+      <div className="app-topbar-actions">
+        <ReportDialog triggerClassName="app-filter-trigger h-9 px-4 text-xs" />
+
+        <button type="button" className="app-topbar-icon" aria-label="Profil utilisateur">
+          <UserRound className="h-4 w-4" />
+        </button>
+      </div>
+    </header>
   );
 }
 

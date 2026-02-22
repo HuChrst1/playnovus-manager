@@ -119,7 +119,7 @@ export default async function SetDetailPage({
 
   // 3. RENDER
   return (
-    <main className="space-y-6 min-w-[1024px]">
+    <main className="space-y-6">
       {/* HEADER FICHE SET */}
       <div className="flex items-center justify-between gap-3">
         <div>

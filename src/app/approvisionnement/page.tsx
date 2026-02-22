@@ -5,14 +5,9 @@ import { DeleteLotButton } from "./DeleteLotButton";
 import { EditLotDialog, LotForEdit } from "./EditLotDialog";
 import { ClickableRow } from "./ClickableRow";
 import Link from "next/link";
+import { Boxes, Calculator, Filter, Package, Wallet } from "lucide-react";
 import { SalesStatCard } from "@/components/sales/SalesStatCard";
-import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
-import {
-  FilterActions,
-  FilterLabel,
-  FilterPopover,
-} from "@/components/ui/filter-bar";
 import {
   SortableTableHeader,
   TableCard,
@@ -282,73 +277,43 @@ export default async function ApprovisionnementPage({
 
   return (
     <main className="space-y-6">
-      <PageHeader
-        title="Approvisionnements"
-        description="Gestion des lots d&apos;achat et du stock initial."
-        actions={
-          <>
-            <FilterPopover>
-              <form method="GET" className="space-y-3">
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-1">
-                    <FilterLabel htmlFor="lots-from">Du</FilterLabel>
-                    <input
-                      id="lots-from"
-                      type="date"
-                      name="from"
-                      defaultValue={normalized.from ?? ""}
-                      className="app-control"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <FilterLabel htmlFor="lots-to">Au</FilterLabel>
-                    <input
-                      id="lots-to"
-                      type="date"
-                      name="to"
-                      defaultValue={normalized.to ?? ""}
-                      className="app-control"
-                    />
-                  </div>
-                </div>
-
-                <input type="hidden" name="sort" value={normalized.sort} />
-                <input type="hidden" name="dir" value={normalized.dir} />
-
-                <FilterActions>
-                  <Button variant="outline" size="sm" asChild>
-                    <Link href={resetDateHref}>Réinitialiser</Link>
-                  </Button>
-                  <Button type="submit" size="sm">
-                    Appliquer
-                  </Button>
-                </FilterActions>
-              </form>
-            </FilterPopover>
-
-            <NewLotDialog />
-          </>
-        }
-      />
+      <header className="px-1 md:px-2">
+        <div className="min-w-0">
+          <h1 className="text-3xl font-medium tracking-tight text-slate-900 md:text-[42px] md:leading-none">
+            Approvisionnements
+          </h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Gestion des lots d&apos;achat et du stock initial.
+          </p>
+        </div>
+      </header>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 items-start">
         <SalesStatCard
           title="Lots confirmés"
           mainValue={stats.totalLotsConfirmed.toLocaleString("fr-FR")}
           color="indigo"
+          variant="neutral"
+          icon={<Package className="h-4 w-4" />}
+          iconGradientClassName="from-sky-700 to-blue-500"
         />
 
         <SalesStatCard
           title="Nb pièces totales"
           mainValue={stats.totalPiecesConfirmed.toLocaleString("fr-FR")}
-          color="orange"
+          color="azure"
+          variant="neutral"
+          icon={<Boxes className="h-4 w-4" />}
+          iconGradientClassName="from-cyan-600 to-sky-400"
         />
 
         <SalesStatCard
           title="Coût total"
           mainValue={euro.format(stats.totalCostConfirmed)}
-          color="amber"
+          color="sky"
+          variant="neutral"
+          icon={<Wallet className="h-4 w-4" />}
+          iconGradientClassName="from-blue-700 to-indigo-500"
         />
 
         <SalesStatCard
@@ -357,13 +322,72 @@ export default async function ApprovisionnementPage({
             stats.totalPiecesConfirmed > 0 ? euro.format(stats.avgCostPerPiece) : "—"
           }
           color="emerald"
+          variant="neutral"
+          icon={<Calculator className="h-4 w-4" />}
+          iconGradientClassName="from-sky-600 to-blue-400"
         />
       </section>
 
-      <TableCard>
-        <TableOverflow>
-          <table className="min-w-full text-sm">
-            <thead className="app-table-head">
+      <div className="appro-actions-bar">
+        <details className="group relative">
+          <summary className="appro-filter-trigger-icon" aria-label="Filtrer" title="Filtrer">
+            <Filter className="h-4 w-4" />
+          </summary>
+
+          <div className="appro-filter-popover-left hidden group-open:block">
+            <form
+              method="GET"
+              className="inline-flex max-w-[min(96vw,980px)] flex-nowrap items-center gap-2 overflow-x-auto whitespace-nowrap rounded-[24px] border border-white/75 bg-white/92 px-2.5 py-2 shadow-[0_16px_36px_rgba(15,23,42,0.1)] backdrop-blur-md"
+            >
+              <label
+                htmlFor="lots-from"
+                className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-slate-500"
+              >
+                <span>Du</span>
+                <input
+                  id="lots-from"
+                  type="date"
+                  name="from"
+                  defaultValue={normalized.from ?? ""}
+                  className="app-control h-8 w-[132px] px-3 text-[11px]"
+                />
+              </label>
+
+              <label
+                htmlFor="lots-to"
+                className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-slate-500"
+              >
+                <span>Au</span>
+                <input
+                  id="lots-to"
+                  type="date"
+                  name="to"
+                  defaultValue={normalized.to ?? ""}
+                  className="app-control h-8 w-[132px] px-3 text-[11px]"
+                />
+              </label>
+
+              <input type="hidden" name="sort" value={normalized.sort} />
+              <input type="hidden" name="dir" value={normalized.dir} />
+
+              <Button variant="outline" size="sm" asChild className="shrink-0 text-[11px]">
+                <Link href={resetDateHref}>Réinitialiser</Link>
+              </Button>
+              <Button type="submit" size="sm" className="shrink-0 text-[11px] font-semibold">
+                Appliquer
+              </Button>
+            </form>
+          </div>
+        </details>
+
+        <NewLotDialog triggerClassName="h-9 gap-2 px-4 text-xs font-medium !border !border-white/75 !bg-white/92 !text-slate-700 shadow-[0_8px_20px_rgba(15,23,42,0.06)] hover:!bg-white" />
+      </div>
+
+      <TableCard className="appro-table-shell">
+
+        <TableOverflow className="appro-table-scroll">
+          <table className="appro-table min-w-full text-sm">
+            <thead className="appro-table-header">
               <tr>
                 <SortableTableHeader
                   label="LotID"
@@ -424,10 +448,10 @@ export default async function ApprovisionnementPage({
 
             <tbody>
               {lots.length === 0 ? (
-                <tr className="border-t border-border">
+                <tr>
                   <td
                     colSpan={9}
-                    className="px-4 py-6 text-center text-sm text-muted-foreground"
+                    className="px-4 py-6 text-center text-sm text-slate-500"
                   >
                     Aucun lot d&apos;approvisionnement pour le moment.
                   </td>
@@ -455,7 +479,11 @@ export default async function ApprovisionnementPage({
                   };
 
                   return (
-                    <ClickableRow key={lot.id} href={`/approvisionnement/${lot.id}`}>
+                    <ClickableRow
+                      key={lot.id}
+                      href={`/approvisionnement/${lot.id}`}
+                      className="appro-table-row cursor-pointer focus-visible:outline-none"
+                    >
                       <td className="px-4 py-3 font-mono text-xs">{displayCode}</td>
 
                       <td className="px-4 py-3">{formatDate(lot.purchase_date)}</td>

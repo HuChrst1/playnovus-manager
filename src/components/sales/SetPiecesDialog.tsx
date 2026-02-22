@@ -125,7 +125,7 @@ export function SetPiecesDialog({
                 {" · "}
                 Qté sets : {Math.max(1, setQty)}
                 {isPartial && (
-                  <span className="ml-2 inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                  <span className="ml-2 inline-flex items-center rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-800">
                     Set partiel
                   </span>
                 )}
@@ -258,7 +258,7 @@ export function SetPiecesDialog({
                               className={cn(
                                 "h-9 rounded-full px-3",
                                 Number(p.current_qty) < Number(p.required_qty) &&
-                                  "ring-1 ring-amber-300"
+                                  "ring-1 ring-sky-300"
                               )}
                               disabled={disabled || loading}
                             />

@@ -485,7 +485,7 @@ export function ReportDialog({ triggerClassName }: ReportDialogProps) {
                               type="button"
                               variant="ghost"
                               size="icon"
-                              className="h-8 w-8 rounded-full"
+                              className="h-8 w-8 rounded-full text-slate-700 hover:bg-slate-100 hover:text-slate-900"
                               aria-label={`Supprimer le ticket #${ticket.id}`}
                               disabled={rowPending}
                               onClick={() => void handleDelete(ticket.id)}

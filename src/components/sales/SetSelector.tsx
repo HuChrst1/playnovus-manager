@@ -324,7 +324,7 @@ export function SetSelector({
                     Détail des pièces
                   </button>
                   {hasOverrides ? (
-                    <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-800">
+                    <span className="inline-flex items-center rounded-full bg-sky-50 px-2 py-1 text-[11px] font-semibold text-sky-800">
                         Set partiel
                     </span>
                     ) : line.is_partial_set ? (

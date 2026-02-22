@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase-server";
 import { cn } from "@/lib/utils";
 import { SalesStatCard } from "@/components/sales/SalesStatCard";
+import { Banknote, Calculator, ChartColumnIncreasing, Wallet } from "lucide-react";
 import type { SaleRow, SaleItemRow } from "@/lib/sales-types";
 import type { ReactNode } from "react";
 import { formatBusinessSaleNumberDisplay } from "@/lib/sale-number";
@@ -135,18 +136,27 @@ export default async function VenteDetailPage({ params }: VentesDetailPageProps)
           title="Net vendeur"
           mainValue={euro.format(net)}
           color="indigo"
+          variant="neutral"
+          icon={<Wallet className="h-4 w-4" />}
+          iconGradientClassName="from-sky-700 to-blue-500"
         />
 
         <SalesStatCard
           title="Coût total (FIFO)"
           mainValue={euro.format(totalCost)}
-          color="orange"
+          color="azure"
+          variant="neutral"
+          icon={<Banknote className="h-4 w-4" />}
+          iconGradientClassName="from-cyan-600 to-sky-400"
         />
 
         <SalesStatCard
           title="Marge totale"
           mainValue={euro.format(totalMargin)}
-          color="amber"
+          color="sky"
+          variant="neutral"
+          icon={<ChartColumnIncreasing className="h-4 w-4" />}
+          iconGradientClassName="from-blue-700 to-indigo-500"
         />
 
         <SalesStatCard
@@ -157,6 +167,9 @@ export default async function VenteDetailPage({ params }: VentesDetailPageProps)
               : "—"
           }
           color="emerald"
+          variant="neutral"
+          icon={<Calculator className="h-4 w-4" />}
+          iconGradientClassName="from-sky-600 to-blue-400"
         />
       </section>
 
@@ -244,7 +257,7 @@ export default async function VenteDetailPage({ params }: VentesDetailPageProps)
                       <Cell title={href ? "Voir les pièces réellement vendues pour ce set" : undefined}>
                         {labelType}
                         {item.item_kind === "SET" && item.is_partial_set && (
-                          <span className="ml-1 text-[11px] rounded-full bg-amber-50 px-2 py-0.5 text-amber-700">
+                          <span className="ml-1 text-[11px] rounded-full bg-sky-50 px-2 py-0.5 text-sky-700">
                             Set partiel
                           </span>
                         )}

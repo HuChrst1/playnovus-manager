@@ -828,7 +828,7 @@ Definition of done:
 
 ## Phase 5 - Coherence UI transversale
 
-Statut global: `A FAIRE`
+Statut global: `EN COURS`
 
 ### F5.0 - Operations lots et ventes
 
@@ -1001,6 +1001,40 @@ Routes:
 Definition of done:
 - parcours utilisables desktop et mobile sans cassure majeure
 
+### F5.5 - Refonte globale UI/UX (Soft UI / Bento)
+
+Statut: `FAIT`
+Objectif: appliquer une refonte visuelle transversale inspiree Soft UI / Bento sur toutes les routes metier sans regression de comportement.
+Livrables realises:
+- fondations design system globales dans `src/app/globals.css`:
+  - topographie visuelle Soft UI (surfaces glass legeres, ombres diffuses, rayons XXL, pills)
+  - separateurs pointilles discrets en remplacement des lignes dures dominantes
+  - tokens et utilitaires transverses (`app-topbar*`, `app-main`, `app-progress-*`, etats tableaux/badges)
+- layout racine et navigation globale refondus:
+  - remplacement du paradigme sidebar par topbar flottante 3 zones (logo, navigation centrale, actions/profil)
+  - menu compact mobile conserve pour l'acces aux routes principales
+  - action `Report` conservee dans la navigation globale
+- harmonisation des composants shared UI vers le nouveau langage visuel:
+  - `button`, `badge`, `card`, `progress`, `data-table`, `page-header`, `clickable-table-row`
+  - boutons piliers/circulaires, tags statut avec dot, lignes de tableaux plus aeriennes
+- adaptation transversale dashboard et surfaces detail:
+  - dashboard (`DashboardExecutiveView`, `DashboardModal`) aligne sur surfaces bento et separateurs discrets
+  - suppression de rigidites responsive critiques sur routes detail (`approvisionnement`, `stock`, `catalogue`, `historique-stock`)
+- invariants preserves:
+  - aucun changement de logique metier
+  - aucun changement des query params/filtres/tri/pagination/actions/navigation
+  - aucun changement de contrat API/DB
+  - aucune migration SQL ajoutee
+Definition of done:
+- topbar flottante active et coherente sur toutes les routes principales
+- design system visuel homogenise (cards, boutons, tags, tableaux, modales, progressions)
+- validations techniques completes vertes:
+  - `npm ci`
+  - `npm run lint`
+  - `npm run typecheck`
+  - `npm run build`
+  - `npm run test:f2.0`
+
 ## Phase 6 - Validation finale et readiness deploiement
 
 Statut global: `A FAIRE`
@@ -1155,9 +1189,10 @@ Hypotheses et defaults explicites (auth/reglages):
 35. F5.1
 36. F5.2
 37. F5.3
-38. F6.1
-39. F6.2
-40. F6.3
-41. F6.4
-42. F6.5
-43. F6.6
+38. F5.5
+39. F6.1
+40. F6.2
+41. F6.3
+42. F6.4
+43. F6.5
+44. F6.6

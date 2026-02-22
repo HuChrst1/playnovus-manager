@@ -43,6 +43,17 @@ const percent = new Intl.NumberFormat("fr-FR", {
   maximumFractionDigits: 1,
 });
 
+const CHART_COLORS = {
+  grid: "#DBEAFE",
+  axis: "#4B6AA3",
+  primary: "#1E3A8A",
+  secondary: "#1D4ED8",
+  tertiary: "#2563EB",
+  quaternary: "#0284C7",
+  soft: "#0EA5E9",
+  softer: "#38BDF8",
+} as const;
+
 function safeNumber(value: unknown): number {
   const n = typeof value === "number" ? value : Number(value);
   return Number.isFinite(n) ? n : 0;
@@ -83,23 +94,23 @@ export function TrendDualChart({
     <div style={{ height }} className="w-full">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={points} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
-          <CartesianGrid stroke="#E2E8F0" strokeDasharray="4 4" vertical={false} />
+          <CartesianGrid stroke={CHART_COLORS.grid} strokeDasharray="4 4" vertical={false} />
           <XAxis
             dataKey="label"
-            tick={{ fontSize: compact ? 10 : 11, fill: "#64748B" }}
+            tick={{ fontSize: compact ? 10 : 11, fill: CHART_COLORS.axis }}
             interval={compact ? "preserveStartEnd" : 0}
             minTickGap={compact ? 24 : 12}
           />
           <YAxis
             yAxisId="money"
-            tick={{ fontSize: compact ? 10 : 11, fill: "#64748B" }}
+            tick={{ fontSize: compact ? 10 : 11, fill: CHART_COLORS.axis }}
             tickFormatter={(value) => compactNumber.format(safeNumber(value))}
           />
           {showSalesCount && (
             <YAxis
               yAxisId="count"
               orientation="right"
-              tick={{ fontSize: compact ? 10 : 11, fill: "#64748B" }}
+              tick={{ fontSize: compact ? 10 : 11, fill: CHART_COLORS.axis }}
               tickFormatter={(value) => integer.format(safeNumber(value))}
             />
           )}
@@ -126,7 +137,7 @@ export function TrendDualChart({
             yAxisId="money"
             type="monotone"
             dataKey="netRevenue"
-            stroke="#2563EB"
+            stroke={CHART_COLORS.primary}
             strokeWidth={2.5}
             dot={false}
             name="CA net"
@@ -135,7 +146,7 @@ export function TrendDualChart({
             yAxisId="money"
             type="monotone"
             dataKey="netMargin"
-            stroke="#16A34A"
+            stroke={CHART_COLORS.secondary}
             strokeWidth={2.5}
             dot={false}
             name="Marge nette"
@@ -146,7 +157,7 @@ export function TrendDualChart({
               yAxisId="money"
               type="monotone"
               dataKey="stockValue"
-              stroke="#7C3AED"
+              stroke={CHART_COLORS.tertiary}
               strokeWidth={2}
               strokeDasharray="4 4"
               dot={false}
@@ -159,7 +170,7 @@ export function TrendDualChart({
               yAxisId="money"
               type="monotone"
               dataKey="procurementCost"
-              stroke="#F59E0B"
+              stroke={CHART_COLORS.quaternary}
               strokeWidth={2}
               dot={false}
               name="Cout appro"
@@ -171,7 +182,7 @@ export function TrendDualChart({
               yAxisId="count"
               type="monotone"
               dataKey="salesCount"
-              stroke="#0EA5E9"
+              stroke={CHART_COLORS.soft}
               strokeWidth={2}
               dot={false}
               name="Nombre ventes"
@@ -230,10 +241,10 @@ export function KpiSparklineChart({
     <div style={{ height }} className="w-full">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data} margin={{ top: 6, right: 6, left: 0, bottom: 0 }}>
-          <CartesianGrid stroke="#E2E8F0" strokeDasharray="4 4" vertical={false} />
-          <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#64748B" }} />
+          <CartesianGrid stroke={CHART_COLORS.grid} strokeDasharray="4 4" vertical={false} />
+          <XAxis dataKey="label" tick={{ fontSize: 10, fill: CHART_COLORS.axis }} />
           <YAxis
-            tick={{ fontSize: 10, fill: "#64748B" }}
+            tick={{ fontSize: 10, fill: CHART_COLORS.axis }}
             tickFormatter={(value) => {
               const number = safeNumber(value);
               if (isCount) return integer.format(number);
@@ -252,7 +263,7 @@ export function KpiSparklineChart({
           <Line
             type="monotone"
             dataKey={metric}
-            stroke="#1D4ED8"
+            stroke={CHART_COLORS.secondary}
             strokeWidth={2.2}
             dot={false}
             name="Serie"
@@ -282,15 +293,15 @@ export function SalesStackedOrdersChart({
     <div style={{ height }} className="w-full">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={points} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-          <CartesianGrid stroke="#E2E8F0" strokeDasharray="4 4" vertical={false} />
+          <CartesianGrid stroke={CHART_COLORS.grid} strokeDasharray="4 4" vertical={false} />
           <XAxis
             dataKey="label"
-            tick={{ fontSize: compact ? 10 : 11, fill: "#64748B" }}
+            tick={{ fontSize: compact ? 10 : 11, fill: CHART_COLORS.axis }}
             interval={compact ? "preserveStartEnd" : 0}
             minTickGap={compact ? 24 : 10}
           />
           <YAxis
-            tick={{ fontSize: compact ? 10 : 11, fill: "#64748B" }}
+            tick={{ fontSize: compact ? 10 : 11, fill: CHART_COLORS.axis }}
             tickFormatter={(value) => integer.format(safeNumber(value))}
           />
           <Tooltip
@@ -300,8 +311,8 @@ export function SalesStackedOrdersChart({
             }}
           />
           {showLegend ? <Legend /> : null}
-          <Bar dataKey="sets" stackId="sales" fill="#4F46E5" name="Sets" radius={[6, 6, 0, 0]} />
-          <Bar dataKey="pieces" stackId="sales" fill="#38BDF8" name="Pieces" radius={[6, 6, 0, 0]} />
+          <Bar dataKey="sets" stackId="sales" fill={CHART_COLORS.primary} name="Sets" radius={[6, 6, 0, 0]} />
+          <Bar dataKey="pieces" stackId="sales" fill={CHART_COLORS.soft} name="Pieces" radius={[6, 6, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
     </div>
@@ -372,21 +383,21 @@ export function SetPieceGroupedMetricChart({
     <div style={{ height }} className="w-full">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={mapped} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-          <CartesianGrid stroke="#E2E8F0" strokeDasharray="4 4" vertical={false} />
+          <CartesianGrid stroke={CHART_COLORS.grid} strokeDasharray="4 4" vertical={false} />
           <XAxis
             dataKey="label"
-            tick={{ fontSize: compact ? 10 : 11, fill: "#64748B" }}
+            tick={{ fontSize: compact ? 10 : 11, fill: CHART_COLORS.axis }}
             interval={compact ? "preserveStartEnd" : 0}
             minTickGap={compact ? 24 : 10}
           />
           <YAxis
-            tick={{ fontSize: compact ? 10 : 11, fill: "#64748B" }}
+            tick={{ fontSize: compact ? 10 : 11, fill: CHART_COLORS.axis }}
             tickFormatter={yFormatter}
           />
           <Tooltip formatter={tooltipFormatter} />
           {showLegend ? <Legend /> : null}
-          <Bar dataKey="sets" fill="#2563EB" name="Sets" radius={[6, 6, 0, 0]} />
-          <Bar dataKey="pieces" fill="#10B981" name="Pieces" radius={[6, 6, 0, 0]} />
+          <Bar dataKey="sets" fill={CHART_COLORS.secondary} name="Sets" radius={[6, 6, 0, 0]} />
+          <Bar dataKey="pieces" fill={CHART_COLORS.softer} name="Pieces" radius={[6, 6, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
     </div>
@@ -427,8 +438,8 @@ export function SetPieceRevenuePieChart({
             outerRadius={compact ? 70 : 94}
             paddingAngle={2}
           >
-            <Cell key="sets" fill="#2563EB" />
-            <Cell key="pieces" fill="#10B981" />
+            <Cell key="sets" fill={CHART_COLORS.primary} />
+            <Cell key="pieces" fill={CHART_COLORS.soft} />
           </Pie>
           <Tooltip
             formatter={(value: number) => [euro.format(safeNumber(value)), "CA net"]}
@@ -461,15 +472,15 @@ export function ProcurementMonthlyChart({
     <div style={{ height }} className="w-full">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={points} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
-          <CartesianGrid stroke="#E2E8F0" strokeDasharray="4 4" vertical={false} />
+          <CartesianGrid stroke={CHART_COLORS.grid} strokeDasharray="4 4" vertical={false} />
           <XAxis
             dataKey="label"
-            tick={{ fontSize: compact ? 10 : 11, fill: "#64748B" }}
+            tick={{ fontSize: compact ? 10 : 11, fill: CHART_COLORS.axis }}
             interval={compact ? "preserveStartEnd" : 0}
             minTickGap={compact ? 24 : 10}
           />
           <YAxis
-            tick={{ fontSize: compact ? 10 : 11, fill: "#64748B" }}
+            tick={{ fontSize: compact ? 10 : 11, fill: CHART_COLORS.axis }}
             tickFormatter={(value) => compactNumber.format(safeNumber(value))}
           />
           <Tooltip
@@ -486,14 +497,14 @@ export function ProcurementMonthlyChart({
           {showLegend ? <Legend /> : null}
           <Bar
             dataKey="procurementCost"
-            fill="#A855F7"
+            fill={CHART_COLORS.tertiary}
             name="Cout appro"
             radius={[6, 6, 0, 0]}
           />
           <Line
             type="monotone"
             dataKey="procurementTrend"
-            stroke="#1D4ED8"
+            stroke={CHART_COLORS.secondary}
             strokeWidth={2.3}
             dot={false}
             name="Tendance achats"
@@ -502,7 +513,7 @@ export function ProcurementMonthlyChart({
             <Line
               type="monotone"
               dataKey="salesNetRevenue"
-              stroke="#0F766E"
+              stroke={CHART_COLORS.softer}
               strokeWidth={2}
               dot={false}
               strokeDasharray="4 4"

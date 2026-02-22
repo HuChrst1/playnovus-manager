@@ -255,7 +255,7 @@ export function LotInvoiceAttachmentPanel({
                   variant="outline"
                   disabled={isPending}
                   onClick={handleDelete}
-                  className="h-8 rounded-full px-3 text-xs text-red-600 border-red-200 hover:bg-red-50"
+                  className="h-8 rounded-full border-slate-200 px-3 text-xs text-slate-700 hover:bg-slate-100 hover:text-slate-900"
                 >
                   {isPending ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />

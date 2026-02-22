@@ -2,12 +2,10 @@
 
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
-import { History } from "lucide-react";
+import { Boxes, Calculator, History, Wallet } from "lucide-react";
 import { SalesStatCard } from "@/components/sales/SalesStatCard";
 import { Button } from "@/components/ui/button";
-import { PageHeader } from "@/components/ui/page-header";
 import { SortableTableHeader, TableCard, TableOverflow } from "@/components/ui/data-table";
-import { FilterBar } from "@/components/ui/filter-bar";
 
 export const dynamic = "force-dynamic";
 
@@ -160,37 +158,16 @@ export default async function StockPage({ searchParams }: StockPageProps) {
 
   return (
     <main className="space-y-6">
-      <PageHeader
-        title="Stock de pièces"
-        description="Vue agrégée par numéro de pièce à partir des lots confirmés."
-      />
-
-      <FilterBar className="p-3">
-        <div className="flex w-full flex-col items-stretch gap-2 md:flex-row md:items-center md:justify-end">
-          <form method="GET" className="flex flex-1 items-center gap-2">
-            <input
-              type="text"
-              name="q"
-              placeholder="Filtrer par réf. pièce..."
-              defaultValue={searchQuery}
-              className="app-control app-control--md"
-            />
-
-            <input type="hidden" name="sort" value={activeSortKey} />
-            <input type="hidden" name="dir" value={dir} />
-
-            <Button type="submit">
-              Rechercher
-            </Button>
-          </form>
-
-          <Button asChild size="icon" aria-label="Voir l'historique des mouvements de stock">
-            <Link href="/historique-stock">
-              <History className="h-4 w-4" />
-            </Link>
-          </Button>
+      <header className="px-1 md:px-2">
+        <div className="min-w-0">
+          <h1 className="text-3xl font-medium tracking-tight text-slate-900 md:text-[42px] md:leading-none">
+            Stock de pièces
+          </h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Vue agrégée par numéro de pièce à partir des lots confirmés.
+          </p>
         </div>
-      </FilterBar>
+      </header>
 
       {/* CARDS DE TOTAUX STOCK */}
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -198,12 +175,18 @@ export default async function StockPage({ searchParams }: StockPageProps) {
           title="Pièces en stock"
           mainValue={stockStats.totalPieces.toLocaleString("fr-FR")}
           color="indigo"
+          variant="neutral"
+          icon={<Boxes className="h-4 w-4" />}
+          iconGradientClassName="from-sky-700 to-blue-500"
         />
 
         <SalesStatCard
           title="Valeur totale stock"
           mainValue={euro.format(stockStats.totalValue)}
-          color="orange"
+          color="azure"
+          variant="neutral"
+          icon={<Wallet className="h-4 w-4" />}
+          iconGradientClassName="from-cyan-600 to-sky-400"
         />
 
         <SalesStatCard
@@ -213,15 +196,49 @@ export default async function StockPage({ searchParams }: StockPageProps) {
               ? euro.format(stockStats.avgCostPerPiece)
               : "—"
           }
-          color="amber"
+          color="sky"
+          variant="neutral"
+          icon={<Calculator className="h-4 w-4" />}
+          iconGradientClassName="from-blue-700 to-indigo-500"
         />
       </section>
 
+      <section className="grid gap-2 px-1 md:grid-cols-2 md:items-center md:px-2 xl:grid-cols-3">
+        <form method="GET" className="col-span-1 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+          <input
+            type="text"
+            name="q"
+            placeholder="Filtrer par réf. pièce..."
+            defaultValue={searchQuery}
+            className="app-control app-control--md h-9 w-full min-w-0"
+          />
+
+          <input type="hidden" name="sort" value={activeSortKey} />
+          <input type="hidden" name="dir" value={dir} />
+
+          <Button type="submit" className="h-9 px-4 text-xs font-medium">
+            Rechercher
+          </Button>
+        </form>
+
+        <div className="col-span-1 flex items-start justify-end md:col-start-2 xl:col-start-3">
+          <Button
+            asChild
+            className="h-9 gap-2 px-4 text-xs font-medium !border !border-white/75 !bg-white/92 !text-slate-700 shadow-[0_8px_20px_rgba(15,23,42,0.06)] hover:!bg-white"
+          >
+            <Link href="/historique-stock">
+              <History className="h-4 w-4" />
+              Historique
+            </Link>
+          </Button>
+        </div>
+      </section>
+
       {/* TABLEAU STOCK */}
-      <TableCard>
-        <TableOverflow>
-          <table className="min-w-full text-sm">
-            <thead className="app-table-head">
+      <TableCard className="appro-table-shell">
+        <TableOverflow className="appro-table-scroll">
+          <table className="appro-table min-w-full text-sm">
+            <thead className="appro-table-header">
               <tr>
                 <SortableTableHeader
                   label="Réf. pièce"
@@ -284,7 +301,7 @@ export default async function StockPage({ searchParams }: StockPageProps) {
                       : Number(row.total_value);
 
                   return (
-                    <tr key={row.piece_ref} className="app-table-row">
+                    <tr key={row.piece_ref} className="appro-table-row">
                       <td className="px-4 py-3 font-mono text-xs">
                         <Link
                             href={`/stock/${encodeURIComponent(row.piece_ref)}`}

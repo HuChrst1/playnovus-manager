@@ -355,10 +355,10 @@ const setsForDisplay: SetRow[] = setsWithCompletion;
       textClass = "text-emerald-700";
       borderClass = "border-emerald-200/80";
     } else if (percent >= 50 || status === "medium") {
-      // 50–79% : orange
-      bgClass = "bg-orange-50";
-      textClass = "text-orange-700";
-      borderClass = "border-orange-200";
+      // 50–79% : bleu ciel
+      bgClass = "bg-sky-50";
+      textClass = "text-sky-700";
+      borderClass = "border-sky-200";
     } else {
       // 0–49% : rouge
       bgClass = "bg-red-50";

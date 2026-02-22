@@ -12,7 +12,7 @@ type TableCardProps = {
 };
 
 export function TableCard({ children, className }: TableCardProps) {
-  return <div className={cn("app-card overflow-hidden", className)}>{children}</div>;
+  return <div className={cn("app-card overflow-hidden p-1 sm:p-2", className)}>{children}</div>;
 }
 
 type TableOverflowProps = {
@@ -77,17 +77,18 @@ export function TableStatusBadge({ label, tone = "muted", className }: TableStat
       : tone === "danger"
       ? "bg-red-100 text-red-700 ring-1 ring-red-200"
       : tone === "warning"
-      ? "bg-amber-50 text-amber-700 ring-1 ring-amber-200"
+      ? "bg-sky-50 text-sky-700 ring-1 ring-sky-200"
       : "bg-slate-100 text-slate-600 ring-1 ring-slate-200";
 
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold",
+        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold",
         toneClasses,
         className
       )}
     >
+      <span className="h-1.5 w-1.5 rounded-full bg-current" />
       {label}
     </span>
   );
@@ -115,7 +116,7 @@ export function TablePagination({
   return (
     <div
       className={cn(
-        "flex flex-col gap-3 border-t border-border bg-muted/40 px-4 py-3 sm:flex-row sm:items-center sm:justify-between",
+        "mt-1 flex flex-col gap-3 border-t border-transparent bg-muted/30 px-4 py-3 sm:flex-row sm:items-center sm:justify-between",
         className
       )}
     >

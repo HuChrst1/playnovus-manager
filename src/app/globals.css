@@ -1,17 +1,13 @@
-/* 1) Import Google Font Outfit */
-@import url("https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap");
 @import "tailwindcss";
 @import "tw-animate-css";
 
-/* Dark variant Tailwind */
 @custom-variant dark (&:is(.dark *));
 
-/* Thème Tailwind inline (Shadcn + PlayNovus) */
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: "Outfit", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    sans-serif;
+  --font-sans: "Plus Jakarta Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-mono: var(--font-geist-mono);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -42,79 +38,67 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 6px);
+  --radius-md: calc(var(--radius) - 3px);
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  --radius-xl: calc(var(--radius) + 6px);
 }
 
-/* ===================== */
-/*       THEME LIGHT      */
-/* ===================== */
 :root {
-  /* Fond global très clair, bleu/gris comme sur la maquette */
-  --background: 225 40% 96%; /* ~ #EDF0F7 */
-  --foreground: 222 47% 11%; /* gris très foncé / presque noir */
+  --background: 220 30% 96%;
+  --foreground: 218 33% 14%;
 
-  /* Cards / surfaces blanches */
   --card: 0 0% 100%;
-  --card-foreground: 222 47% 11%;
+  --card-foreground: 218 33% 14%;
 
-  /* Popovers, dialogs */
   --popover: 0 0% 100%;
-  --popover-foreground: 222 47% 11%;
+  --popover-foreground: 218 33% 14%;
 
-  /* Primaire = bleu/violet des graphs & boutons “forts” */
-  --primary: 239 84% 64%; /* ~ #4F46E5 */
+  --primary: 220 18% 16%;
   --primary-foreground: 0 0% 100%;
 
-  /* Secondaire = gris très clair (chips, fonds inputs) */
-  --secondary: 220 20% 96%; /* ~ #F3F4F6 */
-  --secondary-foreground: 222 47% 11%;
+  --secondary: 220 25% 94%;
+  --secondary-foreground: 220 22% 23%;
 
-  /* Muted / texte secondaire */
-  --muted: 220 20% 96%;
-  --muted-foreground: 215 16% 47%;
+  --muted: 220 25% 94%;
+  --muted-foreground: 220 12% 42%;
 
-  /* Accent = hover subtil, petits badges */
-  --accent: 220 20% 96%;
-  --accent-foreground: 222 47% 11%;
+  --accent: 199 92% 60%;
+  --accent-foreground: 218 33% 14%;
 
-  /* Erreur / dangereux (rouge badges) */
-  --destructive: 0 84% 60%;
+  --destructive: 0 78% 58%;
   --destructive-foreground: 0 0% 100%;
 
-  /* Bordures / inputs */
-  --border: 214 32% 91%; /* ~ #E5E7EB */
-  --input: 214 32% 91%;
-  --ring: 239 84% 64%;
+  --border: 220 24% 88%;
+  --input: 220 20% 88%;
+  --ring: 220 38% 55%;
 
-  /* Arrondi global */
-  --radius: 1rem;
+  --radius: 24px;
 
-  /* Couleurs graphiques (cards KPI & status) */
-  --chart-1: 239 84% 64%; /* bleu */
-  --chart-2: 16 84% 60%;  /* orange */
-  --chart-3: 142 71% 45%; /* vert */
-  --chart-4: 48 96% 53%;  /* jaune */
-  --chart-5: 0 84% 60%;   /* rouge */
+  --chart-1: 219 88% 58%;
+  --chart-2: 199 89% 48%;
+  --chart-3: 153 58% 42%;
+  --chart-4: 201 94% 73%;
+  --chart-5: 356 82% 61%;
 
   --status-good: var(--chart-3);
   --status-medium: var(--chart-2);
   --status-low: var(--chart-5);
-  --status-unknown: 215 16% 47%;
+  --status-unknown: 220 12% 48%;
 
-  /* Ombres design system */
-  --app-shadow-xs: 0 4px 12px rgba(15, 23, 42, 0.08);
-  --app-shadow-sm: 0 8px 20px rgba(15, 23, 42, 0.1);
-  --app-shadow-md: 0 16px 40px rgba(15, 23, 42, 0.16);
-  --app-shadow-lg: 0 26px 60px rgba(15, 23, 42, 0.24);
+  --app-radius-container: 40px;
+  --app-radius-card: 30px;
+  --app-radius-pill: 999px;
+
+  --app-shadow-xs: 0 8px 20px rgba(15, 23, 42, 0.06);
+  --app-shadow-sm: 0 14px 34px rgba(15, 23, 42, 0.08);
+  --app-shadow-md: 0 22px 52px rgba(15, 23, 42, 0.11);
+  --app-shadow-lg: 0 34px 78px rgba(15, 23, 42, 0.16);
+
+  --app-dot-color: rgba(15, 23, 42, 0.09);
+  --app-divider-dotted: 2px dotted rgba(15, 23, 42, 0.14);
 }
 
-/* ===================== */
-/*       THEME DARK      */
-/* (on garde pour plus tard) */
-/* ===================== */
 .dark {
   --background: oklch(0.141 0.005 285.823);
   --foreground: oklch(0.985 0 0);
@@ -149,9 +133,6 @@
   --sidebar-ring: oklch(0.552 0.016 285.938);
 }
 
-/* ===================== */
-/*        BASE           */
-/* ===================== */
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -161,122 +142,249 @@
     @apply bg-background text-foreground font-sans;
   }
 
-  /* Fond général type UI (clair + halos bleus doux) */
-.app-shell {
-  @apply min-h-screen;
-
-  /* couleur de base identique à avant */
-  background-color: #edf0f7;
-
-  /* halos inspirés des maquettes (subtils) */
-  background-image:
-    radial-gradient(circle at top left, rgba(129, 140, 248, 0.18), transparent 55%),
-    radial-gradient(circle at bottom right, rgba(56, 189, 248, 0.12), transparent 55%);
-
-  background-attachment: fixed;
-}
-
-  /* Carte principale (grand panneau blanc arrondi au centre) */
-  .app-card {
-    @apply bg-card text-card-foreground rounded-[32px] border border-border;
-    box-shadow: var(--app-shadow-md);
+  .app-shell {
+    @apply min-h-screen;
+    background-color: #eef1f6;
+    background-image:
+      radial-gradient(circle at 12% 14%, rgba(186, 230, 253, 0.58), transparent 30%),
+      radial-gradient(circle at 84% 9%, rgba(199, 215, 255, 0.55), transparent 34%),
+      radial-gradient(circle at 70% 82%, rgba(224, 242, 254, 0.5), transparent 35%),
+      radial-gradient(var(--app-dot-color) 1px, transparent 1px);
+    background-size: auto, auto, auto, 22px 22px;
+    background-position: center, center, center, 0 0;
+    background-attachment: fixed;
   }
 }
-/* ===================== */
-/*     COMPONENTS UI     */
-/* ===================== */
+
 @layer components {
-  /* Micro-titre au-dessus d’un bloc / card */
-  .app-section-label {
-    @apply text-[11px] font-semibold uppercase tracking-[0.18em]
-      text-muted-foreground;
+  .app-layout-wrap {
+    @apply mx-auto w-full max-w-[1640px] px-3 py-4 sm:px-5 sm:py-5 lg:px-7 lg:py-7;
   }
 
-  /* Sidebar (colonne verticale gauche comme sur la maquette) */
-  .app-sidebar {
-    @apply flex flex-col justify-between items-center
-      rounded-[32px] bg-card
-      px-2 py-6 w-[72px] border border-border;
-    box-shadow: var(--app-shadow-md);
+  .app-topbar {
+    @apply sticky top-3 z-40 grid items-center gap-3 rounded-[30px] border border-white/55 bg-white/62 px-3 py-2 backdrop-blur-xl sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:gap-4 sm:px-4;
+    box-shadow: var(--app-shadow-md), inset 0 1px 0 rgba(255, 255, 255, 0.85);
   }
 
-  .app-sidebar-item {
-    @apply flex items-center justify-center rounded-2xl h-10 w-10 cursor-pointer
-      bg-transparent hover:bg-[#f3f4ff] transition-colors;
+  .app-topbar-brand {
+    @apply inline-flex items-center gap-2 rounded-full border border-slate-200/80 bg-white/85 px-3 py-1.5 text-sm font-medium text-slate-700;
+    box-shadow: var(--app-shadow-xs);
   }
 
-  .app-sidebar-item--active {
+  .app-topbar-nav {
+    @apply hidden min-w-0 items-center justify-center gap-1 sm:flex;
+  }
+
+  .app-topbar-nav-item {
+    @apply inline-flex h-9 items-center justify-center rounded-full px-4 text-xs font-medium text-slate-600 transition-colors;
+  }
+
+  .app-topbar-nav-item[data-active="true"] {
     @apply bg-slate-900 text-white;
     box-shadow: var(--app-shadow-sm);
   }
 
-  /* En-tête de tableau façon “Order list” */
-  .app-table-head {
-    @apply bg-slate-50 text-[11px] font-semibold uppercase tracking-[0.16em]
-      text-muted-foreground border-b border-border;
+  .app-topbar-nav-item[data-active="false"] {
+    @apply bg-transparent hover:bg-white/85 hover:text-slate-900;
   }
 
-  /* Lignes de tableau avec fond blanc + hover bleu doux, cohérent partout */
+  .app-topbar-actions {
+    @apply flex items-center justify-end gap-2 sm:pl-3;
+  }
+
+  .app-topbar-icon {
+    @apply inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/70 bg-white/78 text-slate-600 transition-colors hover:text-slate-900;
+    box-shadow: var(--app-shadow-xs), inset 0 1px 0 rgba(255, 255, 255, 0.75);
+  }
+
+  .app-topbar-mobile-menu {
+    @apply absolute left-0 right-0 top-[calc(100%+8px)] rounded-[26px] border border-white/55 bg-white/90 p-3 shadow-[0_20px_48px_rgba(15,23,42,0.12)] backdrop-blur-xl sm:hidden;
+  }
+
+  .app-main {
+    @apply mt-4 p-1 sm:p-2 lg:p-3;
+    box-shadow: none;
+  }
+
+  .app-card {
+    @apply rounded-[var(--app-radius-card)] border border-white/80 bg-white/92;
+    box-shadow: var(--app-shadow-sm);
+  }
+
+  .app-surface-muted {
+    @apply rounded-[26px] border border-white/80 bg-slate-50/80;
+    box-shadow: var(--app-shadow-xs);
+  }
+
+  .app-section-label {
+    @apply text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500;
+  }
+
+  .app-pill {
+    @apply inline-flex items-center rounded-full;
+  }
+
+  .app-divider-dotted {
+    border-bottom: var(--app-divider-dotted);
+  }
+
+  .app-table-head {
+    @apply bg-transparent text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500;
+  }
+
+  .app-table-head th {
+    border-bottom: var(--app-divider-dotted);
+  }
+
   .app-table-row {
-    @apply border-t border-border bg-white transition-colors hover:bg-[#eef2ff];
+    @apply transition-colors;
+  }
+
+  .app-table-row td {
+    @apply py-4 align-middle;
+    border-top: 1px dotted rgba(15, 23, 42, 0.1);
+  }
+
+  .app-table-row:hover td {
+    background-color: rgba(15, 23, 42, 0.03);
+  }
+
+  .app-table-row--active td {
+    background-color: rgba(125, 211, 252, 0.34);
+  }
+
+  .app-table-row:hover td:first-child,
+  .app-table-row:focus-visible td:first-child {
+    border-top-left-radius: 999px;
+    border-bottom-left-radius: 999px;
+  }
+
+  .app-table-row:hover td:last-child,
+  .app-table-row:focus-visible td:last-child {
+    border-top-right-radius: 999px;
+    border-bottom-right-radius: 999px;
+  }
+
+  .appro-table-shell {
+    @apply rounded-[32px] border border-white/80 bg-gradient-to-br from-white via-white to-sky-50/35 p-3 sm:p-4;
+    box-shadow: var(--app-shadow-sm);
+  }
+
+  .appro-actions-bar {
+    @apply flex items-start justify-end gap-2 px-1 md:px-2;
+  }
+
+  .appro-filter-trigger-icon {
+    @apply inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-white/75 bg-white/92 text-slate-700 transition-colors hover:text-slate-900;
+    box-shadow: var(--app-shadow-xs), inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  }
+
+  .appro-filter-trigger-icon::-webkit-details-marker {
+    display: none;
+  }
+
+  .appro-filter-popover-left {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 8px);
+    z-index: 30;
+  }
+
+  @media (min-width: 640px) {
+    .appro-filter-popover-left {
+      right: calc(100% + 8px);
+      top: 0;
+    }
+  }
+
+  .appro-table-toolbar {
+    @apply mb-3 flex flex-wrap items-start justify-end gap-2;
+  }
+
+  .appro-table-scroll {
+    @apply rounded-[24px] border border-white/80 bg-white/94 p-1 sm:p-2;
+    box-shadow: var(--app-shadow-xs);
+  }
+
+  .appro-table {
+    border-collapse: separate;
+    border-spacing: 0 8px;
+  }
+
+  .appro-table-header {
+    @apply text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500;
+  }
+
+  .appro-table-header th {
+    @apply px-4 py-3;
+    border-bottom: 1px dotted rgba(15, 23, 42, 0.16);
+  }
+
+  .appro-table-row td {
+    @apply py-4 align-middle;
+    background-color: rgba(255, 255, 255, 0.92);
+    border-top: none;
+    border-bottom: 1px dotted rgba(15, 23, 42, 0.06);
+  }
+
+  .appro-table-row:hover td,
+  .appro-table-row:focus-visible td {
+    background-color: rgba(125, 211, 252, 0.26);
+  }
+
+  .appro-table-row td:first-child {
+    border-top-left-radius: 999px;
+    border-bottom-left-radius: 999px;
+  }
+
+  .appro-table-row td:last-child {
+    border-top-right-radius: 999px;
+    border-bottom-right-radius: 999px;
   }
 
   .app-card table {
     width: 100%;
     border-collapse: separate;
     border-spacing: 0;
-    font-size: 0.875rem; /* text-sm */
   }
 
-  .app-card thead tr {
-    background-color: rgb(248 250 252);
+  .appro-table-shell table.appro-table {
+    border-spacing: 0 8px;
   }
 
-  .app-card thead th {
-    padding: 0.75rem 1rem; /* py-3 px-4 */
-    text-align: left;
-    font-size: 0.6875rem; /* ~11px */
-    font-weight: 600;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-    color: #9ca3af;
-    border-bottom: 1px solid rgb(226 232 240);
-  }
-
-  .app-card tbody td {
-    padding: 0.75rem 1rem;
-    vertical-align: middle;
-  }
-
-  /* Badges status type “delivered / on way / await” (pour plus tard) */
   .app-status-pill {
-    @apply inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold;
+    @apply inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-medium;
+  }
+
+  .app-status-pill::before {
+    content: "";
+    @apply h-1.5 w-1.5 rounded-full;
+    background: currentColor;
   }
 
   .app-status-pill--good {
-    @apply bg-emerald-100 text-emerald-700;
+    @apply bg-emerald-100/85 text-emerald-700;
   }
 
   .app-status-pill--warn {
-    @apply bg-amber-100 text-amber-700;
+    @apply bg-sky-100/85 text-sky-700;
   }
 
   .app-status-pill--bad {
-    @apply bg-red-100 text-red-700;
+    @apply bg-rose-100/85 text-rose-700;
   }
 
   .app-control-label {
-    @apply text-[11px] font-medium text-slate-500;
+    @apply text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500;
   }
 
   .app-control {
-    @apply h-9 w-full rounded-full border border-border bg-white px-3 text-xs text-slate-700
-      outline-none transition-colors placeholder:text-slate-400;
-    box-shadow: var(--app-shadow-xs);
+    @apply h-10 w-full rounded-full border border-white/70 bg-white/90 px-4 text-xs text-slate-700 outline-none transition-colors placeholder:text-slate-400;
+    box-shadow: var(--app-shadow-xs), inset 0 1px 0 rgba(255, 255, 255, 0.8);
   }
 
   .app-control:focus-visible {
-    @apply border-primary ring-2 ring-primary/30 ring-offset-1 ring-offset-background;
+    @apply ring-2 ring-primary/25;
   }
 
   .app-control--md {
@@ -284,18 +392,16 @@
   }
 
   .app-control--textarea {
-    @apply min-h-[120px] rounded-2xl py-3 text-sm;
+    @apply min-h-[120px] rounded-[22px] py-3 text-sm;
   }
 
   .app-filter-trigger {
-    @apply list-none inline-flex h-9 cursor-pointer items-center rounded-full border border-border
-      bg-white px-4 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50
-      [&::-webkit-details-marker]:hidden;
-    box-shadow: var(--app-shadow-sm);
+    @apply inline-flex h-10 cursor-pointer items-center gap-2 rounded-full border border-white/70 bg-white/86 px-4 text-xs font-medium text-slate-700 transition-colors hover:text-slate-900;
+    box-shadow: var(--app-shadow-xs), inset 0 1px 0 rgba(255, 255, 255, 0.85);
   }
 
   .app-filter-panel {
-    @apply rounded-2xl border border-border bg-white p-4;
+    @apply rounded-[26px] border border-white/75 bg-white/96 p-4;
     box-shadow: var(--app-shadow-md);
   }
 
@@ -304,7 +410,8 @@
   }
 
   .app-segmented {
-    @apply inline-flex items-center gap-1 rounded-full border border-border bg-slate-100 p-1;
+    @apply inline-flex items-center gap-1 rounded-full border border-white/70 bg-white/70 p-1;
+    box-shadow: var(--app-shadow-xs);
   }
 
   .app-segmented-item {
@@ -316,22 +423,38 @@
   }
 
   .app-segmented-item--inactive {
-    @apply text-slate-600 hover:bg-slate-200;
+    @apply text-slate-600 hover:bg-white hover:text-slate-900;
   }
 
   .app-dialog-overlay {
-    @apply fixed inset-0 bg-black/40 backdrop-blur-[2px]
-      data-[state=open]:animate-in data-[state=closed]:animate-out
-      data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0;
+    @apply fixed inset-0 bg-slate-950/25 backdrop-blur-[3px] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0;
   }
 
   .app-dialog-surface {
-    @apply rounded-[28px] border border-border bg-white;
+    @apply rounded-[30px] border border-white/80 bg-white/96;
     box-shadow: var(--app-shadow-lg);
   }
 
   .app-dialog-close {
-    @apply inline-flex h-8 w-8 items-center justify-center rounded-full border border-border
-      text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700;
+    @apply inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/80 bg-white/90 text-slate-500 transition-colors hover:text-slate-900;
+    box-shadow: var(--app-shadow-xs);
+  }
+
+  .app-progress-track {
+    @apply relative h-2.5 w-full overflow-hidden rounded-full;
+    background:
+      repeating-linear-gradient(
+        -45deg,
+        rgba(15, 23, 42, 0.05),
+        rgba(15, 23, 42, 0.05) 5px,
+        rgba(15, 23, 42, 0.12) 5px,
+        rgba(15, 23, 42, 0.12) 10px
+      ),
+      rgba(226, 232, 240, 0.75);
+  }
+
+  .app-progress-fill {
+    @apply h-full rounded-full;
+    background-color: hsl(var(--accent));
   }
 }

@@ -198,7 +198,7 @@ export default async function PieceHistoryPage({
   };
 
   return (
-    <main className="space-y-6 min-w-[1024px]">
+    <main className="space-y-6">
       {/* HEADER PAGE */}
       <div className="flex items-center justify-between gap-3">
         <div>

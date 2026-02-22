@@ -1,7 +1,7 @@
 # Journal des décisions
 
 Date de mise à jour initiale: 2026-02-12
-Derniere mise a jour: 2026-02-20
+Derniere mise a jour: 2026-02-22
 
 ## Décisions prises
 
@@ -511,6 +511,30 @@ Derniere mise a jour: 2026-02-20
   - invariants:
     - aucun impact sur `stock_movements`, `stock_balance`, `PURCHASE/SALE/SALE_CANCEL`
     - aucun changement SQL/migration requis pour F5.0.2
+
+### D-033 - F5.5 refonte UI globale: topbar flottante + design system Soft UI/Bento
+
+- Statut: validee
+- Constat:
+  - le paradigme sidebar n'etait plus aligne avec la direction visuelle cible (Soft UI/Bento, topbar flottante)
+  - des styles ad hoc persistaient entre routes et composants shared, avec une lisibilite tableau heterogene
+  - la refonte devait rester strictement non intrusive sur les flux metier (query params, tri, pagination, actions, navigation)
+- Impact:
+  - navigation globale migree vers une topbar flottante 3 zones:
+    - gauche: marque/logo
+    - centre: navigation principale
+    - droite: actions globales/profil (incluant `Report`)
+  - design system transverse unifie dans `globals.css`:
+    - rayons XXL et surfaces pill-systematiques
+    - ombres diffuses / glass leger
+    - separateurs pointilles discrets
+    - progression avec piste hachuree diagonale
+  - composants shared alignes (button/badge/card/progress/data-table/page-header) sans changer leur logique
+  - assouplissement responsive sur pages detail critiques (suppression de rigidites `min-w-[1024px]`)
+  - invariants proteges:
+    - aucun changement API/DB
+    - aucune migration SQL
+    - aucune ecriture distante
 
 ## Hypothèses / décisions en attente
 

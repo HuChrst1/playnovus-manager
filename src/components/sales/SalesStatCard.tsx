@@ -1,5 +1,6 @@
 // src/components/sales/SalesStatCard.tsx
 
+import type { ReactNode } from "react";
 import { KpiCard, type KpiCardColor } from "@/components/ui/kpi-card";
 
 export type SalesStatCardColor = KpiCardColor;
@@ -26,6 +27,9 @@ export type SalesStatCardProps = {
    * Les couleurs correspondent à celles utilisées pour les cards Appro.
    */
   color: SalesStatCardColor;
+  variant?: "default" | "neutral";
+  icon?: ReactNode;
+  iconGradientClassName?: string;
 };
 
 export function SalesStatCard({
@@ -33,6 +37,19 @@ export function SalesStatCard({
   mainValue,
   subtitle,
   color,
+  variant,
+  icon,
+  iconGradientClassName,
 }: SalesStatCardProps) {
-  return <KpiCard title={title} mainValue={mainValue} subtitle={subtitle} color={color} />;
+  return (
+    <KpiCard
+      title={title}
+      mainValue={mainValue}
+      subtitle={subtitle}
+      color={color}
+      variant={variant}
+      icon={icon}
+      iconGradientClassName={iconGradientClassName}
+    />
+  );
 }

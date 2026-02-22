@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Plus } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   Dialog,
   DialogTrigger,
@@ -22,9 +23,13 @@ import { NewSaleForm } from "@/app/ventes/nouvelle/NewSaleForm";
  */
 type NewSaleDialogProps = {
   openFromIntent?: boolean;
+  triggerClassName?: string;
 };
 
-export function NewSaleDialog({ openFromIntent = false }: NewSaleDialogProps) {
+export function NewSaleDialog({
+  openFromIntent = false,
+  triggerClassName,
+}: NewSaleDialogProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -56,7 +61,7 @@ export function NewSaleDialog({ openFromIntent = false }: NewSaleDialogProps) {
     <Dialog open={open} onOpenChange={handleOpenChange}>
       {/* Bouton dans la barre d’actions */}
       <DialogTrigger asChild>
-        <Button className="h-9 px-5 text-sm font-medium gap-2">
+        <Button className={cn("h-9 gap-2 px-5 text-sm font-medium", triggerClassName)}>
           <Plus className="h-4 w-4" />
           Nouvelle vente
         </Button>

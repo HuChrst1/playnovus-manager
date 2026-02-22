@@ -43,7 +43,7 @@ export function DeleteInventoryLineButton({ lotId, lineId }: Props) {
       size="icon"
       onClick={handleClick}
       disabled={isPending}
-      className="h-7 w-7 rounded-full text-red-500 hover:text-red-600 hover:bg-red-50"
+      className="h-7 w-7 rounded-full text-slate-700 hover:bg-slate-100 hover:text-slate-900"
       aria-label="Supprimer la ligne"
     >
       {isPending ? (

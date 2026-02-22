@@ -11,8 +11,9 @@ const buttonVariants = cva(
     "inline-flex items-center justify-center gap-2",
     "whitespace-nowrap rounded-full",
     "font-medium tracking-tight",
+    "border border-transparent",
     "transition-colors duration-150",
-    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/35",
     "disabled:pointer-events-none disabled:opacity-60",
   ].join(" "),
   {
@@ -21,49 +22,52 @@ const buttonVariants = cva(
         default:
           [
             "bg-slate-900 text-white",
-            "shadow-[0_10px_24px_rgba(15,23,42,0.32)]",
+            "shadow-[0_14px_28px_rgba(15,23,42,0.28)]",
             "hover:bg-slate-800 active:bg-slate-900",
           ].join(" "),
 
         outline:
           [
-            "bg-white text-slate-700",
-            "border border-border",
-            "shadow-[0_6px_16px_rgba(15,23,42,0.1)]",
-            "hover:bg-slate-50 active:bg-slate-100",
+            "bg-white/88 text-slate-700",
+            "border-white/70",
+            "shadow-[0_10px_22px_rgba(15,23,42,0.08),inset_0_1px_0_rgba(255,255,255,0.8)]",
+            "hover:bg-white active:bg-slate-100/80",
           ].join(" "),
 
         ghost:
           [
             "bg-transparent text-muted-foreground",
-            "hover:bg-slate-100 active:bg-slate-200",
+            "border-transparent",
+            "hover:bg-white/85 hover:text-slate-900 active:bg-slate-200/70",
           ].join(" "),
 
         destructive:
           [
             "bg-red-600 text-white",
+            "border-red-500/70",
             "shadow-[0_8px_20px_rgba(220,38,38,0.35)]",
             "hover:bg-red-600 active:bg-red-700",
           ].join(" "),
 
         secondary:
           [
-            "bg-slate-100 text-slate-700",
-            "border border-border",
-            "hover:bg-slate-200 active:bg-slate-300",
+            "bg-sky-100/90 text-sky-800",
+            "border-sky-200/80",
+            "shadow-[0_8px_20px_rgba(14,165,233,0.16)]",
+            "hover:bg-sky-200/80 active:bg-sky-300/80",
           ].join(" "),
 
         link:
           "bg-transparent text-primary underline-offset-4 hover:underline p-0 h-auto",
       },
       size: {
-        default: "h-9 px-4 text-xs md:text-[13px]",
+        default: "h-10 px-5 text-xs md:text-[13px]",
 
         sm: "h-8 px-3 text-[11px]",
 
-        lg: "h-10 px-6 text-sm",
+        lg: "h-11 px-7 text-sm",
 
-        icon: "h-8 w-8 p-0 text-sm",
+        icon: "h-10 w-10 p-0 text-sm rounded-full shadow-[0_10px_26px_rgba(15,23,42,0.12),inset_0_1px_0_rgba(255,255,255,0.72)] bg-white/86 border-white/70",
       },
     },
     defaultVariants: {

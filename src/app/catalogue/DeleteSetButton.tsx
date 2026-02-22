@@ -37,7 +37,7 @@ export function DeleteSetButton({
         type="submit"
         variant="ghost"
         size="icon"
-        className="h-7 w-7 text-muted-foreground hover:text-destructive"
+        className="h-7 w-7 text-slate-700 hover:bg-slate-100 hover:text-slate-900"
         onClick={handleClick}
         data-row-action="true" // évite de déclencher le clic sur la ligne
         aria-label="Supprimer le set"

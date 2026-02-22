@@ -14,6 +14,7 @@ type DashboardModalProps = {
   contentClassName?: string;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  tone?: "default" | "dark";
 };
 
 export function DashboardModal({
@@ -25,7 +26,10 @@ export function DashboardModal({
   contentClassName,
   open,
   onOpenChange,
+  tone = "default",
 }: DashboardModalProps) {
+  const isDark = tone === "dark";
+
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       {trigger ? <DialogPrimitive.Trigger asChild>{trigger}</DialogPrimitive.Trigger> : null}
@@ -42,6 +46,7 @@ export function DashboardModal({
             "fixed left-1/2 top-1/2 z-[91] w-[min(96vw,1100px)]",
             "max-h-[88vh] -translate-x-1/2 -translate-y-1/2 overflow-hidden",
             "app-dialog-surface",
+            isDark && "border-slate-800 bg-slate-950 text-slate-100",
             "data-[state=open]:animate-in data-[state=closed]:animate-out",
             "data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0",
             "data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95",
@@ -50,19 +55,37 @@ export function DashboardModal({
             contentClassName
           )}
         >
-          <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4 md:px-6">
+          <div
+            className={cn(
+              "flex items-start justify-between gap-4 border-b border-dashed px-5 py-4 md:px-6",
+              isDark ? "border-slate-700/70" : "border-slate-200/80"
+            )}
+          >
             <div className="space-y-1">
-              <DialogPrimitive.Title className="text-base font-semibold text-slate-900 md:text-lg">
+              <DialogPrimitive.Title
+                className={cn(
+                  "text-base font-semibold md:text-lg",
+                  isDark ? "text-slate-100" : "text-slate-900"
+                )}
+              >
                 {title}
               </DialogPrimitive.Title>
               {description ? (
-                <DialogPrimitive.Description className="text-xs text-slate-500 md:text-sm">
+                <DialogPrimitive.Description
+                  className={cn(
+                    "text-xs md:text-sm",
+                    isDark ? "text-slate-300" : "text-slate-500"
+                  )}
+                >
                   {description}
                 </DialogPrimitive.Description>
               ) : null}
             </div>
             <DialogPrimitive.Close
-              className="app-dialog-close"
+              className={cn(
+                "app-dialog-close",
+                isDark && "border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800/80 hover:text-white"
+              )}
               aria-label="Fermer"
             >
               <X className="h-4 w-4" />
@@ -74,7 +97,14 @@ export function DashboardModal({
           </div>
 
           {footer ? (
-            <div className="border-t border-slate-100 px-5 py-3 md:px-6">{footer}</div>
+            <div
+              className={cn(
+                "border-t border-dashed px-5 py-3 md:px-6",
+                isDark ? "border-slate-700/70" : "border-slate-200/80"
+              )}
+            >
+              {footer}
+            </div>
           ) : null}
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>

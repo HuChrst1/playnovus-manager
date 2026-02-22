@@ -2,9 +2,9 @@
 
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowUp, ChartColumnIncreasing } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { DashboardStatCard } from "@/components/dashboard/DashboardStatCard";
+import { SalesStatCard } from "@/components/sales/SalesStatCard";
 import { PageHeader } from "@/components/ui/page-header";
 import { FilterBar, FilterLabel } from "@/components/ui/filter-bar";
 import { TableCard, TableOverflow } from "@/components/ui/data-table";
@@ -201,7 +201,7 @@ export default async function StockHistoryPage({
   };
 
   return (
-    <main className="space-y-6 min-w-[1024px]">
+    <main className="space-y-6">
       <PageHeader
         title="Historique de stock"
         description="Journal global des mouvements de stock (entrées, sorties, ajustements)."
@@ -300,25 +300,31 @@ export default async function StockHistoryPage({
 
       {/* Stats rapides */}
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        <DashboardStatCard
+        <SalesStatCard
           title="Nombre de mouvements"
           mainValue={rows.length.toLocaleString("fr-FR")}
-          trendPercent={null}
           color="indigo"
+          variant="neutral"
+          icon={<ChartColumnIncreasing className="h-4 w-4" />}
+          iconGradientClassName="from-sky-700 to-blue-500"
         />
 
-        <DashboardStatCard
+        <SalesStatCard
           title="Total entrées"
           mainValue={totalIn.toLocaleString("fr-FR")}
-          trendPercent={null}
-          color="orange"
+          color="azure"
+          variant="neutral"
+          icon={<ArrowDown className="h-4 w-4" />}
+          iconGradientClassName="from-cyan-600 to-sky-400"
         />
 
-        <DashboardStatCard
+        <SalesStatCard
           title="Total sorties"
           mainValue={totalOut.toLocaleString("fr-FR")}
-          trendPercent={null}
-          color="amber"
+          color="sky"
+          variant="neutral"
+          icon={<ArrowUp className="h-4 w-4" />}
+          iconGradientClassName="from-blue-700 to-indigo-500"
         />
       </section>
 

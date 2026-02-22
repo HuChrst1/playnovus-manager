@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { supabaseServer as supabase } from "@/lib/supabase-server";
-import { cn } from "@/lib/utils";
 import {
   getSalesPageData,
   type SalesPageSortColumn,
@@ -10,13 +9,15 @@ import {
 import { SalesTable } from "@/components/sales/SalesTable";
 import { SalesStatCard } from "@/components/sales/SalesStatCard";
 import { NewSaleDialog } from "@/components/sales/NewSaleDialog";
-import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import {
-  FilterActions,
-  FilterLabel,
-  FilterPopover,
-} from "@/components/ui/filter-bar";
+  Boxes,
+  Calculator,
+  ChartColumnIncreasing,
+  Filter,
+  Package,
+  Wallet,
+} from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -214,25 +215,7 @@ export default async function VentesPage({ searchParams }: SalesPageProps) {
     supabase
   );
 
-  const { table, kpis, headerCounts } = salesPageData;
-  const totalSalesCount = headerCounts.totalSalesCount;
-
-  const buildStatusToggleHref = (includeCancelled: boolean) => {
-    const params = new URLSearchParams();
-    params.set("include_cancelled", includeCancelled ? "true" : "false");
-    if (normalized.newIntent) params.set("new", "1");
-    if (normalized.channel) params.set("channel", normalized.channel);
-    if (normalized.saleType) params.set("sale_type", normalized.saleType);
-    params.set("sort", normalized.sort);
-    params.set("dir", normalized.dir);
-    params.set("page", "1");
-    if (normalized.from) params.set("from", normalized.from);
-    if (normalized.to) params.set("to", normalized.to);
-    return `/ventes?${params.toString()}`;
-  };
-
-  const includeCancelledHref = buildStatusToggleHref(true);
-  const excludeCancelledHref = buildStatusToggleHref(false);
+  const { table, kpis } = salesPageData;
 
   const resetDateParams = new URLSearchParams();
   resetDateParams.set(
@@ -249,124 +232,34 @@ export default async function VentesPage({ searchParams }: SalesPageProps) {
 
   return (
     <main className="space-y-6">
-      <PageHeader
-        title="Ventes"
-        description="Suivi des ventes de sets et de pièces au détail."
-        meta={
-          totalSalesCount > 0 ? (
-            <p className="text-xs text-muted-foreground">
-              {totalSalesCount.toLocaleString("fr-FR")} commandes
-              {" • "}
-              <span className="text-emerald-700">
-                {headerCounts.confirmedCount.toLocaleString("fr-FR")} confirmées
-              </span>
-              {normalized.includeCancelled ? (
-                <>
-                  {" • "}
-                  <span className="text-rose-700">
-                    {headerCounts.cancelledCount.toLocaleString("fr-FR")} annulées
-                  </span>
-                </>
-              ) : null}
-            </p>
-          ) : null
-        }
-        actions={
-          <>
-            <div className="app-segmented bg-white">
-              <Link
-                href={includeCancelledHref}
-                className={cn(
-                  "app-segmented-item",
-                  normalized.includeCancelled
-                    ? "app-segmented-item--active"
-                    : "app-segmented-item--inactive"
-                )}
-              >
-                Inclure annulées
-              </Link>
-              <Link
-                href={excludeCancelledHref}
-                className={cn(
-                  "app-segmented-item",
-                  !normalized.includeCancelled
-                    ? "app-segmented-item--active"
-                    : "app-segmented-item--inactive"
-                )}
-              >
-                Exclure annulées
-              </Link>
-            </div>
-
-            <FilterPopover>
-              <form method="GET" className="space-y-3">
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-1">
-                    <FilterLabel htmlFor="sales-from">Du</FilterLabel>
-                    <input
-                      id="sales-from"
-                      type="date"
-                      name="from"
-                      defaultValue={normalized.from ?? ""}
-                      className="app-control"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <FilterLabel htmlFor="sales-to">Au</FilterLabel>
-                    <input
-                      id="sales-to"
-                      type="date"
-                      name="to"
-                      defaultValue={normalized.to ?? ""}
-                      className="app-control"
-                    />
-                  </div>
-                </div>
-
-                <input
-                  type="hidden"
-                  name="include_cancelled"
-                  value={normalized.includeCancelled ? "true" : "false"}
-                />
-                {normalized.newIntent && <input type="hidden" name="new" value="1" />}
-                {normalized.channel ? (
-                  <input type="hidden" name="channel" value={normalized.channel} />
-                ) : null}
-                {normalized.saleType ? (
-                  <input type="hidden" name="sale_type" value={normalized.saleType} />
-                ) : null}
-                <input type="hidden" name="sort" value={normalized.sort} />
-                <input type="hidden" name="dir" value={normalized.dir} />
-                <input type="hidden" name="page" value="1" />
-
-                <FilterActions>
-                  <Button variant="outline" size="sm" asChild>
-                    <Link href={resetDateHref}>Réinitialiser</Link>
-                  </Button>
-                  <Button type="submit" size="sm">
-                    Appliquer
-                  </Button>
-                </FilterActions>
-              </form>
-            </FilterPopover>
-
-            <NewSaleDialog openFromIntent={normalized.newIntent} />
-          </>
-        }
-      />
+      <header className="px-1 md:px-2">
+        <div className="min-w-0">
+          <h1 className="text-3xl font-medium tracking-tight text-slate-900 md:text-[42px] md:leading-none">
+            Ventes
+          </h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Suivi des ventes de sets et de pièces au détail.
+          </p>
+        </div>
+      </header>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5 items-start">
         <SalesStatCard
           title="CA net (ventes confirmées)"
           mainValue={euro.format(kpis.netWindowValue)}
           color="indigo"
+          variant="neutral"
+          icon={<Wallet className="h-4 w-4" />}
+          iconGradientClassName="from-sky-700 to-blue-500"
         />
 
         <SalesStatCard
           title="Marge totale"
           mainValue={euro.format(kpis.marginWindowValue)}
-          color="orange"
+          color="azure"
+          variant="neutral"
+          icon={<ChartColumnIncreasing className="h-4 w-4" />}
+          iconGradientClassName="from-cyan-600 to-sky-400"
         />
 
         <SalesStatCard
@@ -376,27 +269,118 @@ export default async function VentesPage({ searchParams }: SalesPageProps) {
               ? `${(kpis.avgMarginRateWindowValue * 100).toFixed(1)}%`
               : "—"
           }
-          color="amber"
+          color="sky"
+          variant="neutral"
+          icon={<Calculator className="h-4 w-4" />}
+          iconGradientClassName="from-blue-700 to-indigo-500"
         />
 
         <SalesStatCard
           title="Commandes avec set(s)"
           mainValue={kpis.setsWindowValue.toLocaleString("fr-FR")}
           color="emerald"
+          variant="neutral"
+          icon={<Package className="h-4 w-4" />}
+          iconGradientClassName="from-sky-600 to-blue-400"
         />
 
         <SalesStatCard
           title="Commandes avec pièce(s)"
           mainValue={kpis.piecesWindowValue.toLocaleString("fr-FR")}
           color="emerald"
+          variant="neutral"
+          icon={<Boxes className="h-4 w-4" />}
+          iconGradientClassName="from-blue-600 to-cyan-400"
         />
       </section>
+
+      <div className="appro-actions-bar">
+        <details className="group relative">
+          <summary className="appro-filter-trigger-icon" aria-label="Filtrer" title="Filtrer">
+            <Filter className="h-4 w-4" />
+          </summary>
+
+          <div className="appro-filter-popover-left hidden group-open:block">
+            <form
+              method="GET"
+              className="inline-flex max-w-[min(96vw,980px)] flex-nowrap items-center gap-2 overflow-x-auto whitespace-nowrap rounded-[24px] border border-white/75 bg-white/92 px-2.5 py-2 shadow-[0_16px_36px_rgba(15,23,42,0.1)] backdrop-blur-md"
+            >
+              <label
+                htmlFor="sales-include-cancelled"
+                className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-slate-500"
+              >
+                <span>Statut</span>
+                <select
+                  id="sales-include-cancelled"
+                  name="include_cancelled"
+                  defaultValue={normalized.includeCancelled ? "true" : "false"}
+                  className="app-control h-8 w-[168px] px-3 text-[11px]"
+                >
+                  <option value="true">Inclure annulées</option>
+                  <option value="false">Exclure annulées</option>
+                </select>
+              </label>
+
+              <label
+                htmlFor="sales-from"
+                className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-slate-500"
+              >
+                <span>Du</span>
+                <input
+                  id="sales-from"
+                  type="date"
+                  name="from"
+                  defaultValue={normalized.from ?? ""}
+                  className="app-control h-8 w-[132px] px-3 text-[11px]"
+                />
+              </label>
+
+              <label
+                htmlFor="sales-to"
+                className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-slate-500"
+              >
+                <span>Au</span>
+                <input
+                  id="sales-to"
+                  type="date"
+                  name="to"
+                  defaultValue={normalized.to ?? ""}
+                  className="app-control h-8 w-[132px] px-3 text-[11px]"
+                />
+              </label>
+              {normalized.newIntent ? <input type="hidden" name="new" value="1" /> : null}
+              {normalized.channel ? (
+                <input type="hidden" name="channel" value={normalized.channel} />
+              ) : null}
+              {normalized.saleType ? (
+                <input type="hidden" name="sale_type" value={normalized.saleType} />
+              ) : null}
+              <input type="hidden" name="sort" value={normalized.sort} />
+              <input type="hidden" name="dir" value={normalized.dir} />
+              <input type="hidden" name="page" value="1" />
+
+              <Button variant="outline" size="sm" asChild className="shrink-0 text-[11px]">
+                <Link href={resetDateHref}>Réinitialiser</Link>
+              </Button>
+              <Button type="submit" size="sm" className="shrink-0 text-[11px] font-semibold">
+                Appliquer
+              </Button>
+            </form>
+          </div>
+        </details>
+
+        <NewSaleDialog
+          openFromIntent={normalized.newIntent}
+          triggerClassName="h-9 gap-2 px-4 text-xs font-medium !border !border-white/75 !bg-white/92 !text-slate-700 shadow-[0_8px_20px_rgba(15,23,42,0.06)] hover:!bg-white"
+        />
+      </div>
 
       <SalesTable
         rows={table.rows}
         activeSortKey={normalized.sort}
         sortDir={normalized.dir}
         baseQuery={normalized.baseQuery}
+        variant="appro"
         pagination={{
           currentPage: table.currentPage,
           totalPages: table.totalPages,
