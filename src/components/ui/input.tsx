@@ -11,7 +11,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
       <input
         type={type}
         className={cn(
-          "app-control app-control--md text-sm disabled:cursor-not-allowed disabled:opacity-60",
+          "app-control app-control--md text-sm disabled:cursor-not-allowed disabled:opacity-55",
           "file:border-0 file:bg-transparent file:text-sm file:font-medium",
           className
         )}

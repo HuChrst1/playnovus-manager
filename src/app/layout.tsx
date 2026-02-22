@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { AppSidebar } from "@/components/AppSidebar";
+import { AppBackButton } from "@/components/AppBackButton";
 
 export const metadata: Metadata = {
   title: "PlayNovus Manager",
@@ -16,7 +17,10 @@ export default function RootLayout({
     <html lang="fr">
       <body className="app-shell font-sans antialiased">
         <div className="app-layout-wrap">
-          <AppSidebar />
+          <div className="app-topbar-layout">
+            <AppBackButton />
+            <AppSidebar />
+          </div>
           <div className="app-main">
             {children}
           </div>

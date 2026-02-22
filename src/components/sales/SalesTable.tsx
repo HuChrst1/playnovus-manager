@@ -107,7 +107,7 @@ export function SalesTable({
           <thead className={isApproVariant ? "appro-table-header" : "app-table-head"}>
             <tr>
               <SortableTableHeader
-                label="N° vente"
+                label="N° commande"
                 columnKey="sale_id"
                 activeSortKey={activeSortKey}
                 sortDir={sortDir}

@@ -17,12 +17,7 @@ export function QuickAddPieceForm({ lotId, isDraft }: QuickAddPieceFormProps) {
   const router = useRouter();
 
   if (!isDraft) {
-    // Lot confirmé : pas de formulaire, petit message soft
-    return (
-      <p className="text-[11px] text-slate-400 italic">
-        Lot confirmé – saisie des pièces verrouillée.
-      </p>
-    );
+    return null;
   }
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {

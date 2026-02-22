@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Plus, X, Search } from "lucide-react";
 
@@ -44,11 +45,8 @@ const makeLocalId = () => {
   return `${Date.now()}_${Math.random().toString(16).slice(2)}`;
 };
 
-const fieldClassName =
-  "border border-slate-200 bg-white shadow-[0_8px_20px_rgba(15,23,42,0.08)] focus-visible:outline-none focus-visible:ring-0";
-
 const inputClassName = (hasError?: boolean) =>
-  cn("h-10 rounded-full px-4", fieldClassName, hasError && "ring-1 ring-rose-300");
+  cn("app-control app-control--md", hasError && "ring-1 ring-rose-300");
 
 const parseDecimalFR = (raw: string) => {
   const cleaned = (raw ?? "")
@@ -188,20 +186,21 @@ export function PieceSelector({ value, onChange, disabled, errors }: PieceSelect
   };
 
   return (
-    <div className="rounded-3xl border border-dashed border-border/70 p-4 space-y-4 bg-white/70">
+    <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+        <p className="app-section-label">
           Vente de pièces (multi-lignes)
         </p>
 
-        <button
+        <Button
           type="button"
+          variant="outline"
           disabled={disabled}
           onClick={() => setQuery("")}
-          className="inline-flex h-9 items-center rounded-full px-4 bg-slate-900 text-white text-xs font-medium shadow-[0_10px_25px_rgba(15,23,42,0.35)] hover:bg-slate-900/90 disabled:opacity-50"
+          className="h-9 px-4 text-xs font-medium"
         >
           Effacer recherche
-        </button>
+        </Button>
       </div>
 
       {/* Recherche */}
@@ -224,7 +223,7 @@ export function PieceSelector({ value, onChange, disabled, errors }: PieceSelect
         </div>
 
         {(query.trim().length >= 2 || results.length > 0) && (
-          <div className="mt-2 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_18px_40px_rgba(15,23,42,0.14)]">
+          <div className="mt-2 overflow-hidden rounded-2xl border border-white/80 bg-white/96 shadow-[0_18px_40px_rgba(15,23,42,0.12)]">
             <div className="max-h-72 overflow-auto p-1">
               {loading ? (
                 <div className="px-3 py-2 text-xs text-muted-foreground">Recherche…</div>
@@ -234,13 +233,13 @@ export function PieceSelector({ value, onChange, disabled, errors }: PieceSelect
                 </div>
               ) : (
                 results.map((r) => (
-                  <button
-                    key={r.piece_ref}
-                    type="button"
-                    onClick={() => addOrIncrement(r)}
-                    className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left hover:bg-slate-50 disabled:opacity-50"
-                    disabled={disabled}
-                  >
+                          <button
+                            key={r.piece_ref}
+                            type="button"
+                            onClick={() => addOrIncrement(r)}
+                            className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left transition-colors hover:bg-slate-50 disabled:opacity-50"
+                            disabled={disabled}
+                          >
                     <div className="flex flex-col">
                       <span className="text-xs font-semibold text-slate-900">{r.piece_ref}</span>
                       <span className="text-[11px] text-muted-foreground">
@@ -248,10 +247,10 @@ export function PieceSelector({ value, onChange, disabled, errors }: PieceSelect
                       </span>
                     </div>
 
-                    <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-white">
-                      <Plus className="h-4 w-4" />
-                    </span>
-                  </button>
+                            <span className="app-btn-soft-icon h-8 w-8 border-sky-200/90 bg-sky-50/80 text-sky-700">
+                              <Plus className="h-4 w-4" />
+                            </span>
+                          </button>
                 ))
               )}
             </div>
@@ -268,14 +267,14 @@ export function PieceSelector({ value, onChange, disabled, errors }: PieceSelect
       {/* Tableau */}
       <div className="space-y-3">
         {value.length === 0 ? (
-          <div className="rounded-2xl border border-slate-200 bg-white/70 px-4 py-3 text-xs text-muted-foreground">
+          <div className="rounded-2xl border border-white/80 bg-white/85 px-4 py-3 text-xs text-muted-foreground">
             Ajoute une ou plusieurs pièces via la recherche ci-dessus.
           </div>
         ) : (
-          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_18px_40px_rgba(15,23,42,0.10)]">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-slate-50">
+          <div className="appro-table-shell p-1.5">
+            <div className="appro-table-scroll overflow-x-auto">
+              <table className="appro-table w-full text-sm">
+                <thead className="appro-table-header">
                   <tr className="text-left text-xs text-slate-600">
                     <th className="px-4 py-3 font-medium">Pièce</th>
                     <th className="px-4 py-3 font-medium">Stock dispo</th>
@@ -299,7 +298,7 @@ export function PieceSelector({ value, onChange, disabled, errors }: PieceSelect
                     const overStock = available !== null && line.quantity > available;
 
                     return (
-                      <tr key={line.id} className="border-t border-slate-100 align-top">
+                      <tr key={line.id} className="appro-table-row align-top">
                         <td className="px-4 py-3">
                           <div className="text-xs font-semibold text-slate-900">{line.piece_ref}</div>
                         </td>
@@ -380,16 +379,18 @@ export function PieceSelector({ value, onChange, disabled, errors }: PieceSelect
                         </td>
 
                         <td className="px-4 py-3 text-right">
-                          <button
+                          <Button
                             type="button"
+                            variant="ghost"
+                            size="icon"
                             onClick={() => removeLine(line.id)}
                             disabled={disabled}
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-full hover:bg-muted disabled:opacity-50"
+                            className="h-8 w-8 rounded-full text-slate-700 hover:bg-slate-100 hover:text-slate-900"
                             aria-label="Supprimer la ligne"
                             title="Supprimer"
                           >
                             <X className="h-4 w-4" />
-                          </button>
+                          </Button>
                         </td>
                       </tr>
                     );
@@ -398,7 +399,7 @@ export function PieceSelector({ value, onChange, disabled, errors }: PieceSelect
               </table>
             </div>
 
-            <div className="border-t border-slate-100 px-4 py-2 text-[11px] text-muted-foreground">
+            <div className="px-4 py-2 text-[11px] text-muted-foreground">
               Astuce : recliquer sur une pièce dans la recherche <span className="font-medium">fusionne</span> la ligne (quantité +1).
             </div>
           </div>

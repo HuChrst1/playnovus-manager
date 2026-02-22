@@ -17,6 +17,7 @@ import {
 
 import { cn } from "@/lib/utils";
 import { ReportDialog } from "@/components/report/ReportDialog";
+import { Button } from "@/components/ui/button";
 
 type NavItem = {
   href: string;
@@ -81,14 +82,19 @@ export function AppSidebar() {
           <span className="truncate">PlayNovus</span>
         </Link>
 
-        <button
+        <Button
           type="button"
+          variant="icon"
           onClick={() => setMobileOpen((previous) => !previous)}
           className="app-topbar-icon sm:hidden"
           aria-label={mobileOpen ? "Fermer le menu" : "Ouvrir le menu"}
         >
-          {mobileOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
-        </button>
+          {mobileOpen ? (
+            <X className="h-4 w-4 text-slate-700 [stroke-width:2.1]" />
+          ) : (
+            <Menu className="h-4 w-4 text-slate-700 [stroke-width:2.1]" />
+          )}
+        </Button>
 
         {mobileOpen ? (
           <nav className="app-topbar-mobile-menu space-y-1">
@@ -133,9 +139,15 @@ export function AppSidebar() {
       <div className="app-topbar-actions">
         <ReportDialog triggerClassName="app-filter-trigger h-9 px-4 text-xs" />
 
-        <button type="button" className="app-topbar-icon" aria-label="Profil utilisateur">
-          <UserRound className="h-4 w-4" />
-        </button>
+        <Button
+          type="button"
+          variant="icon"
+          className="app-topbar-icon text-slate-700 [&_svg]:h-4 [&_svg]:w-4 [&_svg]:stroke-[2.1] [&_svg]:text-slate-700"
+          aria-label="Compte"
+          title="Compte"
+        >
+          <UserRound className="shrink-0" />
+        </Button>
       </div>
     </header>
   );

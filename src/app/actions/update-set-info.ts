@@ -10,6 +10,7 @@ interface UpdateSetData {
   year_start: number | null;
   year_end: number | null;
   theme: string;
+  image_url?: string | null;
 }
 
 export async function updateSetInfo(setId: string, data: UpdateSetData) {
@@ -25,12 +26,17 @@ export async function updateSetInfo(setId: string, data: UpdateSetData) {
         year_start: data.year_start,
         year_end: data.year_end,
         theme: data.theme,
+        image_url:
+          typeof data.image_url === "string"
+            ? data.image_url.trim() || null
+            : data.image_url ?? null,
       })
       .eq("id", setId);
 
     if (error) throw error;
 
     // On rafraîchit la page pour voir les changements tout de suite
+    revalidatePath("/catalogue");
     revalidatePath(`/catalogue/${setId}`);
     return { success: true };
   } catch (error) {

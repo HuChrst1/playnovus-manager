@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { Plus, X, Search, Boxes } from "lucide-react";
 import { SetPiecesDialog } from "@/components/sales/SetPiecesDialog";
 import type { PieceOverridesMap } from "@/lib/sales-types";
+import { formatSetReferenceDisplay } from "@/lib/sale-number";
 
 export type SaleDraftSetLine = {
   id: string;
@@ -70,15 +71,10 @@ const makeLocalId = () => {
   return `${Date.now()}_${Math.random().toString(16).slice(2)}`;
 };
 
-// Style cohérent avec Approvisionnement : pas de contour noir,
-// mais un “halo” doux pour la profondeur.
-const fieldClassName =
-  "border border-slate-200 bg-white shadow-[0_8px_20px_rgba(15,23,42,0.08)] focus-visible:outline-none focus-visible:ring-0";
-
 const errorRing = "ring-1 ring-rose-300";
 
 const inputClassName = (hasError?: boolean) =>
-  cn("h-10 rounded-full px-4", fieldClassName, hasError && errorRing);
+  cn("app-control app-control--md", hasError && errorRing);
 
 const parseDecimalFR = (raw: string) => {
     const cleaned = (raw ?? "")
@@ -277,17 +273,18 @@ export function SetSelector({
   };
 
   return (
-    <div className="rounded-3xl border border-dashed border-border/70 p-4 space-y-4 bg-white/70">
+    <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+        <p className="app-section-label">
           Lignes de set
         </p>
 
         <Button
           type="button"
+          variant="outline"
           onClick={addLine}
           disabled={disabled}
-          className="h-9 rounded-full px-4 bg-slate-900 text-white text-xs font-medium shadow-[0_10px_25px_rgba(15,23,42,0.35)] hover:bg-slate-900/90 gap-2"
+          className="h-9 gap-2 px-4 text-xs font-medium"
         >
           <Plus className="h-4 w-4" />
           Ajouter un set
@@ -303,26 +300,23 @@ export function SetSelector({
           return (
             <div
               key={line.id}
-              className="rounded-3xl bg-white/80 p-4 shadow-[0_10px_25px_rgba(15,23,42,0.06)]"
+              className="rounded-[24px] border border-white/75 bg-white/90 p-4 shadow-[0_12px_28px_rgba(15,23,42,0.08)]"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-2">
-                  <button
+                  <Button
                     type="button"
+                    variant="outline"
                     onClick={() => {
                       setPiecesDialogLineId(line.id);
                     }}
                     disabled={disabled || !((line.set_id ?? "").trim().length > 0)}
-                    className={cn(
-                      "inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs font-medium",
-                      "bg-white/70 hover:bg-white shadow-[0_10px_25px_rgba(15,23,42,0.10)]",
-                      "disabled:opacity-50 disabled:cursor-not-allowed"
-                    )}
+                    className="h-9 gap-2 px-3 text-xs font-medium"
                     aria-label="Détail des pièces"
                   >
                     <Boxes className="h-4 w-4" />
                     Détail des pièces
-                  </button>
+                  </Button>
                   {hasOverrides ? (
                     <span className="inline-flex items-center rounded-full bg-sky-50 px-2 py-1 text-[11px] font-semibold text-sky-800">
                         Set partiel
@@ -334,15 +328,17 @@ export function SetSelector({
                     ) : null}
                 </div>
                 {value.length > 1 && (
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="icon"
                     onClick={() => removeLine(line.id)}
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-full hover:bg-muted"
+                    className="h-8 w-8 rounded-full text-slate-700 hover:bg-slate-100 hover:text-slate-900"
                     aria-label="Supprimer la ligne"
                     disabled={disabled}
                   >
                     <X className="h-4 w-4" />
-                  </button>
+                  </Button>
                 )}
               </div>
 
@@ -361,7 +357,7 @@ export function SetSelector({
                       value={
                         queryByLineId[line.id] ??
                         line.set_label ??
-                        line.set_id ??
+                        formatSetReferenceDisplay(line.set_id) ??
                         ""
                       }
                       onFocus={() => setActiveLineId(line.id)}
@@ -467,7 +463,10 @@ export function SetSelector({
 
                   {(line.set_label || (line.set_id && (line.set_id ?? "").trim().length > 0)) && (
                     <p className="mt-1 text-[11px] text-muted-foreground">
-                      Sélectionné : <span className="font-medium text-slate-900">{line.set_label ?? line.set_id}</span>
+                      Sélectionné :{" "}
+                      <span className="font-medium text-slate-900">
+                        {line.set_label ?? formatSetReferenceDisplay(line.set_id)}
+                      </span>
                     </p>
                   )}
 

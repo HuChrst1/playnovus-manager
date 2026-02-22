@@ -23,12 +23,12 @@ export function DeletePieceButton({ id, setId, refName }: DeletePieceButtonProps
   };
 
   return (
-    <Button 
-      variant="ghost" 
-      size="icon" 
-      onClick={handleDelete} 
+    <Button
+      variant="ghost"
+      size="icon"
+      onClick={handleDelete}
       disabled={isPending}
-      className="h-8 w-8 text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+      className="h-8 w-8 rounded-full text-slate-700 hover:bg-slate-100 hover:text-slate-900"
       title="Supprimer cette pièce"
     >
       {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}

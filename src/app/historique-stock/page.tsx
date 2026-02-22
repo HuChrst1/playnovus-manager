@@ -2,11 +2,9 @@
 
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
-import { ArrowDown, ArrowLeft, ArrowUp, ChartColumnIncreasing } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowUp, ChartColumnIncreasing, Filter } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SalesStatCard } from "@/components/sales/SalesStatCard";
-import { PageHeader } from "@/components/ui/page-header";
-import { FilterBar, FilterLabel } from "@/components/ui/filter-bar";
 import { TableCard, TableOverflow } from "@/components/ui/data-table";
 
 export const dynamic = "force-dynamic";
@@ -121,15 +119,6 @@ export default async function StockHistoryPage({
         <p className="text-sm text-red-500 mt-2">
           Erreur lors du chargement de l&apos;historique : {error.message}
         </p>
-
-        <div className="mt-4">
-          <Button asChild variant="outline" size="sm" className="rounded-full">
-            <Link href="/stock">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Retour au stock
-            </Link>
-          </Button>
-        </div>
       </main>
     );
   }
@@ -202,101 +191,16 @@ export default async function StockHistoryPage({
 
   return (
     <main className="space-y-6">
-      <PageHeader
-        title="Historique de stock"
-        description="Journal global des mouvements de stock (entrées, sorties, ajustements)."
-        actions={
-          <Button variant="outline" size="sm" asChild className="rounded-full px-4">
-            <Link href="/stock">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Vue stock par pièce
-            </Link>
-          </Button>
-        }
-      />
-
-      {/* FILTRES */}
-      <FilterBar>
-        <form
-          method="GET"
-          className="grid gap-3 md:grid-cols-5 items-end"
-        >
-          {/* Date de / à */}
-          <div className="space-y-1">
-            <FilterLabel htmlFor="history-from">Du</FilterLabel>
-            <input
-              id="history-from"
-              type="date"
-              name="from"
-              defaultValue={from}
-              className="app-control"
-            />
-          </div>
-
-          <div className="space-y-1">
-            <FilterLabel htmlFor="history-to">Au</FilterLabel>
-            <input
-              id="history-to"
-              type="date"
-              name="to"
-              defaultValue={to}
-              className="app-control"
-            />
-          </div>
-
-          {/* Ref pièce */}
-          <div className="space-y-1">
-            <FilterLabel htmlFor="history-piece">Réf. pièce</FilterLabel>
-            <input
-              id="history-piece"
-              type="text"
-              name="piece"
-              placeholder="ex : 30000000"
-              defaultValue={piece}
-              className="app-control"
-            />
-          </div>
-
-          {/* Sens */}
-          <div className="space-y-1">
-            <FilterLabel htmlFor="history-direction">Sens</FilterLabel>
-            <select
-              id="history-direction"
-              name="direction"
-              defaultValue={direction}
-              className="app-control"
-            >
-              <option value="ALL">Tous</option>
-              <option value="IN">Entrées</option>
-              <option value="OUT">Sorties</option>
-              <option value="ADJUST">Ajustements</option>
-            </select>
-          </div>
-
-          {/* Type de source */}
-          <div className="space-y-1">
-            <FilterLabel htmlFor="history-source">Type</FilterLabel>
-            <select
-              id="history-source"
-              name="source_type"
-              defaultValue={sourceType}
-              className="app-control"
-            >
-              <option value="ALL">Tous</option>
-              <option value="PURCHASE">Achats (lots)</option>
-              <option value="SALE">Ventes</option>
-              <option value="ADJUSTMENT">Ajustements</option>
-            </select>
-          </div>
-
-          {/* Bouton submit : sur mobile, il passera à la ligne */}
-          <div className="md:col-span-5 flex justify-end mt-2">
-            <Button type="submit">
-              Filtrer
-            </Button>
-          </div>
-        </form>
-      </FilterBar>
+      <header className="px-1 md:px-2">
+        <div className="min-w-0">
+          <h1 className="text-3xl font-medium tracking-tight text-slate-900 md:text-[42px] md:leading-none">
+            Historique de stock
+          </h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Journal global des mouvements de stock (entrées, sorties, ajustements).
+          </p>
+        </div>
+      </header>
 
       {/* Stats rapides */}
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -328,11 +232,126 @@ export default async function StockHistoryPage({
         />
       </section>
 
+      <div className="appro-actions-bar">
+        <details className="group relative">
+          <summary className="appro-filter-trigger-icon" aria-label="Filtrer" title="Filtrer">
+            <Filter className="h-4 w-4" />
+          </summary>
+
+          <div className="appro-filter-popover-left hidden group-open:block">
+            <form
+              method="GET"
+              className="inline-flex max-w-[min(96vw,920px)] flex-nowrap items-center gap-1 overflow-x-auto whitespace-nowrap rounded-[24px] border border-white/75 bg-white/92 px-2 py-1.5 shadow-[0_16px_36px_rgba(15,23,42,0.1)] backdrop-blur-md"
+            >
+              <label
+                htmlFor="history-from"
+                className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-slate-500"
+              >
+                <span>Du</span>
+                <input
+                  id="history-from"
+                  type="date"
+                  name="from"
+                  defaultValue={from}
+                  className="app-control h-8 w-[104px] px-2.5 text-[11px]"
+                />
+              </label>
+
+              <label
+                htmlFor="history-to"
+                className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-slate-500"
+              >
+                <span>Au</span>
+                <input
+                  id="history-to"
+                  type="date"
+                  name="to"
+                  defaultValue={to}
+                  className="app-control h-8 w-[104px] px-2.5 text-[11px]"
+                />
+              </label>
+
+              <label
+                htmlFor="history-piece"
+                className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-slate-500"
+              >
+                <span>Réf.</span>
+                <input
+                  id="history-piece"
+                  type="text"
+                  name="piece"
+                  placeholder="ex : 30000000"
+                  defaultValue={piece}
+                  className="app-control h-8 w-[118px] px-2.5 text-[11px]"
+                />
+              </label>
+
+              <label
+                htmlFor="history-direction"
+                className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-slate-500"
+              >
+                <span>Sens</span>
+                <select
+                  id="history-direction"
+                  name="direction"
+                  defaultValue={direction}
+                  className="app-control h-8 w-[94px] px-2.5 text-[11px]"
+                >
+                  <option value="ALL">Tous</option>
+                  <option value="IN">Entrées</option>
+                  <option value="OUT">Sorties</option>
+                  <option value="ADJUST">Ajustements</option>
+                </select>
+              </label>
+
+              <label
+                htmlFor="history-source"
+                className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-slate-500"
+              >
+                <span>Type</span>
+                <select
+                  id="history-source"
+                  name="source_type"
+                  defaultValue={sourceType}
+                  className="app-control h-8 w-[132px] px-2.5 text-[11px]"
+                >
+                  <option value="ALL">Tous</option>
+                  <option value="PURCHASE">Achats (lots)</option>
+                  <option value="SALE">Ventes</option>
+                  <option value="ADJUSTMENT">Ajustements</option>
+                </select>
+              </label>
+
+              <div className="inline-flex shrink-0 items-center gap-1.5 pl-1">
+                <Button variant="outline" size="sm" asChild className="shrink-0 text-[11px]">
+                  <Link href="/historique-stock">Réinitialiser</Link>
+                </Button>
+                <Button type="submit" size="sm" className="shrink-0 text-[11px] font-semibold">
+                  Appliquer
+                </Button>
+              </div>
+            </form>
+          </div>
+        </details>
+
+        <Button
+          variant="outline"
+          size="sm"
+          asChild
+          className="h-9 gap-2 px-4 text-xs font-medium"
+        >
+          <Link href="/stock">
+            <ArrowLeft className="h-4 w-4" />
+            Vue stock par pièce
+          </Link>
+        </Button>
+      </div>
+
       {/* TABLEAU JOURNAL */}
-      <TableCard>
-        <TableOverflow>
-          <table className="min-w-full text-sm">
-            <thead className="app-table-head">
+      <TableCard className="appro-table-shell">
+        <TableOverflow className="appro-table-scroll">
+          <table className="appro-table min-w-full text-sm">
+            <thead className="appro-table-header">
               <tr>
                 <th className="px-4 py-3 text-left font-medium">
                   Date
@@ -363,10 +382,10 @@ export default async function StockHistoryPage({
 
             <tbody>
               {rows.length === 0 ? (
-                <tr className="border-t border-border">
+                <tr>
                   <td
                     colSpan={8}
-                    className="px-4 py-6 text-center text-sm text-muted-foreground"
+                    className="px-4 py-6 text-center text-sm text-slate-500"
                   >
                     Aucun mouvement ne correspond à ces filtres.
                   </td>
@@ -392,12 +411,12 @@ export default async function StockHistoryPage({
                   return (
                     <tr
                       key={m.id}
-                      className={`app-table-row transition-colors ${
+                      className={`appro-table-row transition-colors ${
                         m.direction === "IN"
-                          ? "bg-emerald-100 hover:bg-emerald-200"
+                          ? "history-table-row--in"
                           : m.direction === "OUT"
-                          ? "bg-red-50 hover:bg-red-100"
-                          : "hover:bg-sky-50/70"
+                          ? "history-table-row--out"
+                          : "history-table-row--adjust"
                       }`}
                     >
                       <td className="px-4 py-3">

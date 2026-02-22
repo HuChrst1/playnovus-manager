@@ -59,16 +59,20 @@ export function NewSaleDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      {/* Bouton dans la barre d’actions */}
       <DialogTrigger asChild>
-        <Button className={cn("h-9 gap-2 px-5 text-sm font-medium", triggerClassName)}>
+        <Button
+          variant="outline"
+          className={cn(
+            "h-9 gap-2 px-5 text-sm font-medium",
+            triggerClassName
+          )}
+        >
           <Plus className="h-4 w-4" />
           Nouvelle vente
         </Button>
       </DialogTrigger>
 
-      {/* Fenêtre modale */}
-      <DialogContent className="max-w-4xl sm:max-w-3xl p-8 sm:p-10">
+      <DialogContent className="max-w-3xl p-8 sm:p-10">
         <DialogHeader className="mb-6">
           <DialogTitle className="text-xl font-semibold tracking-tight">
             Nouvelle vente
@@ -78,14 +82,15 @@ export function NewSaleDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {/* Contenu : formulaire de création de vente */}
-        <NewSaleForm
-          onDone={() => {
-            setOpen(false);
-            clearNewIntentFromUrl();
-            router.refresh();
-          }}
-        />
+        <div className="pb-1">
+          <NewSaleForm
+            onDone={() => {
+              setOpen(false);
+              clearNewIntentFromUrl();
+              router.refresh();
+            }}
+          />
+        </div>
       </DialogContent>
     </Dialog>
   );

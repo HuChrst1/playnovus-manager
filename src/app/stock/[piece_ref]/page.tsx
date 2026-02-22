@@ -2,9 +2,7 @@
 
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 
 export const dynamic = "force-dynamic";
 
@@ -106,15 +104,6 @@ export default async function PieceHistoryPage({
         <p className="text-sm text-red-500 mt-2">
           Erreur lors du chargement de l&apos;historique : {error.message}
         </p>
-
-        <div className="mt-4">
-          <Button asChild variant="outline" size="sm" className="rounded-full">
-            <Link href="/stock">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Retour au stock
-            </Link>
-          </Button>
-        </div>
       </main>
     );
   }
@@ -200,7 +189,7 @@ export default async function PieceHistoryPage({
   return (
     <main className="space-y-6">
       {/* HEADER PAGE */}
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-start gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">
             Pièce {decodedRef}
@@ -208,20 +197,6 @@ export default async function PieceHistoryPage({
           <p className="text-sm text-muted-foreground">
             Historique des mouvements de stock pour cette référence.
           </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            asChild
-            className="rounded-full px-4"
-          >
-            <Link href="/stock">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Retour stock
-            </Link>
-          </Button>
         </div>
       </div>
 

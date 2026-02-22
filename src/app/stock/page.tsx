@@ -224,7 +224,7 @@ export default async function StockPage({ searchParams }: StockPageProps) {
         <div className="col-span-1 flex items-start justify-end md:col-start-2 xl:col-start-3">
           <Button
             asChild
-            className="h-9 gap-2 px-4 text-xs font-medium !border !border-white/75 !bg-white/92 !text-slate-700 shadow-[0_8px_20px_rgba(15,23,42,0.06)] hover:!bg-white"
+            className="h-9 gap-2 px-4 text-xs font-medium"
           >
             <Link href="/historique-stock">
               <History className="h-4 w-4" />

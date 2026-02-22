@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Filter } from "lucide-react";
@@ -64,6 +63,7 @@ const FILTER_TIMELINE: Array<{ preset: Exclude<DashboardPreset, "custom">; label
 ];
 
 type Block3View = "grouped" | "table" | "pie";
+type TrendModalView = "revenueMargin" | "stockValue" | "salesCount" | "procurementCost";
 
 type KpiSeriesMetric =
   | "netRevenue"
@@ -140,33 +140,6 @@ function toPeriodParams(filters: DashboardExecutiveData["filters"]): URLSearchPa
   params.set("from", filters.from);
   params.set("to", filters.to);
   return params;
-}
-
-function toSalesHref(filters: DashboardExecutiveData["filters"]): string {
-  return `/ventes?${toPeriodParams(filters).toString()}`;
-}
-
-function toProcurementHref(filters: DashboardExecutiveData["filters"]): string {
-  return `/approvisionnement?${toPeriodParams(filters).toString()}`;
-}
-
-function toStockHistoryHref(filters: DashboardExecutiveData["filters"]): string {
-  return `/historique-stock?${toPeriodParams(filters).toString()}`;
-}
-
-function getKpiActionHref(
-  key: DashboardFinancialKpiKey,
-  filters: DashboardExecutiveData["filters"]
-): string {
-  if (key === "procurementCost" || key === "avgPurchasePieceCost" || key === "confirmedLotsCount") {
-    return toProcurementHref(filters);
-  }
-
-  if (key === "stockCurrentValue" || key === "stockRotation" || key === "immobilizationRate") {
-    return key === "stockRotation" ? toStockHistoryHref(filters) : "/stock";
-  }
-
-  return toSalesHref(filters);
 }
 
 function metricFromKpiKey(key: DashboardFinancialKpiKey): KpiSeriesMetric {
@@ -463,11 +436,9 @@ function FilterTimeline({
 function KpiModalBody({
   dashboard,
   kpi,
-  actionHref,
 }: {
   dashboard: DashboardExecutiveData;
   kpi: DashboardFinancialKpi;
-  actionHref: string;
 }) {
   const [bucket, setBucket] = useState<DashboardTimeBucket>(dashboard.filters.activeBucket);
   const [windowMode, setWindowMode] = useState<"all" | "8" | "16">("all");
@@ -524,7 +495,7 @@ function KpiModalBody({
         </span>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto] md:items-end">
+      <div className="grid gap-3 md:grid-cols-2 md:items-end">
         <label className="space-y-1 text-xs font-medium text-slate-600">
           Granularite
           <select
@@ -550,13 +521,6 @@ function KpiModalBody({
             <option value="8">8 derniers points</option>
           </select>
         </label>
-
-        <Link
-          href={actionHref}
-          className="inline-flex h-9 items-center justify-center rounded-full border border-slate-200 px-4 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50"
-        >
-          Page operationnelle
-        </Link>
       </div>
 
       <KpiSparklineChart points={points} metric={metricFromKpiKey(kpi.key)} scale={scale} />
@@ -643,7 +607,6 @@ function KpiHubModalBody({
         <KpiModalBody
           dashboard={dashboard}
           kpi={selectedKpi}
-          actionHref={getKpiActionHref(selectedKpi.key, dashboard.filters)}
         />
       </div>
     </div>
@@ -652,13 +615,36 @@ function KpiHubModalBody({
 
 function TrendModalBody({ dashboard }: { dashboard: DashboardExecutiveData }) {
   const [bucket, setBucket] = useState<DashboardTimeBucket>(dashboard.filters.activeBucket);
-  const [showStockValue, setShowStockValue] = useState(false);
-  const [showSalesCount, setShowSalesCount] = useState(false);
-  const [showProcurementCost, setShowProcurementCost] = useState(false);
+  const [activeView, setActiveView] = useState<TrendModalView>("revenueMargin");
+
+  const trendModalViews: Array<{ key: TrendModalView; label: string }> = [
+    { key: "revenueMargin", label: "CA Net / Marge nette" },
+    { key: "stockValue", label: "Valeur stock" },
+    { key: "salesCount", label: "Nombre ventes" },
+    { key: "procurementCost", label: "Cout appro" },
+  ];
+
+  const trendVisibilityByView: Record<
+    TrendModalView,
+    {
+      showNetRevenue?: boolean;
+      showNetMargin?: boolean;
+      showStockValue?: boolean;
+      showSalesCount?: boolean;
+      showProcurementCost?: boolean;
+    }
+  > = {
+    revenueMargin: { showNetRevenue: true, showNetMargin: true },
+    stockValue: { showNetRevenue: false, showNetMargin: false, showStockValue: true },
+    salesCount: { showNetRevenue: false, showNetMargin: false, showSalesCount: true },
+    procurementCost: { showNetRevenue: false, showNetMargin: false, showProcurementCost: true },
+  };
+
+  const visibility = trendVisibilityByView[activeView];
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-3 md:grid-cols-[220px_minmax(0,1fr)] md:items-end">
         <label className="space-y-1 text-xs font-medium text-slate-600">
           Granularite
           <select
@@ -672,51 +658,35 @@ function TrendModalBody({ dashboard }: { dashboard: DashboardExecutiveData }) {
           </select>
         </label>
 
-        <label className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 text-xs text-slate-700">
-          <input
-            type="checkbox"
-            checked={showStockValue}
-            onChange={(event) => setShowStockValue(event.target.checked)}
-            className="h-3.5 w-3.5"
-          />
-          Valeur stock
-        </label>
-
-        <label className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 text-xs text-slate-700">
-          <input
-            type="checkbox"
-            checked={showSalesCount}
-            onChange={(event) => setShowSalesCount(event.target.checked)}
-            className="h-3.5 w-3.5"
-          />
-          Nombre ventes
-        </label>
-
-        <label className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 text-xs text-slate-700">
-          <input
-            type="checkbox"
-            checked={showProcurementCost}
-            onChange={(event) => setShowProcurementCost(event.target.checked)}
-            className="h-3.5 w-3.5"
-          />
-          Cout appro
-        </label>
-
-        <div className="flex justify-end">
-          <Link
-            href={toSalesHref(dashboard.filters)}
-            className="inline-flex h-9 items-center rounded-full border border-slate-200 px-4 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50"
-          >
-            Ouvrir ventes
-          </Link>
+        <div className="min-w-0">
+          <div className="app-segmented overflow-x-auto whitespace-nowrap p-1">
+            {trendModalViews.map((view) => {
+              const isActive = activeView === view.key;
+              return (
+                <button
+                  key={view.key}
+                  type="button"
+                  onClick={() => setActiveView(view.key)}
+                  className={cn(
+                    "app-segmented-item h-8 px-3 text-[11px] font-semibold",
+                    isActive ? "app-segmented-item--active" : "app-segmented-item--inactive"
+                  )}
+                >
+                  {view.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
       <TrendDualChart
         points={dashboard.trendSeries.byBucket[bucket]}
-        showStockValue={showStockValue}
-        showSalesCount={showSalesCount}
-        showProcurementCost={showProcurementCost}
+        showNetRevenue={visibility.showNetRevenue}
+        showNetMargin={visibility.showNetMargin}
+        showStockValue={visibility.showStockValue}
+        showSalesCount={visibility.showSalesCount}
+        showProcurementCost={visibility.showProcurementCost}
         height={360}
       />
     </div>
@@ -728,7 +698,7 @@ function StackedSalesModalBody({ dashboard }: { dashboard: DashboardExecutiveDat
 
   return (
     <div className="space-y-4">
-      <div className="flex items-end justify-between gap-3">
+      <div className="flex items-end gap-3">
         <label className="space-y-1 text-xs font-medium text-slate-600">
           Regroupement
           <select
@@ -740,13 +710,6 @@ function StackedSalesModalBody({ dashboard }: { dashboard: DashboardExecutiveDat
             <option value="month">Mois</option>
           </select>
         </label>
-
-        <Link
-          href={toSalesHref(dashboard.filters)}
-          className="inline-flex h-9 items-center rounded-full border border-slate-200 px-4 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50"
-        >
-          Ouvrir ventes
-        </Link>
       </div>
 
       <SalesStackedOrdersChart points={dashboard.stackedSalesSeries.byBucket[bucket]} height={360} />
@@ -880,7 +843,7 @@ function SetPieceModalBody({
 
       {activeView === "grouped" && (
         <div className="space-y-4">
-          <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto] md:items-end">
+          <div className="grid gap-3 md:grid-cols-2 md:items-end">
             <label className="space-y-1 text-xs font-medium text-slate-600">
               Metrique
               <select
@@ -905,13 +868,6 @@ function SetPieceModalBody({
                 <option value="month">Mois</option>
               </select>
             </label>
-
-            <Link
-              href={toSalesHref(dashboard.filters)}
-              className="inline-flex h-9 items-center justify-center rounded-full border border-border px-4 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50"
-            >
-              Ouvrir ventes
-            </Link>
           </div>
 
           <SetPieceGroupedMetricChart
@@ -944,7 +900,7 @@ function ProcurementModalBody({ dashboard }: { dashboard: DashboardExecutiveData
 
   return (
     <div className="space-y-5">
-      <div className="grid gap-3 md:grid-cols-[1fr_auto_auto] md:items-center">
+      <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
         <label className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700">
           <input
             type="checkbox"
@@ -957,21 +913,6 @@ function ProcurementModalBody({ dashboard }: { dashboard: DashboardExecutiveData
 
         <div className="flex justify-start md:justify-center">
           <ActionSignalPill signal={forecast.signal} />
-        </div>
-
-        <div className="flex justify-start gap-2 md:justify-end">
-          <Link
-            href={toSalesHref(dashboard.filters)}
-            className="inline-flex h-9 items-center rounded-full border border-slate-200 px-4 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50"
-          >
-            Ouvrir ventes
-          </Link>
-          <Link
-            href={toProcurementHref(dashboard.filters)}
-            className="inline-flex h-9 items-center rounded-full border border-slate-200 px-4 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50"
-          >
-            Ouvrir approvisionnements
-          </Link>
         </div>
       </div>
 
@@ -1153,16 +1094,10 @@ function ProcurementModalBody({ dashboard }: { dashboard: DashboardExecutiveData
       </section>
 
       <section className="space-y-3 rounded-2xl border border-slate-100 bg-white p-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
             Rotation par theme
           </p>
-          <Link
-            href="/catalogue"
-            className="inline-flex h-8 items-center rounded-full border border-slate-200 px-3 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50"
-          >
-            Ouvrir catalogue
-          </Link>
         </div>
         {themeRotation.rows.length === 0 ? (
           <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-3 text-sm text-slate-500">
@@ -1299,7 +1234,7 @@ function OpportunitiesModalBody({ dashboard }: { dashboard: DashboardExecutiveDa
 
   return (
     <div className="space-y-4 text-slate-200">
-      <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
+      <div className="grid gap-3 md:items-end">
         <label className="space-y-1 text-xs font-medium text-slate-300">
           Volume affiche
           <select
@@ -1312,13 +1247,6 @@ function OpportunitiesModalBody({ dashboard }: { dashboard: DashboardExecutiveDa
             <option value="20">Top 20</option>
           </select>
         </label>
-
-        <Link
-          href="/catalogue?sort=completion&dir=desc"
-          className="inline-flex h-9 items-center justify-center rounded-full border border-slate-700 bg-slate-900/70 px-4 text-xs font-medium text-slate-100 transition-colors hover:bg-slate-800"
-        >
-          Ouvrir catalogue
-        </Link>
       </div>
 
       {rows.length === 0 ? (
@@ -1617,7 +1545,7 @@ export function DashboardExecutiveView({ dashboard }: { dashboard: DashboardExec
                 />
               </MinimalCardButton>
             }
-            title="Bloc 2 - Ventes Sets vs Pieces"
+            title="Ventes Sets vs Pieces"
             description="Cycles hebdo/mensuels des commandes confirmees."
             contentClassName="w-[min(96vw,1080px)]"
           >
@@ -1651,7 +1579,7 @@ export function DashboardExecutiveView({ dashboard }: { dashboard: DashboardExec
                 <TrendDualChart points={activeTrendPoints} height={172} compact showLegend={false} />
               </MinimalCardButton>
             }
-            title="Bloc 2 - Tendances temporelles"
+            title="Tendances temporelles"
             description="Courbe principale avec variables additionnelles et lecture detaillee."
             contentClassName="w-[min(98vw,1220px)]"
           >
@@ -1698,7 +1626,7 @@ export function DashboardExecutiveView({ dashboard }: { dashboard: DashboardExec
                 />
               </MinimalCardButton>
             }
-            title="Bloc 4 - Pilotage achats et stock"
+            title="Pilotage achats et stock"
             description="Vue mensuelle achats + projections, cohortes, lead-time et rotation theme."
             contentClassName="w-[min(96vw,1100px)]"
           >
@@ -1737,7 +1665,7 @@ export function DashboardExecutiveView({ dashboard }: { dashboard: DashboardExec
                 </div>
               </MinimalCardButton>
             }
-            title="Bloc 5 - Opportunites catalogue"
+            title="Opportunites catalogue"
             description="Tableau detaille des sets exploitables par completion."
             contentClassName="w-[min(96vw,1080px)]"
             tone="dark"
@@ -1750,7 +1678,7 @@ export function DashboardExecutiveView({ dashboard }: { dashboard: DashboardExec
       <DashboardModal
         open={block3ModalOpen}
         onOpenChange={setBlock3ModalOpen}
-        title="Bloc 3 - Comparaison Sets vs Pieces"
+        title="Comparaison Sets vs Pieces"
         description="Lecture graphique par graphique pour une meilleure visibilite."
         contentClassName="w-[min(98vw,1180px)]"
       >

@@ -2,14 +2,11 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Input } from "@/components/ui/input";
 import { ClickableRow } from "./ClickableRow";
 import { AddSetDialog } from "./AddSetDialog";
 import { createSet, deleteSet } from "./actions";
 import { DeleteSetButton } from "./DeleteSetButton";
 import type { PostgrestError } from "@supabase/supabase-js";
-import { PageHeader } from "@/components/ui/page-header";
-import { FilterSidebar } from "@/components/ui/filter-bar";
 import {
   SortableTableHeader,
   TableCard,
@@ -71,13 +68,14 @@ type SetRow = {
 };
 
 type CatalogueSearchParams = {
-  page?: string;
-  q?: string;
-  prod?: string;
-  sort?: string;
-  dir?: string; // "asc" | "desc"
-  theme?: string;
-  [key: string]: string | undefined;
+  page?: string | string[];
+  q?: string | string[];
+  prod?: string | string[];
+  sort?: string | string[];
+  dir?: string | string[]; // "asc" | "desc"
+  theme?: string | string[];
+  theme_mode?: string | string[];
+  [key: string]: string | string[] | undefined;
 };
 
 type CataloguePageProps = {
@@ -96,6 +94,16 @@ type SortColumn =
 const DEFAULT_SORT_KEY = "completion";
 const DEFAULT_DIR = "desc";
 
+function getFirstParam(value: string | string[] | undefined) {
+  if (Array.isArray(value)) return value[0] ?? "";
+  return value ?? "";
+}
+
+function isEnabledFlag(value: string | string[] | undefined) {
+  if (Array.isArray(value)) return value.includes("1");
+  return value === "1";
+}
+
 // --------- Page ---------
 export default async function CataloguePage({
   searchParams,
@@ -103,18 +111,27 @@ export default async function CataloguePage({
   const pageSize = 50;
 
   const resolvedSearchParams = searchParams ? await searchParams : {};
-  const pageParam = resolvedSearchParams.page;
-  const searchQuery = (resolvedSearchParams.q ?? "").toString().trim();
-  const productionFilter = (resolvedSearchParams.prod ?? "")
-    .toString()
-    .trim();
-  const themeFilter = (resolvedSearchParams.theme ?? "").toString().trim();
+  const pageParam = getFirstParam(resolvedSearchParams.page);
+  const searchQuery = getFirstParam(resolvedSearchParams.q).toString().trim();
+  const productionFilter = getFirstParam(resolvedSearchParams.prod).toString().trim();
+
+  const rawThemeParam = resolvedSearchParams.theme;
+  const rawThemeModeParam = getFirstParam(resolvedSearchParams.theme_mode).toString().trim();
+  const isThemeMultiMode = rawThemeModeParam === "multi" || Array.isArray(rawThemeParam);
+
+  const themeParamValues = (
+    Array.isArray(rawThemeParam)
+      ? rawThemeParam
+      : rawThemeParam
+      ? [rawThemeParam]
+      : []
+  )
+    .map((theme) => theme.toString().trim())
+    .filter((theme) => theme.length > 0);
 
   // --------- Gestion du tri ---------
-  const sortParamRaw = (
-    resolvedSearchParams.sort ?? DEFAULT_SORT_KEY
-  ).toString();
-  let dir = (resolvedSearchParams.dir ?? DEFAULT_DIR).toString().toLowerCase();
+  const sortParamRaw = getFirstParam(resolvedSearchParams.sort).toString() || DEFAULT_SORT_KEY;
+  let dir = (getFirstParam(resolvedSearchParams.dir).toString() || DEFAULT_DIR).toLowerCase();
   if (dir !== "asc" && dir !== "desc") dir = DEFAULT_DIR;
 
   const ALLOWED_SORT_COLUMNS: SortColumn[] = [
@@ -150,7 +167,7 @@ export default async function CataloguePage({
   // Versions sélectionnées (multi-checkbox)
   const selectedVersions: string[] = [];
   for (const v of VERSION_FILTERS) {
-    if (resolvedSearchParams[v.key] === "1") {
+    if (isEnabledFlag(resolvedSearchParams[v.key])) {
       selectedVersions.push(v.value);
     }
   }
@@ -159,10 +176,28 @@ export default async function CataloguePage({
   const selectedYears: number[] = [];
   for (const year of YEAR_OPTIONS) {
     const key = `year_${year}`;
-    if (resolvedSearchParams[key] === "1") {
+    if (isEnabledFlag(resolvedSearchParams[key])) {
       selectedYears.push(year);
     }
   }
+
+  const { data: themesData } = await supabase
+    .from("sets_catalog")
+    .select("theme")
+    .not("theme", "is", null)
+    .order("theme", { ascending: true });
+
+  const themeOptions = Array.from(
+    new Set(
+      (themesData ?? [])
+        .map((row) => row.theme?.toString().trim())
+        .filter((theme): theme is string => Boolean(theme))
+    )
+  );
+  const themeOptionsSet = new Set(themeOptions);
+  const selectedThemes = themeParamValues.filter((theme) => themeOptionsSet.has(theme));
+  const legacyThemeFilter =
+    !isThemeMultiMode && themeParamValues.length > 0 ? themeParamValues[0] : "";
 
   const from = (currentPage - 1) * pageSize;
   const to = from + pageSize - 1;
@@ -195,8 +230,19 @@ export default async function CataloguePage({
   query = query.not("year_end", "is", null);
   }
 
-  if (themeFilter) {
-  query = query.ilike("theme", `%${themeFilter}%`);
+  if (themeParamValues.length > 0) {
+    if (isThemeMultiMode) {
+      const canUseExactThemeFilter =
+        selectedThemes.length > 0 && selectedThemes.length === themeParamValues.length;
+
+      if (canUseExactThemeFilter) {
+        query = query.in("theme", selectedThemes);
+      } else {
+        query = query.ilike("theme", `%${themeParamValues[0]}%`);
+      }
+    } else if (legacyThemeFilter) {
+      query = query.ilike("theme", `%${legacyThemeFilter}%`);
+    }
   }
 
   let data: SetRow[] | null = null;
@@ -284,18 +330,25 @@ const setsForDisplay: SetRow[] = setsWithCompletion;
   const baseParams = new URLSearchParams();
   if (searchQuery) baseParams.set("q", searchQuery);
   if (productionFilter) baseParams.set("prod", productionFilter);
-  if (themeFilter) baseParams.set("theme", themeFilter);
+  if (isThemeMultiMode) {
+    baseParams.set("theme_mode", "multi");
+    for (const theme of selectedThemes) {
+      baseParams.append("theme", theme);
+    }
+  } else if (legacyThemeFilter) {
+    baseParams.set("theme", legacyThemeFilter);
+  }
   baseParams.set("sort", activeSortKey);
   baseParams.set("dir", dir);
 
   for (const v of VERSION_FILTERS) {
-    if (resolvedSearchParams[v.key] === "1") {
+    if (isEnabledFlag(resolvedSearchParams[v.key])) {
       baseParams.set(v.key, "1");
     }
   }
   for (const year of YEAR_OPTIONS) {
     const key = `year_${year}`;
-    if (resolvedSearchParams[key] === "1") {
+    if (isEnabledFlag(resolvedSearchParams[key])) {
       baseParams.set(key, "1");
     }
   }
@@ -418,346 +471,69 @@ const setsForDisplay: SetRow[] = setsWithCompletion;
     );
   }
 
-    // --------- RENDER PRINCIPAL ---------
-    return (
-      <main className="space-y-6">
-        <div className="w-full space-y-6">
-          <PageHeader
-            title="Catalogue PlayNovus"
-            description="Liste des sets présents dans la base."
-          />
-  
-          {/* Barre de recherche + actions alignées comme sur la maquette */}
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            {/* FORMULAIRE DE RECHERCHE (GET) */}
-            <form
-              method="GET"
-              className="flex w-full max-w-md items-center gap-2"
-            >
-              <Input
-                type="text"
-                name="q"
-                placeholder="Rechercher par nom ou SetID..."
-                defaultValue={searchQuery}
-                className="w-full"
-              />
+  // --------- RENDER PRINCIPAL ---------
+  return (
+    <main className="space-y-6">
+      <header className="px-1 md:px-2">
+        <div className="min-w-0">
+          <h1 className="text-3xl font-medium tracking-tight text-slate-900 md:text-[42px] md:leading-none">
+            Catalogue PlayNovus
+          </h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Liste des sets présents dans la base.
+          </p>
+        </div>
+      </header>
 
-              <input type="hidden" name="page" value="1" />
-              <input type="hidden" name="sort" value={activeSortKey} />
-              <input type="hidden" name="dir" value={dir} />
-  
-              {productionFilter && (
-                <input type="hidden" name="prod" value={productionFilter} />
-              )}
-              {themeFilter && (
-                <input type="hidden" name="theme" value={themeFilter} />
-              )}
-              {VERSION_FILTERS.map((v) =>
-                resolvedSearchParams[v.key] === "1" ? (
-                  <input
-                    key={`hidden-${v.key}`}
-                    type="hidden"
-                    name={v.key}
-                    value="1"
-                  />
-                ) : null
-              )}
-              {YEAR_OPTIONS.map((year) => {
-                const key = `year_${year}`;
-                return resolvedSearchParams[key] === "1" ? (
-                  <input
-                    key={`hidden-${key}`}
-                    type="hidden"
-                    name={key}
-                    value="1"
-                  />
-                ) : null;
-              })}
-  
-              <Button type="submit" variant="outline" size="sm">
-                Rechercher
-              </Button>
-            </form>
-  
-            {/* Actions principales à droite : Ajouter un set + Filtres */}
-            <div className="flex items-center gap-2">
-              {/* Dialog d’ajout de set */}
-              <AddSetDialog createSetAction={createSet} />
+      <div className="catalogue-toolbar-shell">
+        <form method="GET" className="catalogue-filter-toolbar">
+          <input type="hidden" name="page" value="1" />
+          <input type="hidden" name="sort" value={activeSortKey} />
+          <input type="hidden" name="dir" value={dir} />
+          <input type="hidden" name="theme_mode" value="multi" />
+          {searchQuery ? <input type="hidden" name="q" value={searchQuery} /> : null}
 
-              {/* Bouton Filtres : c'est un <label>, pas un <Button>, pour garder le toggle checkbox */}
-              <label
-                htmlFor="filters-toggle"
-                className="app-filter-trigger"
-              >
-                Filtres
-              </label>
-            </div>
-          </div>
-  
-          {/* Layout : tableau large + panneau filtres */}
-          <div className="flex gap-4 items-start justify-between">
-            {/* Colonne tableau – prend toute la largeur dispo */}
-            <div className="flex-1">
-              <TableCard>
-                <TableOverflow>
-                  <table className="min-w-full text-sm">
-                    <thead className="app-table-head">
-                      <tr>
-                        <th className="px-4 py-3 text-left font-medium">Photo</th>
-                        <SortableTableHeader
-                          label="SetID"
-                          columnKey="display_ref"
-                          activeSortKey={activeSortKey}
-                          sortDir={dir as "asc" | "desc"}
-                          href={makeSortHref("display_ref")}
-                        />
-                        <SortableTableHeader
-                          label="Nom du set"
-                          columnKey="name"
-                          activeSortKey={activeSortKey}
-                          sortDir={dir as "asc" | "desc"}
-                          href={makeSortHref("name")}
-                        />
-                        <SortableTableHeader
-                          label="Version"
-                          columnKey="version"
-                          activeSortKey={activeSortKey}
-                          sortDir={dir as "asc" | "desc"}
-                          href={makeSortHref("version")}
-                        />
-                        <SortableTableHeader
-                          label="Début prod."
-                          columnKey="year_start"
-                          activeSortKey={activeSortKey}
-                          sortDir={dir as "asc" | "desc"}
-                          href={makeSortHref("year_start")}
-                        />
-                        <SortableTableHeader
-                          label="Fin prod."
-                          columnKey="year_end"
-                          activeSortKey={activeSortKey}
-                          sortDir={dir as "asc" | "desc"}
-                          href={makeSortHref("year_end")}
-                        />
-                        <SortableTableHeader
-                          label="Thème"
-                          columnKey="theme"
-                          activeSortKey={activeSortKey}
-                          sortDir={dir as "asc" | "desc"}
-                          href={makeSortHref("theme")}
-                        />
-                        <SortableTableHeader
-                          label="Complétion"
-                          columnKey="completion"
-                          activeSortKey={activeSortKey}
-                          sortDir={dir as "asc" | "desc"}
-                          href={makeSortHref("completion")}
-                        />
-                        <th className="px-4 py-3 text-right font-medium">
-                          Actions
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {setsForDisplay && setsForDisplay.length > 0 ? (
-                        setsForDisplay.map((set) => (
-                          <ClickableRow
-                            key={set.id}
-                            href={`/catalogue/${encodeURIComponent(set.id)}`}
-                          >
-                            {/* Photo */}
-                            <td className="px-4 py-3">
-                              {set.image_url ? (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img
-                                  src={set.image_url}
-                                  alt={set.name}
-                                  className="h-10 w-10 rounded-md object-cover bg-muted"
-                                />
-                              ) : (
-                                <div className="h-10 w-10 rounded-md bg-muted flex items-center justify-center text-[10px] text-muted-foreground">
-                                  N/A
-                                </div>
-                              )}
-                            </td>
-  
-                            {/* SetID */}
-                            <td className="px-4 py-3 font-mono text-xs">
-                              {set.display_ref}
-                            </td>
-  
-                            {/* Nom */}
-                            <td className="px-4 py-3">
-                              <span className="font-medium">{set.name}</span>
-                            </td>
-  
-                            {/* Version */}
-                            <td className="px-4 py-3">
-                              {set.version && set.version !== "Version Unique"
-                                ? set.version
-                                : "Unique"}
-                            </td>
-  
-                            {/* Début / fin de production */}
-                            <td className="px-4 py-3">
-                              {set.year_start ?? "N/A"}
-                            </td>
-                            <td className="px-4 py-3">
-                              {set.year_end ?? "N/A"}
-                            </td>
-  
-                            {/* Thème */}
-                            <td className="px-4 py-3">
-                              {set.theme ?? "-"}
-                            </td>
-  
-                            {/* Complétion */}
-                            <td className="px-4 py-3">
-                              <div className="flex items-center gap-2">
-                                {renderCompletionPill(set)}
-                                {renderMaxCompleteBadge(set)}
-                              </div>
-                            </td>
-  
-                            {/* Actions */}
-                            <td className="px-4 py-3 text-right">
-                              <div className="flex items-center justify-end gap-2">
-  
-                                <DeleteSetButton
-                                  setId={set.id}
-                                  setName={set.name}
-                                  deleteSetAction={deleteSet}
-                                />
-                              </div>
-                            </td>
-                          </ClickableRow>
-                        ))
-                      ) : (
-                        <tr className="border-t border-border">
-                          <td
-                            colSpan={9}
-                            className="px-4 py-6 text-center text-sm text-muted-foreground"
-                          >
-                            Aucun set trouvé.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </TableOverflow>
-  
-                <TablePagination
-                  currentPage={currentPage}
-                  totalPages={totalPages}
-                  pageNumbers={pageNumbers}
-                  summary={
-                    <>
-                      Affichage {from + 1}–{Math.min(to + 1, totalCount)} sur {totalCount} sets
-                    </>
-                  }
-                  makePageHref={makePageHref}
-                />
-              </TableCard>
-            </div>
-  
-          {/* Toggle caché qui contrôle l’aside (frère direct) */}
-          <input
-            id="filters-toggle"
-            type="checkbox"
-            className="peer sr-only"
-            aria-hidden="true"
-          />
-
-          {/* Panneau filtres : formulaire GET séparé */}
-          <FilterSidebar className="peer-checked:block">
-            <form
-              method="GET"
-              className="app-card sticky top-24 text-xs px-4 py-4 lg:px-5 lg:py-5 space-y-6"
-            >
-              {/* on garde tri + recherche quand on applique les filtres */}
-              <input type="hidden" name="page" value="1" />
-              <input type="hidden" name="sort" value={activeSortKey} />
-              <input type="hidden" name="dir" value={dir} />
-              {searchQuery && <input type="hidden" name="q" value={searchQuery} />}
-
-              {/* HEADER : titre + boutons */}
-              <div className="flex items-center justify-between mb-1">
-                <p className="text-[11px] font-semibold tracking-[0.18em] uppercase text-muted-foreground">
-                  Filtres
-                </p>
-
-                <div className="flex items-center gap-2">
-                  {/* Réinitialiser = bouton noir comme "Ajouter un set" */}
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="default"
-                    className="h-7 rounded-full px-3 text-[11px]"
-                    asChild
-                  >
-                    <Link href="/catalogue">Réinitialiser</Link>
-                  </Button>
-
-                  {/* Appliquer = bouton blanc soft */}
-                  <Button
-                    type="submit"
-                    size="sm"
-                    variant="outline"
-                    className="h-7 rounded-full px-3 text-[11px]"
-                  >
-                    Appliquer
-                  </Button>
-                </div>
-              </div>
-
-              <div className="space-y-6 max-h-[60vh] overflow-y-auto pr-1 pb-1">
-                
-                {/* Versions */}
-                <div className="space-y-3">
-                  <p className="text-[11px] font-medium text-muted-foreground">
-                    Versions
-                  </p>
-                  <div className="grid grid-cols-3 gap-x-3 gap-y-2">
-                    {VERSION_FILTERS.map((v) => {
-                      const isChecked = resolvedSearchParams[v.key] === "1";
-
+          <div className="catalogue-filter-frame">
+            <div className="catalogue-filter-cluster">
+              <details className="catalogue-filter-dropdown" name="catalogue-filter-group">
+                <summary className="catalogue-filter-pill">
+                  Version{selectedVersions.length > 0 ? ` (${selectedVersions.length})` : ""}
+                </summary>
+                <div className="catalogue-filter-drawer catalogue-filter-drawer--version">
+                  <div className="catalogue-filter-check-grid">
+                    {VERSION_FILTERS.map((versionFilter) => {
+                      const isChecked = isEnabledFlag(resolvedSearchParams[versionFilter.key]);
                       return (
-                        <label
-                          key={`${v.key}-${isChecked ? "1" : "0"}`}
-                          className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-1.5 text-[11px] whitespace-nowrap shadow-[0_8px_18px_rgba(15,23,42,0.06)] cursor-pointer transition-colors hover:bg-[#f5f7fb]"
-                        >
+                        <label key={versionFilter.key} className="catalogue-filter-check-option">
                           <input
                             type="checkbox"
-                            name={v.key}
+                            name={versionFilter.key}
                             value="1"
                             defaultChecked={isChecked}
                             className="h-3.5 w-3.5 accent-primary"
                           />
-                          <span>{v.label}</span>
+                          <span>{versionFilter.label}</span>
                         </label>
                       );
                     })}
                   </div>
                 </div>
+              </details>
 
-                {/* Début de production */}
-                <div className="space-y-3">
-                  <p className="text-[11px] font-medium text-muted-foreground">
-                    Début de production
-                  </p>
-                  <div className="grid grid-cols-3 gap-x-3 gap-y-2 max-h-56 overflow-y-auto pr-1 pb-1">
+              <details className="catalogue-filter-dropdown" name="catalogue-filter-group">
+                <summary className="catalogue-filter-pill">
+                  Début prod.{selectedYears.length > 0 ? ` (${selectedYears.length})` : ""}
+                </summary>
+                <div className="catalogue-filter-drawer catalogue-filter-drawer--years">
+                  <div className="catalogue-filter-scroll-grid">
                     {YEAR_OPTIONS.map((year) => {
-                      const paramKey = `year_${year}`;
-                      const isChecked = resolvedSearchParams[paramKey] === "1";
-
+                      const yearKey = `year_${year}`;
+                      const isChecked = isEnabledFlag(resolvedSearchParams[yearKey]);
                       return (
-                        <label
-                          key={`${paramKey}-${isChecked ? "1" : "0"}`}
-                          className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-1.5 text-[11px] whitespace-nowrap shadow-[0_8px_18px_rgba(15,23,42,0.06)] cursor-pointer transition-colors hover:bg-[#f5f7fb]"
-                        >
+                        <label key={yearKey} className="catalogue-filter-check-option">
                           <input
                             type="checkbox"
-                            name={paramKey}
+                            name={yearKey}
                             value="1"
                             defaultChecked={isChecked}
                             className="h-3.5 w-3.5 accent-primary"
@@ -768,42 +544,208 @@ const setsForDisplay: SetRow[] = setsWithCompletion;
                     })}
                   </div>
                 </div>
+              </details>
 
-                {/* PÉRIODE DE PRODUCTION */}
-                <div className="space-y-3">
-                  <p className="text-[11px] font-medium text-muted-foreground">
-                    Période de production
-                  </p>
+              <details className="catalogue-filter-dropdown" name="catalogue-filter-group">
+                <summary className="catalogue-filter-pill">
+                  Période{productionFilter ? " (1)" : ""}
+                </summary>
+                <div className="catalogue-filter-drawer catalogue-filter-drawer--period">
+                  <label className="catalogue-filter-field-label" htmlFor="catalogue-prod-filter">
+                    Statut de production
+                  </label>
                   <select
+                    id="catalogue-prod-filter"
                     name="prod"
-                    defaultValue={productionFilter || ""}
-                    className="app-control text-[11px] text-muted-foreground"
+                    defaultValue={productionFilter}
+                    className="app-control h-9 w-full px-3 text-[11px]"
                   >
                     <option value="">Toutes périodes</option>
                     <option value="active">En production</option>
                     <option value="ended">Production terminée</option>
                   </select>
                 </div>
+              </details>
 
-                {/* THÈME */}
-                <div className="space-y-3">
-                  <p className="text-[11px] font-medium text-muted-foreground">
-                    Thème
-                  </p>
-                  <Input
-                    key={themeFilter || "theme-empty"}
-                    type="text"
-                    name="theme"
-                    placeholder="Rechercher par thème..."
-                    defaultValue={themeFilter}
-                    className="h-9 w-full text-[11px]"
-                  />
+              <details className="catalogue-filter-dropdown" name="catalogue-filter-group">
+                <summary className="catalogue-filter-pill">
+                  Thèmes{selectedThemes.length > 0 ? ` (${selectedThemes.length})` : ""}
+                </summary>
+                <div className="catalogue-filter-drawer catalogue-filter-drawer--themes">
+                  {themeOptions.length === 0 ? (
+                    <p className="text-xs text-slate-500">Aucun thème disponible.</p>
+                  ) : (
+                    <div className="catalogue-filter-scroll-grid">
+                      {themeOptions.map((theme) => (
+                        <label key={theme} className="catalogue-filter-check-option">
+                          <input
+                            type="checkbox"
+                            name="theme"
+                            value={theme}
+                            defaultChecked={selectedThemes.includes(theme)}
+                            className="h-3.5 w-3.5 accent-primary"
+                          />
+                          <span>{theme}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
                 </div>
+              </details>
+
+              <div className="catalogue-filter-actions">
+                <Button variant="outline" size="sm" asChild className="h-9 px-4 text-xs font-medium">
+                  <Link href="/catalogue">Réinitialiser</Link>
+                </Button>
+                <Button type="submit" size="sm" className="h-9 px-4 text-xs font-semibold">
+                  Appliquer
+                </Button>
               </div>
-            </form>
-          </FilterSidebar>
+            </div>
           </div>
+        </form>
+
+        <div className="catalogue-toolbar-cta">
+          <AddSetDialog
+            createSetAction={createSet}
+            triggerClassName="h-9 gap-2 px-4 text-xs font-medium"
+          />
         </div>
-      </main>
-    );
-  }
+      </div>
+
+      <TableCard className="appro-table-shell catalogue-table-shell">
+
+        <TableOverflow className="appro-table-scroll">
+          <table className="appro-table min-w-full text-sm">
+            <thead className="appro-table-header">
+              <tr>
+                <th className="px-4 py-3 text-left font-medium">Photo</th>
+                <SortableTableHeader
+                  label="SetID"
+                  columnKey="display_ref"
+                  activeSortKey={activeSortKey}
+                  sortDir={dir as "asc" | "desc"}
+                  href={makeSortHref("display_ref")}
+                />
+                <SortableTableHeader
+                  label="Nom du set"
+                  columnKey="name"
+                  activeSortKey={activeSortKey}
+                  sortDir={dir as "asc" | "desc"}
+                  href={makeSortHref("name")}
+                />
+                <SortableTableHeader
+                  label="Version"
+                  columnKey="version"
+                  activeSortKey={activeSortKey}
+                  sortDir={dir as "asc" | "desc"}
+                  href={makeSortHref("version")}
+                />
+                <SortableTableHeader
+                  label="Début prod."
+                  columnKey="year_start"
+                  activeSortKey={activeSortKey}
+                  sortDir={dir as "asc" | "desc"}
+                  href={makeSortHref("year_start")}
+                />
+                <SortableTableHeader
+                  label="Fin prod."
+                  columnKey="year_end"
+                  activeSortKey={activeSortKey}
+                  sortDir={dir as "asc" | "desc"}
+                  href={makeSortHref("year_end")}
+                />
+                <SortableTableHeader
+                  label="Thème"
+                  columnKey="theme"
+                  activeSortKey={activeSortKey}
+                  sortDir={dir as "asc" | "desc"}
+                  href={makeSortHref("theme")}
+                />
+                <SortableTableHeader
+                  label="Complétion"
+                  columnKey="completion"
+                  activeSortKey={activeSortKey}
+                  sortDir={dir as "asc" | "desc"}
+                  href={makeSortHref("completion")}
+                />
+                <th className="px-4 py-3 text-right font-medium">Actions</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {setsForDisplay.length > 0 ? (
+                setsForDisplay.map((set) => (
+                  <ClickableRow
+                    key={set.id}
+                    href={`/catalogue/${encodeURIComponent(set.id)}`}
+                    className="appro-table-row cursor-pointer focus-visible:outline-none"
+                  >
+                    <td className="px-4 py-3">
+                      {set.image_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={set.image_url}
+                          alt={set.name}
+                          className="h-10 w-10 rounded-md bg-muted object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-10 w-10 items-center justify-center rounded-md bg-muted text-[10px] text-muted-foreground">
+                          N/A
+                        </div>
+                      )}
+                    </td>
+
+                    <td className="px-4 py-3 font-mono text-xs">{set.display_ref}</td>
+                    <td className="px-4 py-3">
+                      <span className="font-medium">{set.name}</span>
+                    </td>
+                    <td className="px-4 py-3">
+                      {set.version && set.version !== "Version Unique" ? set.version : "Unique"}
+                    </td>
+                    <td className="px-4 py-3">{set.year_start ?? "N/A"}</td>
+                    <td className="px-4 py-3">{set.year_end ?? "N/A"}</td>
+                    <td className="px-4 py-3">{set.theme ?? "-"}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        {renderCompletionPill(set)}
+                        {renderMaxCompleteBadge(set)}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <DeleteSetButton
+                          setId={set.id}
+                          setName={set.name}
+                          deleteSetAction={deleteSet}
+                        />
+                      </div>
+                    </td>
+                  </ClickableRow>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={9} className="px-4 py-6 text-center text-sm text-slate-500">
+                    Aucun set trouvé.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </TableOverflow>
+
+        <TablePagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          pageNumbers={pageNumbers}
+          summary={
+            <>
+              Affichage {from + 1}–{Math.min(to + 1, totalCount)} sur {totalCount} sets
+            </>
+          }
+          makePageHref={makePageHref}
+        />
+      </TableCard>
+    </main>
+  );
+}

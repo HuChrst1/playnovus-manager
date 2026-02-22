@@ -1066,7 +1066,7 @@ export function NewSaleForm({
   return (
     <div
       className={cn(
-        "px-1",
+        "px-1 sm:px-2",
         // Hauteur MAX (pas forcée) : laisse de l'air en haut/bas, scroll interne si besoin
         "max-h-[calc(100dvh-12rem)] overflow-y-auto overscroll-contain pr-3 py-4",
         // Scrollbar visible à droite (WebKit)
@@ -1077,7 +1077,7 @@ export function NewSaleForm({
         "hover:[&::-webkit-scrollbar-thumb]:bg-slate-400/80"
       )}
     >
-      <form onSubmit={handleSubmit} className="space-y-8 pb-10">
+      <form onSubmit={handleSubmit} className="space-y-6 pb-8">
       {/* 3.4.4.3 – Bannière erreur */}
       {submitError && (
         <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
@@ -1085,8 +1085,8 @@ export function NewSaleForm({
         </div>
       )}
       {/* TYPE DE VENTE */}
-      <section className="space-y-3">
-        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+      <section className="app-surface-muted space-y-3 p-4 sm:p-5">
+        <p className="app-section-label">
           Type de vente
         </p>
 
@@ -1124,11 +1124,18 @@ export function NewSaleForm({
       </section>
 
       {/* Infos générales de la vente */}
-      <section className="grid gap-4 md:grid-cols-4">
-        <div className="space-y-1.5">
+      <section className="app-surface-muted p-4 sm:p-5">
+        <p className="app-section-label mb-3">Informations de vente</p>
+        <div
+          className={cn(
+            "grid gap-4",
+            mode === "edit" ? "md:grid-cols-4" : "md:grid-cols-3"
+          )}
+        >
+        <div className="min-w-0 space-y-1.5">
           <Label
             htmlFor="paid_at"
-            className="text-xs font-medium text-muted-foreground"
+            className="app-control-label whitespace-nowrap"
           >
             Date de paiement
           </Label>
@@ -1149,10 +1156,10 @@ export function NewSaleForm({
           )}
         </div>
 
-        <div className="space-y-1.5">
+        <div className="min-w-0 space-y-1.5">
           <Label
             htmlFor="sales_channel"
-            className="text-xs font-medium text-muted-foreground"
+            className="app-control-label whitespace-nowrap"
           >
             Canal de vente
           </Label>
@@ -1174,8 +1181,8 @@ export function NewSaleForm({
         </div>
 
         {mode === "edit" && (
-          <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-muted-foreground">
+          <div className="min-w-0 space-y-1.5">
+            <Label className="app-control-label whitespace-nowrap">
               Statut
             </Label>
             <select
@@ -1189,19 +1196,13 @@ export function NewSaleForm({
               <option value="CONFIRMED">Confirmée</option>
               <option value="CANCELLED">Annulée</option>
             </select>
-
-            {status === "CANCELLED" && (
-              <p className="text-xs text-muted-foreground">
-                Annuler remet le stock et conserve la vente dans l’historique.
-              </p>
-            )}
           </div>
         )}
 
-        <div className="space-y-1.5">
+        <div className="min-w-0 space-y-1.5">
           <Label
             htmlFor="net_amount"
-            className="text-xs font-medium text-muted-foreground"
+            className="app-control-label whitespace-nowrap"
           >
             Montant net vendeur (€)
           </Label>
@@ -1223,13 +1224,20 @@ export function NewSaleForm({
             <p className="text-xs text-rose-600">{errors.netAmount}</p>
           )}
         </div>
+        </div>
+
+        {mode === "edit" && status === "CANCELLED" ? (
+          <p className="mt-3 text-xs text-muted-foreground">
+            Annuler remet le stock et conserve la vente dans l’historique.
+          </p>
+        ) : null}
       </section>
 
       {/* Commentaire global */}
-      <section className="space-y-1.5">
+      <section className="app-surface-muted space-y-1.5 p-4 sm:p-5">
         <Label
           htmlFor="comment"
-          className="text-xs font-medium text-muted-foreground"
+          className="app-control-label"
         >
           Commentaire (optionnel)
         </Label>
@@ -1247,9 +1255,9 @@ export function NewSaleForm({
       </section>
 
       {/* Lignes de vente */}
-      <section className="space-y-3">
+      <section className="app-surface-muted space-y-3 p-4 sm:p-5">
       <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold">Lignes de vente</h2>
+          <h2 className="text-sm font-semibold text-slate-900">Lignes de vente</h2>
         </div>
 
         {isSetSale ? (
@@ -1335,8 +1343,8 @@ export function NewSaleForm({
       </section>
 
       {draft && (
-        <section className="app-card p-4">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+        <section className="app-surface-muted p-4 sm:p-5">
+          <p className="app-section-label">
             Brouillon en mémoire
           </p>
           <div className="mt-2 grid gap-2 md:grid-cols-4 text-xs">
@@ -1365,7 +1373,7 @@ export function NewSaleForm({
       )}
 
       {/* FOOTER FORMULAIRE */}
-      <section className="flex items-center justify-between gap-3 pt-2">
+      <section className="app-surface-muted flex items-center justify-between gap-3 px-4 py-3 sm:px-5">
         {(formMessage || footerAutoMessage) && (
           <p className="text-xs text-muted-foreground">
             {formMessage ?? footerAutoMessage}

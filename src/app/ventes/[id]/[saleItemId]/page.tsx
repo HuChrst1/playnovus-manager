@@ -1,7 +1,7 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase-server";
 import { cn } from "@/lib/utils";
+import { formatSetReferenceDisplay } from "@/lib/sale-number";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +35,31 @@ export default async function SaleSetPiecesPage({ params }: Props) {
 
   if (itemError || !item) notFound();
   if (item.item_kind !== "SET") notFound();
+
+  let setDisplayRef: string | null = null;
+  const setIdRaw = String(item.set_id ?? "").trim();
+  if (setIdRaw.length > 0) {
+    const { data: setRefRow, error: setRefError } = await supabaseServer
+      .from("sets_catalog")
+      .select("display_ref")
+      .eq("id", setIdRaw)
+      .maybeSingle();
+
+    if (setRefError) {
+      console.error("SaleSetPiecesPage - erreur chargement display_ref set:", setRefError);
+    } else {
+      const displayRef = String(setRefRow?.display_ref ?? "").trim();
+      if (displayRef.length > 0) {
+        setDisplayRef = displayRef;
+      }
+    }
+  }
+
+  const setReferenceDisplay = formatSetReferenceDisplay(item.set_id, setDisplayRef) || "—";
+  const pageTitle =
+    item.item_kind === "SET"
+      ? `Set n°${setReferenceDisplay}`
+      : `Pièce n°${itemId}`;
 
   // 2) Charger snapshot des pièces réellement vendues
   type SaleItemPieceSnapshotRow = {
@@ -71,37 +96,50 @@ export default async function SaleSetPiecesPage({ params }: Props) {
         <pre className="text-xs bg-black/5 p-3 rounded">
           {JSON.stringify({ saleId, itemId, rowsError }, null, 2)}
         </pre>
-        <Link className="underline" href={`/ventes/${saleId}`}>
-          ← Retour à la vente
-        </Link>
       </main>
     );
   }
 
   return (
     <main className="space-y-6">
-      <div className="flex items-start justify-between gap-3">
+      <header className="flex flex-wrap items-start justify-between gap-3 px-1 md:px-2">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Set vendu : {item.set_id ?? "—"}
+          <h1 className="text-3xl font-medium tracking-tight text-slate-900 md:text-[42px] md:leading-none">
+            {pageTitle}
           </h1>
-          <p className="text-sm text-muted-foreground">
-            Vente #{saleId} · Ligne #{item.line_index + 1} · Qté : {item.quantity}
+        </div>
+      </header>
+
+      <section className="app-surface-muted p-4 sm:p-5">
+        <p className="app-section-label mb-2">Résumé de la ligne</p>
+        <div className="grid gap-2 text-sm text-slate-700 sm:grid-cols-2 lg:grid-cols-4">
+          <p>
+            <span className="text-xs uppercase tracking-[0.14em] text-slate-500">Set</span>
+            <span className="mt-0.5 block font-medium text-slate-900">{setReferenceDisplay}</span>
+          </p>
+          <p>
+            <span className="text-xs uppercase tracking-[0.14em] text-slate-500">Quantité vendue</span>
+            <span className="mt-0.5 block font-medium text-slate-900">{item.quantity}</span>
+          </p>
+          <p>
+            <span className="text-xs uppercase tracking-[0.14em] text-slate-500">Net ligne</span>
+            <span className="mt-0.5 block font-medium text-slate-900">
+              {euro.format(Number(item.net_amount ?? 0))}
+            </span>
+          </p>
+          <p>
+            <span className="text-xs uppercase tracking-[0.14em] text-slate-500">Marge ligne</span>
+            <span className="mt-0.5 block font-medium text-slate-900">
+              {euro.format(Number(item.margin_amount ?? 0))}
+            </span>
           </p>
         </div>
+      </section>
 
-        <Link
-          href={`/ventes/${saleId}`}
-          className="inline-flex items-center rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-muted"
-        >
-          ← Retour à la vente
-        </Link>
-      </div>
-
-      <section className="app-card overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-sm">
-            <thead className="app-table-head">
+      <section className="appro-table-shell">
+        <div className="appro-table-scroll overflow-x-auto">
+          <table className="appro-table min-w-full text-sm">
+            <thead className="appro-table-header">
               <tr>
                 <th className={cn("px-4 py-3 font-medium text-left")}>Pièce</th>
                 <th className={cn("px-4 py-3 font-medium text-right")}>
@@ -115,17 +153,17 @@ export default async function SaleSetPiecesPage({ params }: Props) {
             </thead>
             <tbody>
               {pieces.length === 0 ? (
-                <tr className="border-t border-border">
+                <tr>
                   <td
                     colSpan={4}
-                    className="px-4 py-6 text-center text-sm text-muted-foreground"
+                    className="px-4 py-6 text-center text-sm text-slate-500"
                   >
                     Aucune pièce snapshotée pour cette ligne (ancienne vente ou snapshot non encore branché).
                   </td>
                 </tr>
               ) : (
                 pieces.map((p) => (
-                  <tr key={`${p.piece_ref}`} className="app-table-row">
+                  <tr key={`${p.piece_ref}`} className="appro-table-row">
                     <td className="px-4 py-3">{p.piece_ref}</td>
                     <td className="px-4 py-3 text-right tabular-nums">{p.quantity}</td>
                     <td className="px-4 py-3 text-right tabular-nums">

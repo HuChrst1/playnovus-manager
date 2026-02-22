@@ -44,22 +44,7 @@ export function LotCsvImportDialog({ lotId, isDraft }: LotCsvImportDialogProps) 
   const router = useRouter();
 
   if (!isDraft) {
-    return (
-      <div className="flex flex-col items-end gap-1">
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          disabled
-          className="h-9 rounded-full px-4 text-xs"
-        >
-          Importer CSV
-        </Button>
-        <p className="text-[11px] text-slate-400">
-          Lot confirmé - import CSV verrouillé.
-        </p>
-      </div>
-    );
+    return null;
   }
 
   const resetDialogState = () => {

@@ -6,7 +6,10 @@ import { SalesStatCard } from "@/components/sales/SalesStatCard";
 import { Banknote, Calculator, ChartColumnIncreasing, Wallet } from "lucide-react";
 import type { SaleRow, SaleItemRow } from "@/lib/sales-types";
 import type { ReactNode } from "react";
-import { formatBusinessSaleNumberDisplay } from "@/lib/sale-number";
+import {
+  formatBusinessSaleNumberDisplay,
+  formatSetReferenceDisplay,
+} from "@/lib/sale-number";
 
 export const dynamic = "force-dynamic";
 
@@ -55,6 +58,34 @@ export default async function VenteDetailPage({ params }: VentesDetailPageProps)
 
   const saleRow = sale as SaleRow;
   const saleItems = (items ?? []) as SaleItemRow[];
+  const setIds = Array.from(
+    new Set(
+      saleItems
+        .filter((item) => item.item_kind === "SET")
+        .map((item) => String(item.set_id ?? "").trim())
+        .filter((setId) => setId.length > 0)
+    )
+  );
+  const setDisplayRefById: Record<string, string> = {};
+
+  if (setIds.length > 0) {
+    const { data: setRefs, error: setRefsError } = await supabaseServer
+      .from("sets_catalog")
+      .select("id, display_ref")
+      .in("id", setIds);
+
+    if (setRefsError) {
+      console.error("VenteDetailPage - erreur chargement display_ref sets:", setRefsError);
+    } else {
+      for (const row of setRefs ?? []) {
+        const setId = String(row.id ?? "").trim();
+        const displayRef = String(row.display_ref ?? "").trim();
+        if (setId.length > 0 && displayRef.length > 0) {
+          setDisplayRefById[setId] = displayRef;
+        }
+      }
+    }
+  }
 
   const net = Number(saleRow.net_seller_amount ?? 0);
   const totalCost = Number(saleRow.total_cost_amount ?? 0);
@@ -71,6 +102,12 @@ export default async function VenteDetailPage({ params }: VentesDetailPageProps)
     saleRow.sale_number,
     saleRow.id
   );
+  const saleTypeLabel =
+    saleRow.sale_type === "SET"
+      ? "SETS"
+      : saleRow.sale_type === "PIECE"
+      ? "PIECES"
+      : "MIXED";
 
   const renderHeader = (
     label: string,
@@ -91,44 +128,29 @@ export default async function VenteDetailPage({ params }: VentesDetailPageProps)
   return (
     <main className="space-y-6">
       {/* HEADER */}
-      <div className="flex items-center justify-between gap-3">
+      <header className="flex flex-wrap items-start justify-between gap-3 px-1 md:px-2">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Vente {saleNumberDisplay}
+          <h1 className="text-3xl font-medium tracking-tight text-slate-900 md:text-[42px] md:leading-none">
+            Commande n°{saleNumberDisplay}
           </h1>
-          <p className="text-sm text-muted-foreground">
-            {saleRow.sale_type === "SET"
-              ? "Vente de set(s)"
-              : "Vente de pièces au détail"}
+          <p className="mt-1 text-sm text-slate-500">
+            {saleTypeLabel}
             {" · "}
             {saleRow.sales_channel}
           </p>
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="mt-1 text-xs text-slate-500">
             Payée le {formatDate(saleRow.paid_at)} · Statut :{" "}
             <span
               className={cn(
-                "inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium",
-                isCancelled
-                  ? "bg-rose-50 text-rose-700"
-                  : "bg-emerald-50 text-emerald-700"
+                "app-status-pill px-2.5 py-0.5 text-[11px]",
+                isCancelled ? "app-status-pill--bad" : "app-status-pill--good"
               )}
             >
               {isCancelled ? "Annulée" : "Confirmée"}
             </span>
           </p>
-          <p className="mt-1 text-xs text-muted-foreground">ID technique: {saleRow.id}</p>
         </div>
-
-        <div className="flex items-center gap-2">
-          <Link
-            href="/ventes"
-            className="inline-flex items-center rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-muted"
-          >
-            ← Retour aux ventes
-          </Link>
-          {/* Les boutons d'annulation / édition seront ajoutés plus tard */}
-        </div>
-      </div>
+      </header>
 
       {/* STATS DE LA VENTE */}
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 items-start">
@@ -175,8 +197,8 @@ export default async function VenteDetailPage({ params }: VentesDetailPageProps)
 
       {/* COMMENTAIRE GLOBAL */}
       {saleRow.comment && (
-        <section className="app-card p-4">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
+        <section className="app-surface-muted p-4 sm:p-5">
+          <p className="app-section-label mb-1.5">
             Commentaire
           </p>
           <p className="text-sm whitespace-pre-line">{saleRow.comment}</p>
@@ -184,10 +206,10 @@ export default async function VenteDetailPage({ params }: VentesDetailPageProps)
       )}
 
       {/* LIGNES DE VENTE */}
-      <section className="app-card overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-sm">
-            <thead className="app-table-head">
+      <section className="appro-table-shell">
+        <div className="appro-table-scroll overflow-x-auto">
+          <table className="appro-table min-w-full text-sm">
+            <thead className="appro-table-header">
               <tr>
                 {renderHeader("Type", "left")}
                 {renderHeader("Réf. set / pièce", "left")}
@@ -200,10 +222,10 @@ export default async function VenteDetailPage({ params }: VentesDetailPageProps)
 
             <tbody>
               {saleItems.length === 0 ? (
-                <tr className="border-t border-border">
+                <tr>
                   <td
                     colSpan={6}
-                    className="px-4 py-6 text-center text-sm text-muted-foreground"
+                    className="px-4 py-6 text-center text-sm text-slate-500"
                   >
                     Aucune ligne de vente pour cette vente.
                   </td>
@@ -223,7 +245,10 @@ export default async function VenteDetailPage({ params }: VentesDetailPageProps)
 
                   const refValue =
                     item.item_kind === "SET"
-                      ? item.set_id ?? "—"
+                      ? formatSetReferenceDisplay(
+                          item.set_id,
+                          setDisplayRefById[String(item.set_id ?? "").trim()] ?? null
+                        ) || "—"
                       : item.piece_ref ?? "—";
 
                   const isSetRow = item.item_kind === "SET" && Boolean(item.set_id);
@@ -253,7 +278,7 @@ export default async function VenteDetailPage({ params }: VentesDetailPageProps)
                     );
 
                   return (
-                    <tr key={item.id} className={cn("app-table-row", href && "cursor-pointer")}>
+                    <tr key={item.id} className={cn("appro-table-row", href && "cursor-pointer")}>
                       <Cell title={href ? "Voir les pièces réellement vendues pour ce set" : undefined}>
                         {labelType}
                         {item.item_kind === "SET" && item.is_partial_set && (

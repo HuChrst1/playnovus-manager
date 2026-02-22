@@ -1,8 +1,5 @@
 import { supabase } from "@/lib/supabase";
-import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { EditLotDialog, LotForEdit } from "../EditLotDialog";
 import { QuickAddPieceForm } from "./QuickAddPieceForm";
 import { EditInventoryLineDialog } from "./EditInventoryLineDialog";
@@ -10,6 +7,7 @@ import { DeleteInventoryLineButton } from "./DeleteInventoryLineButton";
 import { LotCsvImportDialog } from "./LotCsvImportDialog";
 import { LotInvoiceAttachmentPanel } from "./LotInvoiceAttachmentPanel";
 import { getLotInvoiceAttachment } from "../action";
+import { buildSupplierOptionsFromDb } from "../supplier-options";
 
 export const dynamic = "force-dynamic";
 
@@ -105,6 +103,20 @@ export default async function LotDetailPage({
   const lotStatus: "draft" | "confirmed" =
     lot.status === "confirmed" ? "confirmed" : "draft";
 
+  const { data: supplierRows, error: supplierRowsError } = await supabase
+    .from("lots")
+    .select("supplier")
+    .not("supplier", "is", null);
+  if (supplierRowsError) {
+    console.error(
+      "LotDetailPage - erreur chargement fournisseurs:",
+      supplierRowsError
+    );
+  }
+  const supplierOptions = buildSupplierOptionsFromDb(
+    (supplierRows ?? []).map((row) => row.supplier)
+  );
+
   // 2. Charge les lignes d'inventaire liées au lot
   const { data: inventoryData, error: inventoryError } = await supabase
     .from("inventory")
@@ -152,7 +164,7 @@ export default async function LotDetailPage({
   return (
     <main className="space-y-6">
       {/* HEADER PAGE (aligné avec /catalogue/[id]) */}
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-start gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">
             {displayCode}{" "}
@@ -161,20 +173,6 @@ export default async function LotDetailPage({
         <p className="text-sm text-muted-foreground">
             Détail du lot d&apos;approvisionnement.
           </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            asChild
-            className="rounded-full px-4"
-          >
-            <Link href="/approvisionnement">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Retour lots
-            </Link>
-          </Button>
         </div>
       </div>
 
@@ -189,7 +187,11 @@ export default async function LotDetailPage({
               </CardTitle>
 
               {/* Petit bouton crayon dans l’en-tête de la card */}
-              <EditLotDialog lot={lotForEdit} variant="card" />
+              <EditLotDialog
+                lot={lotForEdit}
+                supplierOptions={supplierOptions}
+                variant="card"
+              />
             </CardHeader>
 
             <CardContent className="p-0 bg-white text-sm divide-y divide-slate-100">
@@ -245,16 +247,16 @@ export default async function LotDetailPage({
                   {lot.status === "confirmed" ? "Confirmé" : "Brouillon"}
                 </span>
               </div>
+
+              <LotInvoiceAttachmentPanel
+                lotId={lot.id}
+                lotStatus={lotStatus}
+                initialAttachment={invoiceAttachment}
+                initialWarning={invoiceAttachmentWarning}
+                initialError={invoiceAttachmentError}
+              />
             </CardContent>
           </Card>
-
-          <LotInvoiceAttachmentPanel
-            lotId={lot.id}
-            lotStatus={lotStatus}
-            initialAttachment={invoiceAttachment}
-            initialWarning={invoiceAttachmentWarning}
-            initialError={invoiceAttachmentError}
-          />
         </div>
 
         {/* COLONNE DROITE : pièces du lot */}
@@ -266,10 +268,6 @@ export default async function LotDetailPage({
                 <h2 className="text-sm font-semibold tracking-[0.16em] uppercase text-slate-500">
                     Pièces du lot ({lines.length})
                 </h2>
-                <p className="mt-1 text-xs text-slate-500">
-                    Saisie rapide : indique une référence de pièce Playmobil et une
-                    quantité, puis ajoute-la à ce lot.
-                </p>
                 </div>
 
                 <div className="flex items-center gap-3">
@@ -286,9 +284,10 @@ export default async function LotDetailPage({
             </div>
 
           {/* Tableau des pièces */}
-          <div className="flex-1 bg-white overflow-y-auto max-h-[720px]">
-            <table className="min-w-full text-sm">
-            <thead className="app-table-head">
+          <div className="flex-1 max-h-[720px] overflow-y-auto bg-white p-3 sm:p-4">
+            <div className="appro-table-scroll">
+            <table className="appro-table min-w-full text-sm">
+            <thead className="appro-table-header">
                 <tr>
                     <th className="px-4 py-3 text-left font-medium">
                     Réf. pièce
@@ -306,9 +305,9 @@ export default async function LotDetailPage({
             </thead>
               <tbody>
                 {lines.length === 0 ? (
-                  <tr className="border-t border-border">
+                  <tr>
                     <td
-                      colSpan={3}
+                      colSpan={4}
                       className="px-4 py-6 text-center text-sm text-muted-foreground"
                     >
                       Aucune pièce enregistrée pour ce lot pour le
@@ -319,7 +318,7 @@ export default async function LotDetailPage({
                   lines.map((line) => (
                     <tr
                         key={line.id}
-                        className="border-t border-border hover:bg-sky-50/70 transition-colors"
+                        className="appro-table-row transition-colors"
                         >
                         <td className="px-4 py-3 font-mono text-xs">
                             {line.piece_ref || "—"}
@@ -346,6 +345,7 @@ export default async function LotDetailPage({
                 )}
               </tbody>
             </table>
+            </div>
           </div>
         </Card>
       </div>

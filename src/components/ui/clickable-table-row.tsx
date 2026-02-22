@@ -14,6 +14,10 @@ function isInteractiveTarget(target: HTMLElement) {
     target.closest("a") ||
     target.closest("button") ||
     target.closest("[data-row-action='true']") ||
+    target.closest("[role='dialog']") ||
+    target.closest("[data-radix-popper-content-wrapper]") ||
+    target.closest("summary") ||
+    target.closest("details") ||
     target.closest("input") ||
     target.closest("select") ||
     target.closest("textarea") ||

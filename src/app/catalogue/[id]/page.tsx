@@ -1,15 +1,9 @@
 import { supabase } from "@/lib/supabase";
 import { getStockForPieces } from "@/lib/stock";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { ArrowLeft } from "lucide-react";
-import Link from "next/link";
 import { SetPartsList } from "@/components/catalogue/set-parts-list";
 import { SetImage } from "@/components/catalogue/set-image";
-import { EditPhotoButton } from "@/components/catalogue/edit-photo-button";
 import { EditSetDialog } from "@/components/catalogue/edit-set-dialog";
-import { EditPieceDialog } from "@/components/catalogue/edit-piece-dialog";
 
 export default async function SetDetailPage({
   params,
@@ -19,7 +13,6 @@ export default async function SetDetailPage({
   const { id } = await params;
   const setId = decodeURIComponent(id);
 
-  // 1. Données
   const { data: set } = await supabase
     .from("sets_catalog")
     .select("*")
@@ -28,14 +21,16 @@ export default async function SetDetailPage({
 
   if (!set) {
     return (
-      <main className="p-6 text-red-500 font-bold">
-        Set introuvable
+      <main className="space-y-4 px-1 py-4 md:px-2">
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+          Catalogue
+        </h1>
+        <p className="text-sm font-medium text-rose-600">Set introuvable.</p>
       </main>
     );
   }
 
-    // 2. BOM du set
-    const { data: bomData } = await supabase
+  const { data: bomData } = await supabase
     .from("sets_bom")
     .select("*")
     .eq("set_id", setId)
@@ -50,16 +45,9 @@ export default async function SetDetailPage({
   };
 
   const bom = (bomData ?? []) as BomRow[];
-
-  const pieceRefs =
-    bom.map((p) => p.piece_ref as string).filter(Boolean) || [];
-
-  // On récupère le stock depuis la vue stock_per_piece via le helper
+  const pieceRefs = bom.map((part) => part.piece_ref).filter(Boolean);
   const stockByPiece = await getStockForPieces(pieceRefs);
 
-  // 3. Calculs complétion
-  // On garde la même structure que précédemment :
-  // chaque "part" a un champ inStock utilisé par SetPartsList.
   const partsWithStock = bom.map((part) => {
     const stockInfo = stockByPiece[part.piece_ref] ?? {
       totalQuantity: 0,
@@ -76,7 +64,8 @@ export default async function SetDetailPage({
   const completionStats = partsWithStock.reduce(
     (acc, part) => {
       const totalPartsNeeded = acc.totalPartsNeeded + part.quantity;
-      const totalPartsOwned = acc.totalPartsOwned + Math.min(part.inStock, part.quantity);
+      const totalPartsOwned =
+        acc.totalPartsOwned + Math.min(part.inStock, part.quantity);
 
       const setsForThisPart =
         part.quantity > 0 ? Math.floor(part.inStock / part.quantity) : null;
@@ -110,151 +99,103 @@ export default async function SetDetailPage({
       ? Math.round((totalPartsOwned / totalPartsNeeded) * 100)
       : 0;
 
-  // Normalisation pour cohérence avec /catalogue
   const versionLabel =
     set.version && set.version !== "Version Unique" ? set.version : "Unique";
 
   const yearStartLabel = set.year_start ?? "N/A";
   const yearEndLabel = set.year_end ?? "N/A";
 
-  // 3. RENDER
   return (
-    <main className="space-y-6">
-      {/* HEADER FICHE SET */}
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {set.display_ref} – {set.name}
+    <main className="space-y-6 catalogue-detail-shell">
+      <header className="flex flex-wrap items-start gap-3">
+        <div className="min-w-0">
+          <h1 className="text-3xl font-medium tracking-tight text-slate-900 md:text-[42px] md:leading-none">
+            {set.display_ref} - {set.name}
           </h1>
-          <p className="text-sm text-muted-foreground">
-            Fiche détaillée du set.
-          </p>
+          <p className="mt-1 text-sm text-slate-500">Fiche détaillée du set.</p>
         </div>
+      </header>
 
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            asChild
-            className="rounded-full px-4"
-          >
-            <Link href="/catalogue">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Retour catalogue
-            </Link>
-          </Button>
+      <div className="catalogue-detail-grid">
+        <aside className="space-y-4">
+          <section className="catalogue-detail-meta-card">
+            <p className="app-section-label mb-3">Aperçu du set</p>
+            <SetImage url={set.image_url} name={set.name} />
+          </section>
 
-          <EditPhotoButton setId={set.id} currentUrl={set.image_url} />
-          <EditSetDialog set={set} />
-        </div>
-      </div>
-
-      {/* LAYOUT PRINCIPAL */}
-      <div className="grid gap-6 lg:grid-cols-[minmax(320px,360px)_1fr]">
-        {/* COLONNE GAUCHE : image + fiche technique */}
-        <div className="space-y-4">
-          {/* Aperçu / image */}
-          <Card className="border border-slate-200 shadow-sm rounded-3xl overflow-hidden">
-            <div className="px-5 pt-4 pb-2">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                Aperçu du set
-              </p>
+          <section className="catalogue-detail-meta-card">
+            <div className="catalogue-detail-meta-head">
+              <p className="app-section-label">Fiche technique</p>
+              <EditSetDialog set={set} variant="card" />
             </div>
-            <CardContent className="pt-0 px-5 pb-5">
-              <SetImage url={set.image_url} name={set.name} />
-            </CardContent>
-          </Card>
 
-          {/* Fiche technique */}
-          <Card className="border border-slate-200 shadow-sm rounded-3xl overflow-hidden">
-            <CardHeader className="py-3 px-5 border-b border-slate-100 bg-slate-50/80">
-              <CardTitle className="text-xs font-semibold text-slate-500 uppercase tracking-[0.22em]">
-                Fiche technique
-              </CardTitle>
-            </CardHeader>
-
-            <CardContent className="p-0 bg-white text-sm divide-y divide-slate-100">
-              <div className="flex items-center justify-between px-5 py-4">
-                <span className="text-slate-500 font-medium">Référence</span>
-                <Badge variant="outline" className="rounded-full px-3">
-                  {set.display_ref}
-                </Badge>
+            <dl className="catalogue-detail-meta-list">
+              <div className="catalogue-detail-meta-row">
+                <dt className="catalogue-detail-meta-label">Référence</dt>
+                <dd>
+                  <Badge variant="outline" className="rounded-full px-3 text-xs font-medium">
+                    {set.display_ref}
+                  </Badge>
+                </dd>
               </div>
 
-              <div className="flex items-center justify-between px-5 py-4">
-                <span className="text-slate-500 font-medium">Version</span>
-                <span className="font-semibold">{versionLabel}</span>
+              <div className="catalogue-detail-meta-row">
+                <dt className="catalogue-detail-meta-label">Version</dt>
+                <dd className="catalogue-detail-meta-value">{versionLabel}</dd>
               </div>
 
-              <div className="flex items-center justify-between px-5 py-4">
-                <span className="text-slate-500 font-medium">Dates</span>
-                <span>
-                  {yearStartLabel} – {yearEndLabel}
-                </span>
+              <div className="catalogue-detail-meta-row">
+                <dt className="catalogue-detail-meta-label">Dates</dt>
+                <dd className="catalogue-detail-meta-value">
+                  {yearStartLabel} - {yearEndLabel}
+                </dd>
               </div>
 
-              <div className="flex items-center justify-between px-5 py-4">
-                <span className="text-slate-500 font-medium">Thème</span>
-                <span className="text-right truncate pl-4">
+              <div className="catalogue-detail-meta-row">
+                <dt className="catalogue-detail-meta-label">Thème</dt>
+                <dd className="catalogue-detail-meta-value text-right">
                   {set.theme || "-"}
-                </span>
+                </dd>
               </div>
-            </CardContent>
-          </Card>
-        </div>
+            </dl>
+          </section>
+        </aside>
 
-        {/* COLONNE DROITE : inventaire + jauge violette */}
-        <Card className="border border-slate-200 shadow-md rounded-3xl flex flex-col overflow-hidden">
-          <div className="px-6 py-5 border-b border-slate-100 bg-white">
-            <div className="mb-4 flex items-end justify-between gap-6">
+        <section className="space-y-4">
+          <div className="catalogue-detail-summary">
+            <div className="catalogue-detail-summary-top">
               <div>
-                <h2 className="text-sm font-semibold tracking-[0.16em] uppercase text-slate-500">
+                <p className="app-section-label mb-1.5">
                   Inventaire ({partsWithStock.length})
-                </h2>
-                <p className="mt-1 text-sm text-slate-500">
-                  <span className="font-semibold text-slate-900">
-                    {totalPartsOwned}
-                  </span>{" "}
-                  / {totalPartsNeeded} pièces physiques
+                </p>
+                <p className="text-sm text-slate-500">
+                  <span className="font-semibold text-slate-900">{totalPartsOwned}</span> / {" "}
+                  {totalPartsNeeded} pièces physiques
                 </p>
               </div>
 
-              <div className="flex items-center gap-4">
-                <EditPieceDialog setId={set.id} />
-                <div className="flex flex-col items-end">
-                  <span className="mb-1 text-xs font-medium text-slate-500">
-                    Complétion
+              <div className="flex items-end gap-2">
+                <span className="text-4xl font-semibold leading-none text-cyan-600">
+                  {completionPercent}%
+                </span>
+                {maxCompleteSets > 0 ? (
+                  <span className="inline-flex items-center rounded-full bg-slate-900/5 px-2 py-0.5 text-[11px] font-medium text-slate-700">
+                    x{maxCompleteSets}
                   </span>
-
-                  <div className="flex items-center gap-2">
-                    <span className="text-4xl font-semibold leading-none text-[#5b4bff]">
-                      {completionPercent}%
-                    </span>
-
-                    {typeof maxCompleteSets === "number" &&
-                      maxCompleteSets > 0 && (
-                        <span className="inline-flex items-center rounded-full bg-slate-900/5 px-2 py-0.5 text-[11px] font-medium text-slate-700">
-                          x{maxCompleteSets}
-                        </span>
-                      )}
-                  </div>
-                </div>
+                ) : null}
               </div>
             </div>
 
-            {/* Jauge violette */}
-            <div className="h-3.5 w-full rounded-full border border-slate-200 bg-slate-100 overflow-hidden">
+            <div className="catalogue-detail-gauge">
               <div
-                className="h-full rounded-full bg-[#5b4bff] transition-all duration-700 ease-out"
+                className="catalogue-detail-gauge-fill"
                 style={{ width: `${completionPercent}%` }}
               />
             </div>
           </div>
 
-          <div className="flex-1 bg-white overflow-y-auto max-h-[720px]">
-            <SetPartsList parts={partsWithStock} />
-          </div>
-        </Card>
+          <SetPartsList setId={set.id} parts={partsWithStock} />
+        </section>
       </div>
     </main>
   );

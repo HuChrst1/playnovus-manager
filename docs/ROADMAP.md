@@ -1034,6 +1034,36 @@ Definition of done:
   - `npm run typecheck`
   - `npm run build`
   - `npm run test:f2.0`
+- sous-bilan consolide post-refonte (valide):
+  - dashboard: modales harmonisees, tendances temporelles en vues dediees, opportunites en theme sombre
+  - approvisionnement: table/toolbar/filtres alignes, modal lot harmonisee, fournisseur en dropdown extensible
+  - ventes: alignement liste + subpages + modales, libelles metier clarifies (`Commande n°`, `SETS/PIECES`)
+  - stock / historique-stock: shell visuel aligne, actions externes coherentes, code couleur IN/OUT preserve
+  - catalogue: toolbar filtres drilldown, detail set harmonise, actions pieces standardisees
+  - topbar globale: bouton retour externe + report + compte visibles et coherents
+  - design system: enforcement contraste AA strict via `npm run lint:ui-contrast`
+- references d'audit post-refonte:
+  - `docs/UI_AUDIT_F5.5.md`
+  - `docs/UX_AUDIT_F5.5.md`
+
+### F5.6 - Finitions UI/UX post-refonte (residuel priorise)
+
+Statut: `A FAIRE`
+Objectif: fermer les ecarts residuels identifies par les audits UI/UX post-F5.5 sans toucher au metier.
+Livrables cibles:
+- harmonisation finale des actions icon-only (edit/delete/close) sur un style unique
+- normalisation du chrome modal restant (largeur, header, densite verticale, footer)
+- unification des toolbar filtres inter-pages (placement, feedback etats actifs, reset/apply)
+- reduction des styles ad hoc restants au profit de classes shared
+- checklist UX par parcours metier (navigation, dashboard, appro, ventes, stock, catalogue)
+Definition of done:
+- plus aucun ecart `Critique` ni `Majeur` dans `docs/UI_AUDIT_F5.5.md` et `docs/UX_AUDIT_F5.5.md`
+- cohherence visuelle stable desktop/mobile sur les routes metier principales
+- validations techniques vertes:
+  - `npm run lint`
+  - `npm run typecheck`
+  - `npm run build`
+  - `npm run test:f2.0`
 
 ## Phase 6 - Validation finale et readiness deploiement
 
@@ -1190,9 +1220,10 @@ Hypotheses et defaults explicites (auth/reglages):
 36. F5.2
 37. F5.3
 38. F5.5
-39. F6.1
-40. F6.2
-41. F6.3
-42. F6.4
-43. F6.5
-44. F6.6
+39. F5.6
+40. F6.1
+41. F6.2
+42. F6.3
+43. F6.4
+44. F6.5
+45. F6.6

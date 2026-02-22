@@ -10,7 +10,7 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
       <textarea
         ref={ref}
         className={cn(
-          "app-control app-control--textarea disabled:cursor-not-allowed disabled:opacity-50",
+          "app-control app-control--textarea disabled:cursor-not-allowed disabled:opacity-55",
           className
         )}
         {...props}

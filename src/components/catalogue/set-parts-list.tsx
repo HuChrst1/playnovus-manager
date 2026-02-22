@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { EditPieceDialog } from "@/components/catalogue/edit-piece-dialog";
 import { DeletePieceButton } from "@/components/catalogue/delete-piece-button";
+import { Button } from "@/components/ui/button";
+import { ChevronDown, ChevronRight } from "lucide-react";
 
 interface PartWithStock {
   id: number;
@@ -14,127 +16,176 @@ interface PartWithStock {
   inStock: number;
 }
 
-export function SetPartsList({ parts }: { parts: PartWithStock[] }) {
-  // ✅ Toggle pour afficher / cacher les jauges
+export function SetPartsList({
+  setId,
+  parts,
+}: {
+  setId: string;
+  parts: PartWithStock[];
+}) {
   const [showGauges, setShowGauges] = useState(true);
+  const [qteView, setQteView] = useState<"compact" | "detailed">("compact");
 
-  if (!parts || parts.length === 0) {
-    return (
-      <div className="text-center py-16 text-zinc-400 italic bg-zinc-50/50 m-4 rounded-lg border border-dashed border-zinc-200">
-        Aucune pièce associée à ce set.
-      </div>
-    );
-  }
+  const isDetailedQteView = qteView === "detailed";
+  const gaugeColSpan = isDetailedQteView ? 5 : 4;
+  const toggleQteView = () =>
+    setQteView((current) => (current === "compact" ? "detailed" : "compact"));
 
   return (
-    <div className="w-full text-sm font-sans">
-      {/* Barre de contrôle en haut : toggle jauges */}
-      <div className="flex items-center justify-end px-4 pt-3 pb-1 text-xs text-zinc-500 gap-2">
-        <label className="inline-flex items-center gap-2 cursor-pointer select-none">
-          <input
-            type="checkbox"
-            className="h-3 w-3 rounded border-zinc-300 text-blue-600"
-            checked={showGauges}
-            onChange={(e) => setShowGauges(e.target.checked)}
-          />
-          <span>Afficher les jauges de complétion</span>
-        </label>
+    <section className="space-y-3">
+      <div className="catalogue-detail-table-toolbar catalogue-detail-table-toolbar--external">
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            className="h-9 px-4 text-xs font-medium"
+            onClick={() => setShowGauges((current) => !current)}
+            aria-pressed={showGauges}
+          >
+            {showGauges
+              ? "Masquer les jauges de complétion"
+              : "Afficher les jauges de complétion"}
+          </Button>
+        </div>
+
+        <EditPieceDialog
+          setId={setId}
+          triggerClassName="h-9 gap-2 px-4 text-xs font-medium"
+        />
       </div>
 
-      {/* En-têtes */}
-      <div className="grid grid-cols-12 px-4 py-3 text-xs font-bold text-zinc-500 uppercase bg-white border-y border-zinc-200 sticky top-0 z-20 shadow-sm">
-        <div className="col-span-2 text-center">Qté</div>
-        <div className="col-span-2 pl-2">Réf.</div>
-        <div className="col-span-7">Description</div>
-        <div className="col-span-1 text-right">Actions</div>
-      </div>
-
-      {/* Liste */}
-      <div className="divide-y divide-zinc-100 bg-white">
-        {parts.map((part) => {
-          const ratio = part.quantity > 0 ? part.inStock / part.quantity : 0;
-          const percentage = Math.min(100, Math.max(0, ratio * 100));
-
-          // Couleur de fond : toujours vert clair, comme demandé
-          const barColor = "bg-emerald-100/70";
-          const showBar = showGauges && percentage > 0;
-
-          return (
-            <div
-              key={part.id}
-              className="relative grid grid-cols-12 items-center h-12 group overflow-hidden hover:bg-zinc-50 transition-colors"
-            >
-              {/* JAUGE FOND */}
-              {showBar && (
-                <div
-                  className={`absolute top-0 left-0 h-full transition-all duration-700 ease-out z-0 ${barColor}`}
-                  style={{ width: `${percentage}%` }}
-                />
-              )}
-
-              {/* 1. Qté (2 cols) */}
-              <div className="col-span-2 relative z-10 text-center">
-                <span
-                  className={
-                    showGauges
-                      ? `inline-flex items-center justify-center px-2 py-0.5 rounded text-xs font-bold border ${
-                          ratio >= 1
-                            ? "text-emerald-700 bg-emerald-50/80 border-emerald-200"
-                            : ratio > 0
-                            ? "text-emerald-700 bg-emerald-50/40 border-emerald-200"
-                            : "text-zinc-600 bg-white/70 border-zinc-200"
-                        }`
-                      : "inline-flex items-center justify-center px-2 py-0.5 rounded text-xs font-bold text-zinc-700 bg-white/70 border border-zinc-200"
-                  }
-                >
-                  {part.inStock} / {part.quantity}
-                </span>
-              </div>
-
-              {/* 2. Réf (2 cols) */}
-              <div className="col-span-2 relative z-10 pl-2 font-mono text-xs font-medium text-zinc-600 select-all">
-                {part.piece_ref}
-              </div>
-
-              {/* 3. Description (7 cols) */}
-              <div className="col-span-7 relative z-10 pr-2">
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <button className="text-left w-full focus:outline-none cursor-pointer group-hover:text-blue-700 transition-colors truncate block">
-                      <span className="font-medium text-zinc-700 group-hover:text-blue-700">
-                        {part.piece_name || "Nom inconnu"}
-                      </span>
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-80 p-4 text-sm bg-white shadow-xl border-zinc-200 z-50">
-                    <div className="font-bold mb-1 text-zinc-900 flex justify-between">
-                      <span>Détail Pièce</span>
-                      <span className="font-mono text-xs text-zinc-400">
-                        {part.piece_ref}
-                      </span>
+      {parts.length === 0 ? (
+        <div className="rounded-[24px] border border-dashed border-slate-200 bg-white/88 px-4 py-14 text-center text-sm italic text-slate-400">
+          Aucune pièce associée à ce set.
+        </div>
+      ) : (
+        <div className="appro-table-scroll">
+          <table className="appro-table min-w-full text-sm">
+            <thead className="appro-table-header">
+              <tr>
+                {isDetailedQteView ? (
+                  <>
+                    <th className="px-4 py-3 text-right font-medium">
+                      <div className="inline-flex items-center justify-end gap-1.5">
+                        <button
+                          type="button"
+                          onClick={toggleQteView}
+                          className="app-btn-soft-icon h-5 w-5 text-slate-500 hover:text-slate-800"
+                          aria-label="Basculer l'affichage des colonnes QTE"
+                          title="Masquer QTE stock/attendus"
+                        >
+                          <ChevronDown className="h-3.5 w-3.5" />
+                        </button>
+                        <span>QTE en stock</span>
+                      </div>
+                    </th>
+                    <th className="px-4 py-3 text-right font-medium">QTE attendus</th>
+                  </>
+                ) : (
+                  <th className="px-4 py-3 text-right font-medium">
+                    <div className="inline-flex items-center justify-end gap-1.5">
+                      <button
+                        type="button"
+                        onClick={toggleQteView}
+                        className="app-btn-soft-icon h-5 w-5 text-slate-500 hover:text-slate-800"
+                        aria-label="Basculer l'affichage des colonnes QTE"
+                        title="Démasquer QTE stock/attendus"
+                      >
+                        <ChevronRight className="h-3.5 w-3.5" />
+                      </button>
+                      <span>Qté</span>
                     </div>
-                    <p className="text-zinc-600 leading-relaxed border-t border-zinc-100 pt-2 mt-1">
-                      {part.piece_name || "Pas de description."}
-                    </p>
-                  </PopoverContent>
-                </Popover>
-              </div>
+                  </th>
+                )}
+                <th className="px-4 py-3 text-left font-medium">Réf.</th>
+                <th className="px-4 py-3 text-left font-medium">Description</th>
+                <th className="px-4 py-3 text-right font-medium">Actions</th>
+              </tr>
+            </thead>
 
-              {/* 4. Actions */}
-              <div className="col-span-1 relative z-10 flex justify-end items-center pr-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <div className="flex bg-white/80 rounded-md shadow-sm border border-zinc-100 backdrop-blur-sm">
-                  <EditPieceDialog setId={part.set_id} piece={part} />
-                  <DeletePieceButton
-                    id={part.id}
-                    setId={part.set_id}
-                    refName={part.piece_ref}
-                  />
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
+            <tbody>
+              {parts.map((part) => {
+                const ratio = part.quantity > 0 ? part.inStock / part.quantity : 0;
+                const clampedRatio = Math.min(1, Math.max(0, ratio));
+                const percentage = Math.round(clampedRatio * 100);
+
+                return (
+                  <Fragment key={part.id}>
+                    <tr className="appro-table-row">
+                      {isDetailedQteView ? (
+                        <>
+                          <td className="px-4 py-3 text-right tabular-nums font-semibold text-slate-800">
+                            {part.inStock}
+                          </td>
+
+                          <td className="px-4 py-3 text-right tabular-nums text-slate-700">
+                            {part.quantity}
+                          </td>
+                        </>
+                      ) : (
+                        <td className="px-4 py-3 text-right tabular-nums font-semibold text-slate-800">
+                          {part.inStock}/{part.quantity}
+                        </td>
+                      )}
+
+                      <td className="px-4 py-3 font-mono text-xs text-slate-700 select-all">
+                        {part.piece_ref}
+                      </td>
+
+                      <td className="px-4 py-3">
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <button className="w-full truncate text-left text-slate-700 transition-colors hover:text-sky-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/45">
+                              <span className="font-medium">
+                                {part.piece_name || "Nom inconnu"}
+                              </span>
+                            </button>
+                          </PopoverTrigger>
+                          <PopoverContent className="z-50 w-80 border-slate-200 bg-white/98 p-4 text-sm shadow-xl">
+                            <div className="mb-1 flex items-center justify-between text-slate-900">
+                              <span className="font-semibold">Détail pièce</span>
+                              <span className="font-mono text-xs text-slate-400">
+                                {part.piece_ref}
+                              </span>
+                            </div>
+                            <p className="mt-2 border-t border-slate-100 pt-2 text-slate-600">
+                              {part.piece_name || "Pas de description."}
+                            </p>
+                          </PopoverContent>
+                        </Popover>
+                      </td>
+
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <EditPieceDialog setId={part.set_id} piece={part} />
+                          <DeletePieceButton
+                            id={part.id}
+                            setId={part.set_id}
+                            refName={part.piece_ref}
+                          />
+                        </div>
+                      </td>
+                    </tr>
+
+                    {showGauges ? (
+                      <tr className="catalogue-detail-gauge-row">
+                        <td colSpan={gaugeColSpan} className="px-4 pb-2 pt-0">
+                          <div className="catalogue-detail-line-gauge">
+                            <div
+                              className="catalogue-detail-line-gauge-fill"
+                              style={{ width: `${percentage}%` }}
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    ) : null}
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   );
 }

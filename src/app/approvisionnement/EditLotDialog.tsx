@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useId, useMemo, useRef, useState, useTransition } from "react";
 import {
   Dialog,
   DialogTrigger,
@@ -14,8 +14,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Pencil } from "lucide-react";
+import { Check, ChevronDown, Loader2, Pencil, Plus } from "lucide-react";
 import { updateLotFromDialog } from "./action";
+import {
+  dedupeSupplierOptions,
+  isSupplierOptionBlocked,
+  supplierOptionKey,
+} from "./supplier-options";
 
 type LotStatus = "draft" | "confirmed";
 const EMPTY_LOT_CONFIRMATION_ERROR =
@@ -35,6 +40,7 @@ export type LotForEdit = {
 
 interface EditLotDialogProps {
   lot: LotForEdit;
+  supplierOptions?: string[];
   /**
    * - "table" : petit bouton discret pour la colonne Actions du tableau
    * - "card"  : petit bouton rond blanc avec ombre, pour l’en-tête de la card
@@ -42,15 +48,92 @@ interface EditLotDialogProps {
   variant?: "table" | "card";
 }
 
-export function EditLotDialog({ lot, variant = "table" }: EditLotDialogProps) {
+export function EditLotDialog({
+  lot,
+  supplierOptions = [],
+  variant = "table",
+}: EditLotDialogProps) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const detailsRef = useRef<HTMLDetailsElement | null>(null);
+  const supplierDrawerId = useId();
+  const initialSupplierValue = useMemo(() => (lot.supplier ?? "").trim(), [lot.supplier]);
+  const initialSupplierOptions = useMemo(
+    () => dedupeSupplierOptions(supplierOptions),
+    [supplierOptions]
+  );
+  const [localSupplierOptions, setLocalSupplierOptions] = useState<string[]>(
+    initialSupplierOptions
+  );
+  const [selectedSupplier, setSelectedSupplier] = useState(initialSupplierValue);
+  const [isSupplierDrawerOpen, setIsSupplierDrawerOpen] = useState(false);
+  const [showAddSupplier, setShowAddSupplier] = useState(false);
+  const [newSupplierLabel, setNewSupplierLabel] = useState("");
+  const [supplierError, setSupplierError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (open) return;
+
+    setLocalSupplierOptions(initialSupplierOptions);
+    setSelectedSupplier(initialSupplierValue);
+    setIsSupplierDrawerOpen(false);
+    setShowAddSupplier(false);
+    setNewSupplierLabel("");
+    setSupplierError(null);
+
+    if (detailsRef.current) {
+      detailsRef.current.open = false;
+    }
+  }, [open, initialSupplierOptions, initialSupplierValue]);
 
   // l’input date attend YYYY-MM-DD
   const defaultDate = lot.purchase_date
     ? lot.purchase_date.slice(0, 10)
     : "";
+
+  const closeSupplierDrawer = () => {
+    if (detailsRef.current) {
+      detailsRef.current.open = false;
+    }
+    setIsSupplierDrawerOpen(false);
+    setShowAddSupplier(false);
+    setNewSupplierLabel("");
+    setSupplierError(null);
+  };
+
+  const handleSelectSupplier = (supplier: string) => {
+    setSelectedSupplier(supplier);
+    closeSupplierDrawer();
+  };
+
+  const handleAddSupplier = () => {
+    const nextSupplier = newSupplierLabel.trim();
+    if (!nextSupplier) {
+      setSupplierError("Saisissez un fournisseur.");
+      return;
+    }
+
+    if (isSupplierOptionBlocked(nextSupplier)) {
+      setSupplierError("Ce fournisseur n'est plus disponible.");
+      return;
+    }
+
+    const nextKey = supplierOptionKey(nextSupplier);
+    const alreadyExists = localSupplierOptions.some(
+      (supplier) => supplierOptionKey(supplier) === nextKey
+    );
+    if (alreadyExists) {
+      setSupplierError("Ce fournisseur existe déjà.");
+      return;
+    }
+
+    setLocalSupplierOptions((prev) => [...prev, nextSupplier]);
+    setSelectedSupplier(nextSupplier);
+    setShowAddSupplier(false);
+    setNewSupplierLabel("");
+    setSupplierError(null);
+  };
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -164,13 +247,135 @@ export function EditLotDialog({ lot, variant = "table" }: EditLotDialogProps) {
 
             <div className="space-y-2">
               <Label htmlFor="supplier">Fournisseur</Label>
-              <Input
-                id="supplier"
-                name="supplier"
-                defaultValue={lot.supplier ?? ""}
-                placeholder="ex : Vendeur Vinted, Brocante…"
-                className="rounded-full"
-              />
+              <details
+                ref={detailsRef}
+                className="group"
+                data-row-action="true"
+                onToggle={(event) => {
+                  const isOpen = event.currentTarget.open;
+                  setIsSupplierDrawerOpen(isOpen);
+
+                  if (!isOpen) {
+                    setShowAddSupplier(false);
+                    setNewSupplierLabel("");
+                    setSupplierError(null);
+                  }
+                }}
+              >
+                <summary
+                  id="supplier"
+                  aria-expanded={isSupplierDrawerOpen}
+                  aria-controls={supplierDrawerId}
+                  className="app-control flex cursor-pointer list-none items-center justify-between rounded-full"
+                >
+                  <span
+                    className={
+                      selectedSupplier ? "truncate text-slate-700" : "truncate text-slate-400"
+                    }
+                  >
+                    {selectedSupplier || "Sélectionner un fournisseur"}
+                  </span>
+                  <ChevronDown
+                    className={
+                      isSupplierDrawerOpen
+                        ? "h-4 w-4 rotate-180 text-slate-500 transition-transform"
+                        : "h-4 w-4 text-slate-500 transition-transform"
+                    }
+                  />
+                </summary>
+
+                <div
+                  id={supplierDrawerId}
+                  className="mt-2 rounded-[22px] border border-white/75 bg-white/96 p-2 shadow-[0_14px_32px_rgba(15,23,42,0.1)] backdrop-blur-sm"
+                >
+                  <div
+                    role="listbox"
+                    aria-label="Liste des fournisseurs"
+                    className="max-h-44 space-y-1 overflow-y-auto pr-1"
+                  >
+                    {localSupplierOptions.length === 0 ? (
+                      <p className="px-2 py-1 text-xs text-slate-500">
+                        Aucun fournisseur disponible.
+                      </p>
+                    ) : (
+                      localSupplierOptions.map((supplier) => {
+                        const isSelected =
+                          supplierOptionKey(selectedSupplier) === supplierOptionKey(supplier);
+
+                        return (
+                          <button
+                            key={supplier}
+                            type="button"
+                            role="option"
+                            aria-selected={isSelected}
+                            onClick={() => handleSelectSupplier(supplier)}
+                            className={
+                              isSelected
+                                ? "flex w-full items-center justify-between rounded-full bg-sky-100/80 px-3 py-2 text-left text-xs text-sky-900 transition-colors"
+                                : "flex w-full items-center justify-between rounded-full px-3 py-2 text-left text-xs text-slate-700 transition-colors hover:bg-slate-100/70"
+                            }
+                          >
+                            <span className="truncate">{supplier}</span>
+                            {isSelected ? <Check className="h-3.5 w-3.5 shrink-0" /> : null}
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  <div className="mt-2 border-t border-slate-200/70 pt-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] text-slate-500">
+                        Ajouter un fournisseur
+                      </span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="h-7 w-7 shrink-0 rounded-full"
+                        aria-label="Ajouter un fournisseur"
+                        onClick={() => {
+                          setShowAddSupplier((prev) => !prev);
+                          setSupplierError(null);
+                        }}
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+
+                    {showAddSupplier ? (
+                      <div className="mt-2 flex items-center gap-2">
+                        <Input
+                          value={newSupplierLabel}
+                          onChange={(event) => setNewSupplierLabel(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") {
+                              event.preventDefault();
+                              handleAddSupplier();
+                            }
+                          }}
+                          placeholder="Nouveau fournisseur"
+                          className="h-8 rounded-full px-3 text-xs"
+                        />
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="h-8 shrink-0 px-3 text-[11px]"
+                          onClick={handleAddSupplier}
+                        >
+                          Ajouter
+                        </Button>
+                      </div>
+                    ) : null}
+
+                    {supplierError ? (
+                      <p className="mt-1 text-xs text-rose-600">{supplierError}</p>
+                    ) : null}
+                  </div>
+                </div>
+              </details>
+
+              <input type="hidden" name="supplier" value={selectedSupplier} />
             </div>
           </div>
 

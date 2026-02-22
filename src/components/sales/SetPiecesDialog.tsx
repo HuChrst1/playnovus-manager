@@ -108,19 +108,19 @@ export function SetPiecesDialog({
     <div className="fixed inset-0 z-60">
       <button
         type="button"
-        className="absolute inset-0 bg-slate-900/30"
+        className="absolute inset-0 bg-slate-950/28 backdrop-blur-[2px]"
         aria-label="Fermer"
         onClick={onClose}
       />
 
-      <div className="absolute left-1/2 top-10 w-[min(980px,calc(100%-2rem))] -translate-x-1/2">
-        <div className="rounded-3xl bg-white p-5 shadow-[0_30px_80px_rgba(15,23,42,0.30)]">
+      <div className="absolute left-1/2 top-10 w-[min(1020px,calc(100%-2rem))] -translate-x-1/2">
+        <div className="app-dialog-surface p-5 sm:p-6">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="text-sm font-semibold text-slate-900">
+              <p className="text-lg font-medium tracking-tight text-slate-900">
                 Pièces du set
               </p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
+              <p className="mt-1 text-xs text-slate-500">
                 {setId ? `Set ID : ${setId}` : "Sélectionne d'abord un set."}
                 {" · "}
                 Qté sets : {Math.max(1, setQty)}
@@ -132,14 +132,16 @@ export function SetPiecesDialog({
               </p>
             </div>
 
-            <button
+            <Button
               type="button"
+              variant="icon"
+              size="icon"
               onClick={onClose}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full hover:bg-muted"
+              className="h-9 w-9"
               aria-label="Fermer"
             >
               <X className="h-4 w-4" />
-            </button>
+            </Button>
           </div>
 
           <div className="mt-4">
@@ -152,8 +154,8 @@ export function SetPiecesDialog({
                 <div className="flex items-center gap-2">
                   <Button
                     type="button"
-                    variant="secondary"
-                    className="h-9 rounded-full px-4 text-xs"
+                    variant="outline"
+                    className="h-9 px-4 text-xs"
                     onClick={onRefresh}
                     disabled={loading}
                   >
@@ -169,8 +171,8 @@ export function SetPiecesDialog({
 
                   <Button
                     type="button"
-                    variant="secondary"
-                    className="h-9 rounded-full px-4 text-xs"
+                    variant="outline"
+                    className="h-9 px-4 text-xs"
                     onClick={() => setLocalOverrides({})}
                     disabled={disabled || loading}
                   >
@@ -202,11 +204,11 @@ export function SetPiecesDialog({
                 Aucune pièce trouvée pour ce set.
               </div>
             ) : (
-              <div className="overflow-hidden rounded-2xl border border-slate-200">
-                <div className="max-h-[60vh] overflow-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead className="sticky top-0 bg-white">
-                      <tr className="border-b border-slate-100">
+              <div className="appro-table-shell p-1.5">
+                <div className="appro-table-scroll max-h-[60vh] overflow-auto">
+                  <table className="appro-table w-full text-left text-xs">
+                    <thead className="appro-table-header sticky top-0 bg-white/95 backdrop-blur-sm">
+                      <tr>
                         <th className="px-3 py-2 font-semibold text-slate-900">
                           Réf
                         </th>
@@ -229,10 +231,7 @@ export function SetPiecesDialog({
                     </thead>
                     <tbody>
                       {rows.map((p) => (
-                        <tr
-                          key={p.piece_ref}
-                          className="border-b border-slate-50 last:border-b-0"
-                        >
+                        <tr key={p.piece_ref} className="appro-table-row">
                           <td className="px-3 py-2 font-medium text-slate-900">
                             {p.piece_ref}
                           </td>
@@ -287,7 +286,7 @@ export function SetPiecesDialog({
                   </table>
                 </div>
 
-                <div className="flex items-center justify-between gap-3 border-t border-slate-100 bg-white px-3 py-3">
+                <div className="mt-2 flex items-center justify-between gap-3 rounded-2xl border border-white/75 bg-white/90 px-3 py-3">
                   <p className="text-[11px] text-muted-foreground">
                     Laisse vide (= théorique) ou saisis une quantité pour marquer un
                     set incomplet.
@@ -296,8 +295,8 @@ export function SetPiecesDialog({
                   <div className="flex items-center gap-2">
                     <Button
                       type="button"
-                      variant="secondary"
-                      className="h-9 rounded-full px-4 text-xs"
+                      variant="outline"
+                      className="h-9 px-4 text-xs"
                       onClick={onClose}
                     >
                       Annuler
@@ -305,7 +304,7 @@ export function SetPiecesDialog({
 
                     <Button
                       type="button"
-                      className="h-9 rounded-full px-4 text-xs bg-slate-900 text-white hover:bg-slate-900/90"
+                      className="h-9 rounded-full px-4 text-xs font-semibold"
                       onClick={() => {
                         // On envoie un mapping COMPLET (quantités finales) uniquement si le set est partiel.
                         // Sinon, on renvoie {} pour dire "set complet" (pas d’overrides).

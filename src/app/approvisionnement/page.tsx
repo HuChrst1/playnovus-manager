@@ -14,6 +14,7 @@ import {
   TableOverflow,
   TableStatusBadge,
 } from "@/components/ui/data-table";
+import { buildSupplierOptionsFromDb } from "./supplier-options";
 
 export const dynamic = "force-dynamic";
 
@@ -253,6 +254,21 @@ export default async function ApprovisionnementPage({
 
   const lots = (data ?? []) as LotRow[];
   const stats = computeApproStats(lots);
+  const { data: supplierRows, error: supplierRowsError } = await supabase
+    .from("lots")
+    .select("supplier")
+    .not("supplier", "is", null);
+
+  if (supplierRowsError) {
+    console.error(
+      "ApprovisionnementPage - erreur chargement fournisseurs:",
+      supplierRowsError
+    );
+  }
+
+  const supplierOptions = buildSupplierOptionsFromDb(
+    (supplierRows ?? []).map((row) => row.supplier)
+  );
 
   const makeSortHref = (columnKey: string) => {
     const params = new URLSearchParams(normalized.baseQuery);
@@ -380,7 +396,10 @@ export default async function ApprovisionnementPage({
           </div>
         </details>
 
-        <NewLotDialog triggerClassName="h-9 gap-2 px-4 text-xs font-medium !border !border-white/75 !bg-white/92 !text-slate-700 shadow-[0_8px_20px_rgba(15,23,42,0.06)] hover:!bg-white" />
+        <NewLotDialog
+          supplierOptions={supplierOptions}
+          triggerClassName="h-9 gap-2 px-4 text-xs font-medium"
+        />
       </div>
 
       <TableCard className="appro-table-shell">
@@ -519,7 +538,7 @@ export default async function ApprovisionnementPage({
 
                       <td className="px-4 py-3 text-right" data-row-action="true">
                         <div className="inline-flex items-center gap-1.5" data-row-action="true">
-                          <EditLotDialog lot={lotForEdit} />
+                          <EditLotDialog lot={lotForEdit} supplierOptions={supplierOptions} />
                           <DeleteLotButton
                             lotId={lot.id}
                             lotLabel={displayCode}

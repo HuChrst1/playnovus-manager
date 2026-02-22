@@ -2,6 +2,73 @@
 
 Ce fichier consigne les changements du projet, etapes par etapes.
 
+## 2026-02-22 - F5.5 Post-refonte: audit UI/UX + consolidation documentaire
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Construction d'une baseline factuelle unique post-F5.5 a partir de:
+  - `docs/ROADMAP.md`
+  - `docs/HISTORIQUE.md`
+  - `git log` (features F5.x) + `git diff --name-only` courant
+- Regle appliquee pour la consolidation:
+  - seuls les elements valides sont repertories comme "faits"
+- Audit UI mis a jour (etat actuel post-refonte):
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/UI_AUDIT_F5.5.md`
+  - findings priorises (Critique/Majeur/Mineur), conformite contraste, plan court terme
+- Audit UX cree (parcours metier + frictions + opportunites):
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/UX_AUDIT_F5.5.md`
+- Roadmap consolidee:
+  - enrichissement de `F5.5` avec sous-bilan valide par domaine
+  - ajout de `F5.6` (finitions UI/UX residuelles) en statut `A FAIRE`
+  - ordre recommande mis a jour pour inclure `F5.6`
+
+### Consolidation "fait" depuis F5.5 (elements valides)
+
+- Dashboard:
+  - modales harmonisees, titres nettoyes, modal tendances en 4 vues onglets
+  - theme sombre isole pour la modal Opportunites
+- Approvisionnement:
+  - layout/table/filtres alignes au pattern global
+  - modales lot harmonisees
+  - fournisseur en liste deroulante avec ajout local via `+`
+- Ventes:
+  - alignment visuel liste + details + modales New/Edit
+  - libelles metier clarifies (`Commande n°`, `SETS/PIECES`)
+  - references set rendues lisibles dans les details ventes
+- Stock / Historique stock:
+  - shell visuel coherent avec appro/ventes
+  - historique conserve les lignes vert/rouge (IN/OUT)
+- Catalogue:
+  - barre de filtres drilldown en pills
+  - detail set harmonise (cards/meta/table/actions)
+- Navigation globale / topbar:
+  - bouton retour global externe a la topbar
+  - bouton compte a droite de `Report`
+  - visibilite des icones retour/compte renforcee
+- Design system:
+  - enforcement contraste AA via `lint:ui-contrast`
+  - harmonisation des actions edit/delete selon le style de reference appro (avec conservation des suppressions en `X` quand requis)
+- Correctifs conversation recente:
+  - modal `Ajouter un set` alignee sur le gabarit `Nouveau lot`
+  - icones topbar retour + compte forcees visibles
+  - uniformisation globale des boutons edit/delete sur les zones cibles
+
+### Verifications executees
+
+- `npm run lint`: OK
+- `npm run typecheck`: OK
+- `npm run build`: OK
+- `npm run test:f2.0`: OK
+
+### Perimetre / limites
+
+- Lot strictement documentaire:
+  - audits UI/UX + consolidation `ROADMAP`/`HISTORIQUE`
+- Aucun changement metier, API, DB, query params, routes ou server actions dans ce lot.
+- Les points residuels restent traces pour `F5.6`.
+
 ## 2026-02-22 - F5.5 Refonte globale UI/UX (Soft UI / Bento)
 
 Statut: `FAIT`

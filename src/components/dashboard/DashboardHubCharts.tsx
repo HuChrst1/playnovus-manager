@@ -59,6 +59,61 @@ function safeNumber(value: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+type TrendSeriesKey =
+  | "netRevenue"
+  | "netMargin"
+  | "stockValue"
+  | "procurementCost"
+  | "salesCount";
+
+function extractTrendSeriesValue(
+  point: DashboardTrendPoint,
+  key: TrendSeriesKey
+): number | null {
+  switch (key) {
+    case "netRevenue":
+      return point.netRevenue;
+    case "netMargin":
+      return point.netMargin;
+    case "stockValue":
+      return point.stockValue;
+    case "procurementCost":
+      return point.procurementCost;
+    case "salesCount":
+      return point.salesCount;
+  }
+}
+
+function getTrendUnifiedYAxisDomain(
+  points: DashboardTrendPoint[],
+  seriesKeys: TrendSeriesKey[]
+): [number, number] {
+  const values: number[] = [];
+
+  for (const point of points) {
+    for (const seriesKey of seriesKeys) {
+      const value = extractTrendSeriesValue(point, seriesKey);
+      if (typeof value === "number" && Number.isFinite(value)) {
+        values.push(value);
+      }
+    }
+  }
+
+  if (values.length === 0) return [0, 1];
+
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+
+  if (min === max) {
+    const pad = Math.max(Math.abs(min) * 0.08, 1);
+    return [min - pad, max + pad];
+  }
+
+  const span = max - min;
+  const pad = Math.max(span * 0.08, 1);
+  return [min - pad, max + pad];
+}
+
 function EmptyChartState({ message }: { message: string }) {
   return (
     <div className="flex h-[260px] items-center justify-center rounded-3xl border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-500">
@@ -69,6 +124,8 @@ function EmptyChartState({ message }: { message: string }) {
 
 type TrendDualChartProps = {
   points: DashboardTrendPoint[];
+  showNetRevenue?: boolean;
+  showNetMargin?: boolean;
   showStockValue?: boolean;
   showSalesCount?: boolean;
   showProcurementCost?: boolean;
@@ -79,6 +136,8 @@ type TrendDualChartProps = {
 
 export function TrendDualChart({
   points,
+  showNetRevenue = true,
+  showNetMargin = true,
   showStockValue = false,
   showSalesCount = false,
   showProcurementCost = false,
@@ -89,6 +148,21 @@ export function TrendDualChart({
   if (points.length === 0) {
     return <EmptyChartState message="Aucune donnee disponible sur la periode." />;
   }
+
+  const visibleSeriesKeys: TrendSeriesKey[] = [];
+  if (showNetRevenue) visibleSeriesKeys.push("netRevenue");
+  if (showNetMargin) visibleSeriesKeys.push("netMargin");
+  if (showStockValue) visibleSeriesKeys.push("stockValue");
+  if (showProcurementCost) visibleSeriesKeys.push("procurementCost");
+  if (showSalesCount) visibleSeriesKeys.push("salesCount");
+
+  const effectiveSeriesKeys =
+    visibleSeriesKeys.length > 0 ? visibleSeriesKeys : (["netRevenue", "netMargin"] as TrendSeriesKey[]);
+  const yDomain = getTrendUnifiedYAxisDomain(points, effectiveSeriesKeys);
+  const yTickFormatter =
+    effectiveSeriesKeys.length === 1 && effectiveSeriesKeys[0] === "salesCount"
+      ? (value: unknown) => integer.format(safeNumber(value))
+      : (value: unknown) => compactNumber.format(safeNumber(value));
 
   return (
     <div style={{ height }} className="w-full">
@@ -102,20 +176,22 @@ export function TrendDualChart({
             minTickGap={compact ? 24 : 12}
           />
           <YAxis
-            yAxisId="money"
+            domain={yDomain}
             tick={{ fontSize: compact ? 10 : 11, fill: CHART_COLORS.axis }}
-            tickFormatter={(value) => compactNumber.format(safeNumber(value))}
+            tickFormatter={yTickFormatter}
           />
-          {showSalesCount && (
-            <YAxis
-              yAxisId="count"
-              orientation="right"
-              tick={{ fontSize: compact ? 10 : 11, fill: CHART_COLORS.axis }}
-              tickFormatter={(value) => integer.format(safeNumber(value))}
-            />
-          )}
           <Tooltip
-            formatter={(value: number, name: string) => {
+            formatter={(
+              value: number,
+              name: string,
+              item: { dataKey?: string | number } | undefined
+            ) => {
+              const dataKey =
+                typeof item?.dataKey === "string"
+                  ? item.dataKey
+                  : typeof name === "string"
+                    ? name
+                    : "";
               const labels: Record<string, string> = {
                 netRevenue: "CA net",
                 netMargin: "Marge nette",
@@ -124,37 +200,38 @@ export function TrendDualChart({
                 procurementCost: "Cout appro",
               };
 
-              if (name === "salesCount") {
-                return [integer.format(safeNumber(value)), labels[name] ?? name];
+              if (dataKey === "salesCount") {
+                return [integer.format(safeNumber(value)), labels[dataKey] ?? name];
               }
 
-              return [euro.format(safeNumber(value)), labels[name] ?? name];
+              return [euro.format(safeNumber(value)), labels[dataKey] ?? name];
             }}
           />
           {showLegend ? <Legend /> : null}
 
-          <Line
-            yAxisId="money"
-            type="monotone"
-            dataKey="netRevenue"
-            stroke={CHART_COLORS.primary}
-            strokeWidth={2.5}
-            dot={false}
-            name="CA net"
-          />
-          <Line
-            yAxisId="money"
-            type="monotone"
-            dataKey="netMargin"
-            stroke={CHART_COLORS.secondary}
-            strokeWidth={2.5}
-            dot={false}
-            name="Marge nette"
-          />
+          {showNetRevenue && (
+            <Line
+              type="monotone"
+              dataKey="netRevenue"
+              stroke={CHART_COLORS.primary}
+              strokeWidth={2.5}
+              dot={false}
+              name="CA net"
+            />
+          )}
+          {showNetMargin && (
+            <Line
+              type="monotone"
+              dataKey="netMargin"
+              stroke={CHART_COLORS.secondary}
+              strokeWidth={2.5}
+              dot={false}
+              name="Marge nette"
+            />
+          )}
 
           {showStockValue && (
             <Line
-              yAxisId="money"
               type="monotone"
               dataKey="stockValue"
               stroke={CHART_COLORS.tertiary}
@@ -167,7 +244,6 @@ export function TrendDualChart({
 
           {showProcurementCost && (
             <Line
-              yAxisId="money"
               type="monotone"
               dataKey="procurementCost"
               stroke={CHART_COLORS.quaternary}
@@ -179,7 +255,6 @@ export function TrendDualChart({
 
           {showSalesCount && (
             <Line
-              yAxisId="count"
               type="monotone"
               dataKey="salesCount"
               stroke={CHART_COLORS.soft}

@@ -7,19 +7,19 @@ interface SetImageProps {
 
 export function SetImage({ url, name }: SetImageProps) {
   return (
-    <div className="relative w-full aspect-4/3 rounded-xl border border-zinc-300 bg-white shadow-sm overflow-hidden">
-      <div className="w-full h-full flex items-center justify-center p-4">
+    <div className="relative aspect-[4/3] w-full overflow-hidden rounded-[22px] border border-white/80 bg-gradient-to-br from-white via-white to-sky-50/45 shadow-[0_10px_24px_rgba(15,23,42,0.08)]">
+      <div className="flex h-full w-full items-center justify-center p-4">
         {url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={url}
             alt={name}
-            className="w-full h-full object-contain"
+            className="h-full w-full object-contain"
           />
         ) : (
-          <div className="flex flex-col items-center text-zinc-300 gap-2">
+          <div className="flex flex-col items-center gap-2 text-slate-300">
             <ImageIcon className="h-10 w-10" />
-            <span className="italic">Pas d&apos;image</span>
+            <span className="text-xs italic text-slate-400">Pas d&apos;image</span>
           </div>
         )}
       </div>

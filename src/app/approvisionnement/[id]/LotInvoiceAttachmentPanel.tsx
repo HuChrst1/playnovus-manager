@@ -2,9 +2,22 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Paperclip, Trash2, Upload } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  ExternalLink,
+  Loader2,
+  Paperclip,
+  Trash2,
+  Upload,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -22,6 +35,16 @@ type LotInvoiceAttachmentPanelProps = {
 };
 
 const euroBytesFormatter = new Intl.NumberFormat("fr-FR");
+const IMAGE_EXTENSIONS = new Set([
+  "jpg",
+  "jpeg",
+  "png",
+  "webp",
+  "heic",
+  "heif",
+  "gif",
+  "bmp",
+]);
 
 const formatDateTime = (value: string | null) => {
   if (!value) return "—";
@@ -52,6 +75,34 @@ const formatMimeType = (value: string | null) => {
   return value.toUpperCase();
 };
 
+const getFileExtension = (fileName: string | null) => {
+  if (!fileName) return "";
+  const dotIndex = fileName.lastIndexOf(".");
+  if (dotIndex === -1) return "";
+  return fileName.slice(dotIndex + 1).toLowerCase();
+};
+
+const isPdfAttachment = (attachment: LotInvoiceAttachment) => {
+  const mimeType = (attachment.mimeType ?? "").toLowerCase();
+  const extension = getFileExtension(attachment.fileName);
+  return mimeType.includes("pdf") || extension === "pdf";
+};
+
+const isImageAttachment = (attachment: LotInvoiceAttachment) => {
+  const mimeType = (attachment.mimeType ?? "").toLowerCase();
+  const extension = getFileExtension(attachment.fileName);
+  return mimeType.startsWith("image/") || IMAGE_EXTENSIONS.has(extension);
+};
+
+const isAttachmentPreviewable = (attachment: LotInvoiceAttachment) =>
+  isPdfAttachment(attachment) || isImageAttachment(attachment);
+
+const getPreviewMimeType = (attachment: LotInvoiceAttachment) => {
+  if (isPdfAttachment(attachment)) return "application/pdf";
+  if (attachment.mimeType) return attachment.mimeType;
+  return "image/jpeg";
+};
+
 export function LotInvoiceAttachmentPanel({
   lotId,
   lotStatus,
@@ -60,9 +111,12 @@ export function LotInvoiceAttachmentPanel({
   initialError,
 }: LotInvoiceAttachmentPanelProps) {
   const [isPending, startTransition] = useTransition();
+  const [open, setOpen] = useState(false);
+  const [modalMode, setModalMode] = useState<"upload" | "preview">("upload");
   const [attachment, setAttachment] = useState<LotInvoiceAttachment | null>(
     initialAttachment
   );
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(initialError ?? null);
   const [notice, setNotice] = useState<string | null>(initialWarning ?? null);
   const router = useRouter();
@@ -84,13 +138,34 @@ export function LotInvoiceAttachmentPanel({
     }
   }, [initialError]);
 
-  const handleUploadSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const clearFileSelection = () => {
+    setSelectedFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
 
-    const form = event.currentTarget;
-    const formData = new FormData(form);
-    const fileValue = formData.get("attachment");
-    if (!(fileValue instanceof File) || fileValue.size <= 0) {
+  const openUploadModal = () => {
+    setModalMode("upload");
+    setOpen(true);
+    setError(null);
+    setNotice(null);
+  };
+
+  const openPreviewModal = () => {
+    setModalMode("preview");
+    setOpen(true);
+    setError(null);
+    setNotice(null);
+  };
+
+  const openAttachmentInNewTab = () => {
+    if (!attachment) return;
+    window.open(attachment.signedUrl, "_blank", "noopener,noreferrer");
+  };
+
+  const handleUpload = () => {
+    if (!selectedFile || selectedFile.size <= 0) {
       setError(
         "Ajoute un fichier facture (photo/PDF) avant de lancer l'upload."
       );
@@ -103,6 +178,9 @@ export function LotInvoiceAttachmentPanel({
     setNotice(null);
 
     startTransition(async () => {
+      const formData = new FormData();
+      formData.set("attachment", selectedFile);
+
       const result = await uploadLotInvoiceAttachment(lotId, formData);
       if (!result.success) {
         setError(result.error);
@@ -118,12 +196,8 @@ export function LotInvoiceAttachmentPanel({
             : "Pièce jointe facture ajoutée.")
       );
       setError(null);
-
-      form.reset();
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
-
+      setModalMode("preview");
+      clearFileSelection();
       router.refresh();
     });
   };
@@ -138,9 +212,7 @@ export function LotInvoiceAttachmentPanel({
     const confirmed = window.confirm(
       "Supprimer définitivement la pièce jointe facture de ce lot ?"
     );
-    if (!confirmed) {
-      return;
-    }
+    if (!confirmed) return;
 
     setError(null);
     setNotice(null);
@@ -156,29 +228,129 @@ export function LotInvoiceAttachmentPanel({
       setAttachment(null);
       setError(null);
       setNotice("Pièce jointe facture supprimée.");
+      clearFileSelection();
+      setModalMode("upload");
       router.refresh();
     });
   };
 
+  const statusLabel = lotStatus === "confirmed" ? "confirmé" : "brouillon";
+
   return (
-    <Card className="border-0 shadow-[0_18px_50px_rgba(15,23,42,0.16)] rounded-[28px] overflow-hidden bg-white/95">
-      <CardHeader className="py-3 px-5 border-b border-slate-100 bg-white/90">
-        <CardTitle className="text-xs font-semibold text-slate-500 uppercase tracking-[0.22em]">
-          Pièce jointe facture
-        </CardTitle>
-      </CardHeader>
+    <>
+      <div className="flex items-center justify-between gap-3 px-5 py-4">
+        <span className="text-slate-500 font-medium">Pièce jointe facture</span>
 
-      <CardContent className="p-5 space-y-4">
-        <p className="text-xs text-slate-500">
-          Formats autorisés: PDF, JPG/JPEG, PNG, WEBP, HEIC. Taille max: 15 Mo.
-          Upload et suppression disponibles en lot brouillon et confirmé
-          (statut actuel: <strong>{lotStatus === "confirmed" ? "confirmé" : "brouillon"}</strong>).
-        </p>
+        <div className="inline-flex items-center gap-2">
+          {attachment ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="h-8 w-8 rounded-full"
+              aria-label="Voir la pièce jointe facture"
+              onClick={openPreviewModal}
+            >
+              <Paperclip className="h-3.5 w-3.5" />
+            </Button>
+          ) : null}
 
-        <form onSubmit={handleUploadSubmit} className="space-y-3">
-          <div className="space-y-1">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-8 rounded-full px-3 text-xs"
+            onClick={openUploadModal}
+          >
+            <Upload className="mr-1 h-3.5 w-3.5" />
+            Uploader pièce jointe
+          </Button>
+        </div>
+      </div>
+
+      <Dialog
+        open={open}
+        onOpenChange={(nextOpen) => {
+          setOpen(nextOpen);
+          if (!nextOpen) {
+            clearFileSelection();
+            setError(null);
+            setNotice(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-3xl p-8">
+          <DialogHeader className="mb-1">
+            <DialogTitle className="text-xl font-semibold tracking-tight">
+              {modalMode === "preview"
+                ? "Pièce jointe facture"
+                : "Uploader une pièce jointe facture"}
+            </DialogTitle>
+            <DialogDescription className="text-sm text-slate-500">
+              Formats autorisés: PDF, JPG/JPEG, PNG, WEBP, HEIC. Taille max: 15 Mo.
+              Statut du lot: <strong>{statusLabel}</strong>.
+            </DialogDescription>
+          </DialogHeader>
+
+          {attachment ? (
+            <div className="space-y-4">
+              <div className="rounded-[20px] border border-slate-200 bg-slate-50/80 p-3">
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onDoubleClick={openAttachmentInNewTab}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      openAttachmentInNewTab();
+                    }
+                  }}
+                  className="group cursor-zoom-in"
+                >
+                  {isAttachmentPreviewable(attachment) ? (
+                    <object
+                      data={attachment.signedUrl}
+                      type={getPreviewMimeType(attachment)}
+                      className="h-[340px] w-full rounded-[16px] border border-slate-200 bg-white"
+                    >
+                      <div className="flex min-h-[160px] items-center justify-center rounded-[16px] border border-dashed border-slate-200 bg-white px-4 text-center text-xs text-slate-500">
+                        Aperçu indisponible. Double-cliquez pour ouvrir la pièce jointe.
+                      </div>
+                    </object>
+                  ) : (
+                    <div className="flex min-h-[200px] items-center justify-center rounded-[16px] border border-dashed border-slate-200 bg-white px-4 text-center text-xs text-slate-500">
+                      Prévisualisation indisponible pour ce type de fichier.
+                      Double-cliquez pour ouvrir la pièce jointe.
+                    </div>
+                  )}
+
+                  <p className="mt-2 text-[11px] text-slate-500">
+                    Double-cliquez sur la visualisation pour ouvrir la pièce jointe.
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-[18px] border border-slate-200 bg-white/90 p-4 text-xs text-slate-600">
+                <p className="inline-flex items-center gap-1.5 font-semibold text-slate-700">
+                  <Paperclip className="h-3.5 w-3.5" />
+                  {attachment.fileName}
+                </p>
+                <p className="mt-1">Type: {formatMimeType(attachment.mimeType)}</p>
+                <p>Taille: {formatFileSize(attachment.sizeBytes)}</p>
+                <p>
+                  Déposé le: {formatDateTime(attachment.updatedAt ?? attachment.createdAt)}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-[20px] border border-dashed border-slate-200 bg-slate-50/70 px-4 py-5 text-xs text-slate-500">
+              Aucune pièce jointe facture pour ce lot.
+            </div>
+          )}
+
+          <div className="space-y-2">
             <Label htmlFor={`lot-invoice-file-${lotId}`} className="text-xs">
-              Fichier facture
+              {attachment ? "Remplacer la pièce jointe" : "Fichier facture"}
             </Label>
             <Input
               id={`lot-invoice-file-${lotId}`}
@@ -188,96 +360,83 @@ export function LotInvoiceAttachmentPanel({
               accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,application/pdf,image/jpeg,image/png,image/webp,image/heic,image/heif"
               disabled={isPending}
               className="h-9 text-xs"
+              onChange={(event) => {
+                const file = event.currentTarget.files?.[0] ?? null;
+                setSelectedFile(file);
+                if (file) {
+                  setError(null);
+                }
+              }}
             />
+
+            {selectedFile ? (
+              <p className="text-[11px] text-slate-500">
+                Fichier sélectionné: {selectedFile.name}
+              </p>
+            ) : null}
           </div>
 
-          <div className="flex items-center justify-end">
+          {error ? <p className="text-xs text-red-600">{error}</p> : null}
+          {notice ? <p className="text-xs text-emerald-700">{notice}</p> : null}
+
+          <DialogFooter className="mt-2 flex flex-wrap items-center justify-end gap-2">
+            {attachment ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-9 rounded-full px-4 text-xs"
+                asChild
+              >
+                <a href={attachment.signedUrl} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="mr-1 h-3.5 w-3.5" />
+                  Ouvrir
+                </a>
+              </Button>
+            ) : null}
+
+            {attachment ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={isPending}
+                onClick={handleDelete}
+                className="h-9 rounded-full border-slate-200 px-4 text-xs text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+              >
+                {isPending ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <>
+                    <Trash2 className="mr-1 h-3.5 w-3.5" />
+                    Supprimer
+                  </>
+                )}
+              </Button>
+            ) : null}
+
             <Button
-              type="submit"
+              type="button"
               size="sm"
               disabled={isPending}
+              onClick={handleUpload}
               className="h-9 rounded-full px-4 text-xs"
             >
               {isPending ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Upload...
+                  <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                  Envoi...
                 </>
               ) : (
                 <>
-                  <Upload className="mr-2 h-4 w-4" />
-                  Envoyer facture
+                  <Upload className="mr-1 h-3.5 w-3.5" />
+                  {attachment ? "Remplacer" : "Envoyer"}
                 </>
               )}
             </Button>
-          </div>
-        </form>
-
-        {attachment ? (
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div className="space-y-1">
-                <p className="text-xs font-semibold text-slate-700 inline-flex items-center gap-2">
-                  <Paperclip className="h-3.5 w-3.5" />
-                  {attachment.fileName}
-                </p>
-                <p className="text-xs text-slate-500">
-                  Type: {formatMimeType(attachment.mimeType)}
-                </p>
-                <p className="text-xs text-slate-500">
-                  Taille: {formatFileSize(attachment.sizeBytes)}
-                </p>
-                <p className="text-xs text-slate-500">
-                  Déposé le: {formatDateTime(attachment.updatedAt ?? attachment.createdAt)}
-                </p>
-              </div>
-
-              <div className="inline-flex items-center gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  className="h-8 rounded-full px-3 text-xs"
-                  asChild
-                >
-                  <a
-                    href={attachment.signedUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    Ouvrir
-                  </a>
-                </Button>
-
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  disabled={isPending}
-                  onClick={handleDelete}
-                  className="h-8 rounded-full border-slate-200 px-3 text-xs text-slate-700 hover:bg-slate-100 hover:text-slate-900"
-                >
-                  {isPending ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <>
-                      <Trash2 className="mr-1 h-3.5 w-3.5" />
-                      Supprimer
-                    </>
-                  )}
-                </Button>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <p className="text-xs text-slate-500 rounded-xl border border-dashed border-slate-200 px-3 py-2">
-            Aucune pièce jointe facture pour ce lot.
-          </p>
-        )}
-
-        {error && <p className="text-xs text-red-600">{error}</p>}
-        {notice && <p className="text-xs text-emerald-700">{notice}</p>}
-      </CardContent>
-    </Card>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
