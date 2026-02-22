@@ -25,6 +25,7 @@ import {
   TrendDualChart,
   type SetPieceMetric,
 } from "@/components/dashboard/DashboardHubCharts";
+import { Button } from "@/components/ui/button";
 
 const euro = new Intl.NumberFormat("fr-FR", {
   style: "currency",
@@ -274,7 +275,7 @@ function FilterTimeline({
   onSelect: (preset: Exclude<DashboardPreset, "custom">) => void;
 }) {
   return (
-    <div className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-slate-200 bg-slate-50 p-1">
+    <div className="app-segmented shrink-0 whitespace-nowrap">
       {FILTER_TIMELINE.map((item) => {
         const isActive = selectedPreset === item.preset;
         return (
@@ -283,10 +284,10 @@ function FilterTimeline({
             type="button"
             onClick={() => onSelect(item.preset)}
             className={cn(
-              "inline-flex h-8 shrink-0 items-center rounded-full px-3 text-[11px] font-semibold transition-colors",
+              "app-segmented-item h-8 shrink-0 text-[11px] font-semibold",
               isActive
-                ? "bg-slate-900 text-white"
-                : "text-slate-600 hover:bg-white hover:text-slate-900"
+                ? "app-segmented-item--active"
+                : "app-segmented-item--inactive"
             )}
           >
             {item.label}
@@ -602,7 +603,7 @@ function SetPieceModalBody({
   return (
     <div className="space-y-4">
       <div className="sticky top-0 z-10 -mx-5 border-b border-slate-100 bg-white px-5 pb-3 pt-1 md:-mx-6 md:px-6">
-        <div className="inline-flex rounded-full border border-slate-200 bg-white p-1">
+        <div className="app-segmented bg-white">
           {([
             ["grouped", "Graphique"],
             ["table", "Tableau"],
@@ -613,10 +614,10 @@ function SetPieceModalBody({
               type="button"
               onClick={() => setActiveView(view)}
               className={cn(
-                "rounded-full px-3 py-1 text-xs font-medium",
+                "app-segmented-item",
                 activeView === view
-                  ? "bg-slate-900 text-white"
-                  : "text-slate-600 hover:bg-slate-50"
+                  ? "app-segmented-item--active"
+                  : "app-segmented-item--inactive"
               )}
             >
               {label}
@@ -633,7 +634,7 @@ function SetPieceModalBody({
               <select
                 value={metric}
                 onChange={(event) => setMetric(event.target.value as SetPieceMetric)}
-                className="h-9 w-full rounded-full border border-slate-200 bg-white px-3 text-xs text-slate-700"
+                className="app-control"
               >
                 <option value="revenue">CA net</option>
                 <option value="margin">Marge</option>
@@ -646,7 +647,7 @@ function SetPieceModalBody({
               <select
                 value={bucket}
                 onChange={(event) => setBucket(event.target.value as "week" | "month")}
-                className="h-9 w-full rounded-full border border-slate-200 bg-white px-3 text-xs text-slate-700"
+                className="app-control"
               >
                 <option value="week">Semaine</option>
                 <option value="month">Mois</option>
@@ -655,7 +656,7 @@ function SetPieceModalBody({
 
             <Link
               href={toSalesHref(dashboard.filters)}
-              className="inline-flex h-9 items-center justify-center rounded-full border border-slate-200 px-4 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50"
+              className="inline-flex h-9 items-center justify-center rounded-full border border-border px-4 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50"
             >
               Ouvrir ventes
             </Link>
@@ -1164,7 +1165,7 @@ export function DashboardExecutiveView({ dashboard }: { dashboard: DashboardExec
 
   return (
     <main className="space-y-6">
-      <header className="rounded-[30px] border border-slate-200 bg-gradient-to-br from-white via-slate-50 to-sky-50 px-5 py-3 shadow-[0_20px_48px_rgba(15,23,42,0.1)] md:px-6">
+      <header className="rounded-[30px] border border-border bg-gradient-to-br from-white via-slate-50 to-sky-50 px-5 py-3 shadow-[0_20px_48px_rgba(15,23,42,0.1)] md:px-6">
         <div className="grid items-center gap-3 sm:grid-cols-[auto_minmax(0,1fr)_auto]">
           <div className="min-w-0">
             <h1 className="whitespace-nowrap text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
@@ -1174,17 +1175,17 @@ export function DashboardExecutiveView({ dashboard }: { dashboard: DashboardExec
 
           <div className="min-w-0">
             {isDesktopFilterOpen ? (
-              <div className="flex h-10 w-full max-w-full min-w-0 flex-nowrap items-center gap-2 overflow-x-auto whitespace-nowrap rounded-2xl border border-slate-200 bg-white px-2.5 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
+              <div className="app-filter-panel flex h-10 w-full max-w-full min-w-0 flex-nowrap items-center gap-2 overflow-x-auto whitespace-nowrap px-2.5 py-0">
                 <FilterTimeline selectedPreset={draftPreset} onSelect={applyPresetInstant} />
 
                 <button
                   type="button"
                   onClick={() => setDraftPreset("custom")}
                   className={cn(
-                    "inline-flex h-8 shrink-0 items-center rounded-full border px-3 text-[11px] font-medium",
+                    "app-segmented-item h-8 shrink-0",
                     draftPreset === "custom"
-                      ? "border-slate-900 bg-slate-900 text-white"
-                      : "border-slate-200 bg-white text-slate-700"
+                      ? "app-segmented-item--active"
+                      : "app-segmented-item--inactive border border-border bg-white"
                   )}
                 >
                   Personnalise
@@ -1197,7 +1198,7 @@ export function DashboardExecutiveView({ dashboard }: { dashboard: DashboardExec
                     value={draftFrom}
                     onChange={(event) => setDraftFrom(event.target.value)}
                     disabled={draftPreset !== "custom"}
-                    className="h-8 w-[132px] rounded-full border border-slate-200 bg-white px-3 text-[11px] text-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="app-control h-8 w-[132px] px-3 text-[11px] disabled:cursor-not-allowed disabled:opacity-60"
                   />
                 </label>
 
@@ -1208,39 +1209,38 @@ export function DashboardExecutiveView({ dashboard }: { dashboard: DashboardExec
                     value={draftTo}
                     onChange={(event) => setDraftTo(event.target.value)}
                     disabled={draftPreset !== "custom"}
-                    className="h-8 w-[132px] rounded-full border border-slate-200 bg-white px-3 text-[11px] text-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="app-control h-8 w-[132px] px-3 text-[11px] disabled:cursor-not-allowed disabled:opacity-60"
                   />
                 </label>
 
-                <button
+                <Button
                   type="button"
+                  size="sm"
                   onClick={applyFilters}
                   disabled={draftPreset !== "custom"}
-                  className="inline-flex h-8 shrink-0 items-center justify-center rounded-full bg-slate-900 px-4 text-[11px] font-semibold text-white transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+                  className="shrink-0 text-[11px] font-semibold"
                 >
                   Appliquer
-                </button>
+                </Button>
 
-                <button
+                <Button
                   type="button"
+                  size="sm"
+                  variant="outline"
                   onClick={() => {
                     router.push("/?preset=total");
                     setIsDesktopFilterOpen(false);
                   }}
-                  className="inline-flex h-8 shrink-0 items-center justify-center rounded-full border border-slate-200 px-3 text-[11px] font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                  className="shrink-0 text-[11px]"
                 >
                   Reinitialiser
-                </button>
+                </Button>
               </div>
             ) : null}
           </div>
 
           <div className="flex justify-end sm:justify-self-end">
-            <button
-              type="button"
-              onClick={openDesktopFilterPanel}
-              className="inline-flex h-10 items-center gap-2 rounded-full border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-[0_8px_24px_rgba(15,23,42,0.08)] transition-colors hover:bg-slate-50"
-            >
+            <button type="button" onClick={openDesktopFilterPanel} className="app-filter-trigger h-10 text-sm">
               <Filter className="h-4 w-4" />
               Filtrer
             </button>

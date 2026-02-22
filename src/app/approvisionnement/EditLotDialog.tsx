@@ -112,7 +112,7 @@ export function EditLotDialog({ lot, variant = "table" }: EditLotDialogProps) {
       size="icon"
       className={
         variant === "card"
-          ? "h-9 w-9 rounded-full border border-slate-200 bg-white shadow-[0_10px_25px_rgba(15,23,42,0.18)] text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition"
+          ? "h-9 w-9 rounded-full text-slate-600"
           : "h-8 w-8 rounded-full text-slate-500 hover:text-slate-900 hover:bg-slate-100"
       }
     >
@@ -125,7 +125,7 @@ export function EditLotDialog({ lot, variant = "table" }: EditLotDialogProps) {
       {/* Bouton crayon (style dépend du variant) */}
       <DialogTrigger asChild>{triggerButton}</DialogTrigger>
 
-      <DialogContent className="max-w-3xl rounded-[32px] bg-white p-8 sm:p-10 shadow-[0_28px_80px_rgba(15,23,42,0.45)]">
+      <DialogContent className="max-w-3xl p-8 sm:p-10">
         <DialogHeader className="mb-6">
           <DialogTitle className="text-xl font-semibold tracking-tight">
             Modifier le lot
@@ -211,7 +211,7 @@ export function EditLotDialog({ lot, variant = "table" }: EditLotDialogProps) {
                 defaultValue={
                   lot.status === "confirmed" ? "confirmed" : "draft"
                 }
-                className="h-10 w-full rounded-full border border-slate-200 bg-white px-3 text-sm shadow-sm"
+                className="app-control app-control--md"
               >
                 <option value="draft">
                   Brouillon (ne compte pas encore dans le stock)
@@ -245,7 +245,7 @@ export function EditLotDialog({ lot, variant = "table" }: EditLotDialogProps) {
                 type="button"
                 variant="outline"
                 disabled={isPending}
-                className="h-10 rounded-full px-6 bg-white border-slate-200 text-sm shadow-[0_8px_20px_rgba(15,23,42,0.08)]"
+                className="h-10 px-6 text-sm"
               >
                 Annuler
               </Button>
@@ -254,7 +254,7 @@ export function EditLotDialog({ lot, variant = "table" }: EditLotDialogProps) {
             <Button
               type="submit"
               disabled={isPending}
-              className="h-10 rounded-full px-8 bg-slate-900 text-white text-sm font-medium shadow-[0_12px_26px_rgba(15,23,42,0.45)] hover:bg-slate-900/90"
+              className="h-10 px-8 text-sm font-medium"
             >
               {isPending ? (
                 <>

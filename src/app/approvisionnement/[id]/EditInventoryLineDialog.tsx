@@ -98,7 +98,7 @@ export function EditInventoryLineDialog({
         </Button>
       </DialogTrigger>
 
-      <DialogContent className="max-w-lg rounded-[32px] bg-white p-8 sm:p-10 shadow-[0_28px_80px_rgba(15,23,42,0.45)]">
+      <DialogContent className="max-w-lg p-8 sm:p-10">
         <DialogHeader className="mb-6">
           <DialogTitle className="text-xl font-semibold tracking-tight">
             Modifier la pièce du lot
@@ -147,12 +147,7 @@ export function EditInventoryLineDialog({
 
           <DialogFooter className="mt-6 flex flex-row items-center justify-end gap-3">
             <DialogClose asChild>
-              <Button
-                type="button"
-                variant="outline"
-                disabled={isPending}
-                className="h-10 rounded-full px-6 bg-white border-slate-200 text-sm shadow-[0_8px_20px_rgba(15,23,42,0.08)]"
-              >
+              <Button type="button" variant="outline" disabled={isPending} className="h-10 px-6 text-sm">
                 Annuler
               </Button>
             </DialogClose>
@@ -160,7 +155,7 @@ export function EditInventoryLineDialog({
             <Button
               type="submit"
               disabled={isPending}
-              className="h-10 rounded-full px-8 bg-slate-900 text-white text-sm font-medium shadow-[0_12px_26px_rgba(15,23,42,0.45)] hover:bg-slate-900/90"
+              className="h-10 px-8 text-sm font-medium"
             >
               {isPending ? (
                 <>

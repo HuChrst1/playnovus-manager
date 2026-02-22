@@ -158,7 +158,7 @@ export function LotCsvImportDialog({ lotId, isDraft }: LotCsvImportDialogProps) 
         </Button>
       </DialogTrigger>
 
-      <DialogContent className="max-w-4xl rounded-[28px] bg-white p-8 shadow-[0_28px_80px_rgba(15,23,42,0.45)]">
+      <DialogContent className="max-w-4xl p-8">
         <DialogHeader className="mb-4">
           <DialogTitle className="text-xl font-semibold tracking-tight">
             Import CSV des pièces du lot
@@ -169,14 +169,14 @@ export function LotCsvImportDialog({ lotId, isDraft }: LotCsvImportDialogProps) 
           </DialogDescription>
         </DialogHeader>
 
-        <div className="mb-5 inline-flex rounded-full border border-slate-200 bg-slate-50 p-1">
+        <div className="app-segmented mb-5">
           <button
             type="button"
             onClick={() => setMode("file")}
             className={
               mode === "file"
-                ? "h-8 rounded-full bg-white px-4 text-xs font-medium text-slate-900 shadow-sm"
-                : "h-8 rounded-full px-4 text-xs font-medium text-slate-500"
+                ? "app-segmented-item app-segmented-item--active h-8 px-4 text-xs font-medium"
+                : "app-segmented-item app-segmented-item--inactive h-8 px-4 text-xs font-medium"
             }
           >
             Fichier CSV
@@ -186,8 +186,8 @@ export function LotCsvImportDialog({ lotId, isDraft }: LotCsvImportDialogProps) 
             onClick={() => setMode("paste")}
             className={
               mode === "paste"
-                ? "h-8 rounded-full bg-white px-4 text-xs font-medium text-slate-900 shadow-sm"
-                : "h-8 rounded-full px-4 text-xs font-medium text-slate-500"
+                ? "app-segmented-item app-segmented-item--active h-8 px-4 text-xs font-medium"
+                : "app-segmented-item app-segmented-item--inactive h-8 px-4 text-xs font-medium"
             }
           >
             Coller CSV

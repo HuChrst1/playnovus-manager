@@ -949,21 +949,11 @@ export function NewSaleForm({
   }
 
   const isSetSale = saleType === "SET";
-  // Classe utilitaire commune : pas de contour noir, mais un halo (shadow) doux comme sur Approvisionnement
-  const fieldClassName =
-    "border border-slate-200 bg-white shadow-[0_8px_20px_rgba(15,23,42,0.08)] focus-visible:outline-none focus-visible:ring-0";
-
   const errorRing = "ring-1 ring-rose-300";
   const inputClassName = (hasError?: boolean) =>
-    cn("h-10 rounded-full px-4", fieldClassName, hasError && errorRing);
-  const selectClassName = cn(
-    "h-10 w-full rounded-full px-4 text-sm appearance-none",
-    fieldClassName
-  );
-  const textareaClassName = cn(
-    "rounded-2xl px-4 py-3",
-    fieldClassName
-  );
+    cn("app-control app-control--md", hasError && errorRing);
+  const selectClassName = cn("app-control app-control--md w-full appearance-none");
+  const textareaClassName = cn("app-control app-control--textarea");
 
   const euro = new Intl.NumberFormat("fr-FR", {
     style: "currency",
@@ -1100,17 +1090,17 @@ export function NewSaleForm({
           Type de vente
         </p>
 
-        <div className="inline-flex rounded-full bg-muted/70 p-1 shadow-[0_10px_25px_rgba(15,23,42,0.10)]">
+        <div className="app-segmented bg-muted/70">
           <button
             type="button"
             aria-pressed={saleType === "SET"}
             onClick={() => setSaleType("SET")}
             disabled={isSubmitting}
             className={cn(
-              "px-4 py-2 rounded-full text-xs font-semibold transition-all",
+              "app-segmented-item px-4 py-2 text-xs font-semibold",
               saleType === "SET"
-                ? "bg-white text-slate-900 shadow-[0_12px_26px_rgba(15,23,42,0.16)] ring-1 ring-slate-900/5 -translate-y-px"
-                : "text-slate-600 hover:text-slate-900 hover:bg-white/70 opacity-80"
+                ? "app-segmented-item--active"
+                : "app-segmented-item--inactive opacity-80"
             )}
           >
             Vente de set
@@ -1122,10 +1112,10 @@ export function NewSaleForm({
             onClick={() => setSaleType("PIECE")}
             disabled={isSubmitting}
             className={cn(
-              "px-4 py-2 rounded-full text-xs font-semibold transition-all",
+              "app-segmented-item px-4 py-2 text-xs font-semibold",
               saleType === "PIECE"
-                ? "bg-white text-slate-900 shadow-[0_12px_26px_rgba(15,23,42,0.16)] ring-1 ring-slate-900/5 -translate-y-px"
-                : "text-slate-600 hover:text-slate-900 hover:bg-white/70 opacity-80"
+                ? "app-segmented-item--active"
+                : "app-segmented-item--inactive opacity-80"
             )}
           >
             Vente de pièces
@@ -1386,7 +1376,7 @@ export function NewSaleForm({
           type="submit"
           disabled={isSubmitting || !canSubmit}
           className={cn(
-            "inline-flex items-center h-10 rounded-full px-8 bg-slate-900 text-white text-sm font-medium shadow-[0_12px_26px_rgba(15,23,42,0.45)] hover:bg-slate-900/90 focus-visible:outline-none focus-visible:ring-0 disabled:opacity-60 disabled:cursor-not-allowed",
+            "inline-flex items-center h-10 px-8 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60",
             isSubmitting && "opacity-80 cursor-not-allowed"
           )}
         >

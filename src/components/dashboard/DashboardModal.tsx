@@ -32,9 +32,7 @@ export function DashboardModal({
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay
           className={cn(
-            "fixed inset-0 z-[90] bg-black/50",
-            "data-[state=open]:animate-in data-[state=closed]:animate-out",
-            "data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0",
+            "app-dialog-overlay z-[90]",
             "data-[state=open]:duration-150 data-[state=closed]:duration-150",
             "data-[state=open]:ease-out data-[state=closed]:ease-out"
           )}
@@ -43,7 +41,7 @@ export function DashboardModal({
           className={cn(
             "fixed left-1/2 top-1/2 z-[91] w-[min(96vw,1100px)]",
             "max-h-[88vh] -translate-x-1/2 -translate-y-1/2 overflow-hidden",
-            "rounded-[28px] border border-slate-200 bg-white shadow-[0_26px_60px_rgba(15,23,42,0.28)]",
+            "app-dialog-surface",
             "data-[state=open]:animate-in data-[state=closed]:animate-out",
             "data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0",
             "data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95",
@@ -64,7 +62,7 @@ export function DashboardModal({
               ) : null}
             </div>
             <DialogPrimitive.Close
-              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700"
+              className="app-dialog-close"
               aria-label="Fermer"
             >
               <X className="h-4 w-4" />

@@ -439,7 +439,7 @@ const setsForDisplay: SetRow[] = setsWithCompletion;
                 name="q"
                 placeholder="Rechercher par nom ou SetID..."
                 defaultValue={searchQuery}
-                className="w-full rounded-full shadow-[0_12px_30px_rgba(15,23,42,0.12)]"
+                className="w-full"
               />
 
               <input type="hidden" name="page" value="1" />
@@ -487,7 +487,7 @@ const setsForDisplay: SetRow[] = setsWithCompletion;
               {/* Bouton Filtres : c'est un <label>, pas un <Button>, pour garder le toggle checkbox */}
               <label
                 htmlFor="filters-toggle"
-                className="inline-flex h-9 items-center rounded-full border border-slate-200 bg-white px-4 text-xs font-medium text-slate-800 shadow-[0_5px_18px_rgba(15,23,42,0.18)] cursor-pointer hover:bg-slate-50 hover:border-slate-300 transition-colors"
+                className="app-filter-trigger"
               >
                 Filtres
               </label>
@@ -777,8 +777,7 @@ const setsForDisplay: SetRow[] = setsWithCompletion;
                   <select
                     name="prod"
                     defaultValue={productionFilter || ""}
-                    className="h-9 w-full rounded-full border border-border bg-white/90 px-3
-                              text-[11px] text-muted-foreground shadow-[0_8px_20px_rgba(15,23,42,0.08)]"
+                    className="app-control text-[11px] text-muted-foreground"
                   >
                     <option value="">Toutes périodes</option>
                     <option value="active">En production</option>
@@ -797,8 +796,7 @@ const setsForDisplay: SetRow[] = setsWithCompletion;
                     name="theme"
                     placeholder="Rechercher par thème..."
                     defaultValue={themeFilter}
-                    className="h-9 w-full rounded-full border border-border bg-white/90 px-3
-                              text-[11px] shadow-[0_8px_20px_rgba(15,23,42,0.08)]"
+                    className="h-9 w-full text-[11px]"
                   />
                 </div>
               </div>

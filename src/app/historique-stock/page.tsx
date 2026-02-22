@@ -6,7 +6,7 @@ import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DashboardStatCard } from "@/components/dashboard/DashboardStatCard";
 import { PageHeader } from "@/components/ui/page-header";
-import { FilterBar } from "@/components/ui/filter-bar";
+import { FilterBar, FilterLabel } from "@/components/ui/filter-bar";
 import { TableCard, TableOverflow } from "@/components/ui/data-table";
 
 export const dynamic = "force-dynamic";
@@ -149,20 +149,20 @@ export default async function StockHistoryPage({
   const renderDirectionBadge = (dir: JournalRow["direction"]) => {
     if (dir === "IN") {
       return (
-        <span className="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-medium text-emerald-700">
+        <span className="app-status-pill app-status-pill--good">
           Entrée
         </span>
       );
     }
     if (dir === "OUT") {
       return (
-        <span className="inline-flex rounded-full bg-red-50 px-3 py-1 text-[11px] font-medium text-red-700">
+        <span className="app-status-pill app-status-pill--bad">
           Sortie
         </span>
       );
     }
     return (
-      <span className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-[11px] font-medium text-slate-700">
+      <span className="app-status-pill bg-slate-100 text-slate-700">
         Ajustement
       </span>
     );
@@ -219,56 +219,52 @@ export default async function StockHistoryPage({
       <FilterBar>
         <form
           method="GET"
-          className="grid gap-3 md:grids-cols-5 items-end"
+          className="grid gap-3 md:grid-cols-5 items-end"
         >
           {/* Date de / à */}
           <div className="space-y-1">
-            <label className="text-xs font-medium text-slate-500">
-              Du
-            </label>
+            <FilterLabel htmlFor="history-from">Du</FilterLabel>
             <input
+              id="history-from"
               type="date"
               name="from"
               defaultValue={from}
-              className="w-full rounded-full border border-border bg-white px-3 py-2 text-xs shadow-[0_6px_14px_rgba(15,23,42,0.08)] outline-none focus:border-primary"
+              className="app-control"
             />
           </div>
 
           <div className="space-y-1">
-            <label className="text-xs font-medium text-slate-500">
-              Au
-            </label>
+            <FilterLabel htmlFor="history-to">Au</FilterLabel>
             <input
+              id="history-to"
               type="date"
               name="to"
               defaultValue={to}
-              className="w-full rounded-full border border-border bg-white px-3 py-2 text-xs shadow-[0_6px_14px_rgba(15,23,42,0.08)] outline-none focus:border-primary"
+              className="app-control"
             />
           </div>
 
           {/* Ref pièce */}
           <div className="space-y-1">
-            <label className="text-xs font-medium text-slate-500">
-              Réf. pièce
-            </label>
+            <FilterLabel htmlFor="history-piece">Réf. pièce</FilterLabel>
             <input
+              id="history-piece"
               type="text"
               name="piece"
               placeholder="ex : 30000000"
               defaultValue={piece}
-              className="w-full rounded-full border border-border bg-white px-3 py-2 text-xs shadow-[0_6px_14px_rgba(15,23,42,0.08)] outline-none focus:border-primary"
+              className="app-control"
             />
           </div>
 
           {/* Sens */}
           <div className="space-y-1">
-            <label className="text-xs font-medium text-slate-500">
-              Sens
-            </label>
+            <FilterLabel htmlFor="history-direction">Sens</FilterLabel>
             <select
+              id="history-direction"
               name="direction"
               defaultValue={direction}
-              className="h-9 w-full rounded-full border border-slate-200 bg-white px-3 text-xs shadow-sm"
+              className="app-control"
             >
               <option value="ALL">Tous</option>
               <option value="IN">Entrées</option>
@@ -279,13 +275,12 @@ export default async function StockHistoryPage({
 
           {/* Type de source */}
           <div className="space-y-1">
-            <label className="text-xs font-medium text-slate-500">
-              Type
-            </label>
+            <FilterLabel htmlFor="history-source">Type</FilterLabel>
             <select
+              id="history-source"
               name="source_type"
               defaultValue={sourceType}
-              className="h-9 w-full rounded-full border border-slate-200 bg-white px-3 text-xs shadow-sm"
+              className="app-control"
             >
               <option value="ALL">Tous</option>
               <option value="PURCHASE">Achats (lots)</option>
@@ -296,10 +291,7 @@ export default async function StockHistoryPage({
 
           {/* Bouton submit : sur mobile, il passera à la ligne */}
           <div className="md:col-span-5 flex justify-end mt-2">
-            <Button
-              type="submit"
-              className="h-9 rounded-full px-5 bg-slate-900 text-white text-xs font-medium shadow-[0_10px_25px_rgba(15,23,42,0.35)] hover:bg-slate-900/90"
-            >
+            <Button type="submit">
               Filtrer
             </Button>
           </div>

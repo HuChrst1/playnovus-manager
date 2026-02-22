@@ -959,13 +959,35 @@ Definition of done:
 
 ### F5.2 - Harmoniser styles globaux et tokens
 
-Statut: `A FAIRE`
+Statut: `FAIT`
 Objectif: coherence visuelle globale.
-Fichiers cibles:
-- `src/app/globals.css`
-- composants partages
+Livrables realises:
+- harmonisation des tokens globaux et classes utilitaires transverses dans `src/app/globals.css`:
+  - controles formulaire (`app-control`, `app-control--md`, `app-control--textarea`, `app-control-label`)
+  - filtres (`app-filter-trigger`, `app-filter-panel`, `app-filter-actions`)
+  - segments/onglets (`app-segmented`, `app-segmented-item`, etats actif/inactif)
+  - dialogs (`app-dialog-overlay`, `app-dialog-surface`, `app-dialog-close`)
+  - ombres et surfaces standardisees (suppression des bordures noires)
+- composants UI shared alignes visuellement:
+  - `button.tsx`, `badge.tsx`, `input.tsx`, `textarea.tsx`
+  - `dialog.tsx`, `sheet.tsx`, `alert-dialog.tsx`
+  - `filter-bar.tsx`, `data-table.tsx`, `kpi-card.tsx`
+- reduction des styles ad hoc repetes sur les pages/routes et modales consommatrices:
+  - filtres date/actions harmonises (`/ventes`, `/approvisionnement`, `/stock`, `/historique-stock`)
+  - segments/onglets harmonises (`Report`, `Dashboard`, `NewSaleForm`, `LotCsvImportDialog`)
+  - surfaces modales harmonisees (Catalogue, Ventes, Approvisionnement)
+- invariants preserves:
+  - aucun changement de logique metier (query params, tri, pagination, actions, navigation)
+  - aucune migration SQL ajoutee
+  - aucune ecriture DB distante
 Definition of done:
 - boutons, badges, onglets, tableaux et dialogs alignes entre pages
+- non-regression technique et metier validee en local:
+  - `npm ci`
+  - `npm run lint`
+  - `npm run typecheck`
+  - `npm run build`
+  - `npm run test:f2.0`
 
 ### F5.3 - Verification responsive des routes cles
 

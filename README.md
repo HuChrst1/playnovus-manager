@@ -59,10 +59,16 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon-key>
 SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
 ```
 
-3. Lancer le serveur de dev:
+3. Lancer le serveur de dev (mode stable par defaut: webpack):
 
 ```bash
 npm run dev
+```
+
+Pour diagnostiquer un probleme specifique Turbopack:
+
+```bash
+npm run dev:turbo
 ```
 
 4. Ouvrir `http://localhost:3000`.
@@ -82,7 +88,9 @@ npm run dev
 ## Commandes utiles
 
 ```bash
-npm run dev      # développement
+npm run dev          # developpement stable (webpack, recommande)
+npm run dev:webpack  # alias explicite webpack
+npm run dev:turbo    # Turbopack (debug/diagnostic)
 npm run build    # build de production
 npm run start    # exécution du build
 npm run lint     # lint ESLint (bloquant)

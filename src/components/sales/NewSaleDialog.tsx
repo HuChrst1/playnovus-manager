@@ -56,14 +56,14 @@ export function NewSaleDialog({ openFromIntent = false }: NewSaleDialogProps) {
     <Dialog open={open} onOpenChange={handleOpenChange}>
       {/* Bouton dans la barre d’actions */}
       <DialogTrigger asChild>
-        <Button className="h-9 rounded-full px-5 bg-slate-900 text-white text-sm font-medium shadow-[0_10px_25px_rgba(15,23,42,0.35)] hover:bg-slate-900/90 gap-2">
+        <Button className="h-9 px-5 text-sm font-medium gap-2">
           <Plus className="h-4 w-4" />
           Nouvelle vente
         </Button>
       </DialogTrigger>
 
       {/* Fenêtre modale */}
-      <DialogContent className="max-w-4xl sm:max-w-3xl rounded-[32px] bg-white p-8 sm:p-10 shadow-[0_28px_80px_rgba(15,23,42,0.45)]">
+      <DialogContent className="max-w-4xl sm:max-w-3xl p-8 sm:p-10">
         <DialogHeader className="mb-6">
           <DialogTitle className="text-xl font-semibold tracking-tight">
             Nouvelle vente

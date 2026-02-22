@@ -19,8 +19,8 @@ const AlertDialogOverlay = React.forwardRef<
   <AlertDialogPrimitive.Overlay
     ref={ref}
     className={cn(
-        "fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px] data-[state=open]:animate-in data-[state=closed]:animate-out",
-        className
+      "app-dialog-overlay z-50",
+      className
     )}
     {...props}
   />
@@ -36,7 +36,7 @@ const AlertDialogContent = React.forwardRef<
     <AlertDialogPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed left-[50%] top-[50%] z-50 w-full max-w-lg translate-x-[-50%] translate-y-[-50%] rounded-xl bg-white p-6 shadow-lg",
+        "app-dialog-surface fixed left-[50%] top-[50%] z-50 w-full max-w-lg translate-x-[-50%] translate-y-[-50%] p-6",
         className
       )}
       {...props}
@@ -94,7 +94,7 @@ const AlertDialogAction = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Action> & {
     variant?: "default" | "destructive" | "outline" | "secondary" | "ghost" | "link";
   }
->(({ className, variant = "link", ...props }, ref) => (
+>(({ className, variant = "default", ...props }, ref) => (
   <AlertDialogPrimitive.Action
     ref={ref}
     className={cn(buttonVariants({ variant }), className)}
@@ -108,7 +108,7 @@ const AlertDialogCancel = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Cancel> & {
     variant?: "default" | "destructive" | "outline" | "secondary" | "ghost" | "link";
   }
->(({ className, variant = "link", ...props }, ref) => (
+>(({ className, variant = "outline", ...props }, ref) => (
   <AlertDialogPrimitive.Cancel
     ref={ref}
     className={cn(buttonVariants({ variant }), className)}

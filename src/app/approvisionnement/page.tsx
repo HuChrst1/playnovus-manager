@@ -7,7 +7,12 @@ import { ClickableRow } from "./ClickableRow";
 import Link from "next/link";
 import { SalesStatCard } from "@/components/sales/SalesStatCard";
 import { PageHeader } from "@/components/ui/page-header";
-import { FilterPopover } from "@/components/ui/filter-bar";
+import { Button } from "@/components/ui/button";
+import {
+  FilterActions,
+  FilterLabel,
+  FilterPopover,
+} from "@/components/ui/filter-bar";
 import {
   SortableTableHeader,
   TableCard,
@@ -286,22 +291,24 @@ export default async function ApprovisionnementPage({
               <form method="GET" className="space-y-3">
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
-                    <label className="text-[11px] font-medium text-slate-500">Du</label>
+                    <FilterLabel htmlFor="lots-from">Du</FilterLabel>
                     <input
+                      id="lots-from"
                       type="date"
                       name="from"
                       defaultValue={normalized.from ?? ""}
-                      className="h-9 w-full rounded-full border border-slate-200 bg-white px-3 text-xs shadow-sm outline-none focus:border-primary"
+                      className="app-control"
                     />
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[11px] font-medium text-slate-500">Au</label>
+                    <FilterLabel htmlFor="lots-to">Au</FilterLabel>
                     <input
+                      id="lots-to"
                       type="date"
                       name="to"
                       defaultValue={normalized.to ?? ""}
-                      className="h-9 w-full rounded-full border border-slate-200 bg-white px-3 text-xs shadow-sm outline-none focus:border-primary"
+                      className="app-control"
                     />
                   </div>
                 </div>
@@ -309,20 +316,14 @@ export default async function ApprovisionnementPage({
                 <input type="hidden" name="sort" value={normalized.sort} />
                 <input type="hidden" name="dir" value={normalized.dir} />
 
-                <div className="flex items-center justify-end gap-2">
-                  <Link
-                    href={resetDateHref}
-                    className="inline-flex h-8 items-center rounded-full border border-slate-200 px-3 text-[11px] font-medium text-slate-600 hover:bg-slate-50"
-                  >
-                    Réinitialiser
-                  </Link>
-                  <button
-                    type="submit"
-                    className="inline-flex h-8 items-center rounded-full bg-slate-900 px-3 text-[11px] font-medium text-white hover:bg-slate-800"
-                  >
+                <FilterActions>
+                  <Button variant="outline" size="sm" asChild>
+                    <Link href={resetDateHref}>Réinitialiser</Link>
+                  </Button>
+                  <Button type="submit" size="sm">
                     Appliquer
-                  </button>
-                </div>
+                  </Button>
+                </FilterActions>
               </form>
             </FilterPopover>
 

@@ -64,15 +64,15 @@ export function EditSetDialog({ set }: { set: SetData }) {
         <Button
           variant="outline"
           size="sm"
-          className="gap-2 border-zinc-300 text-zinc-700 hover:bg-zinc-50"
+          className="gap-2"
         >
           <Edit className="h-4 w-4" /> Modifier Fiche
         </Button>
       </DialogPrimitive.Trigger>
 
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[2px] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0" />
-        <DialogPrimitive.Content className="fixed left-1/2 top-1/2 z-50 grid w-full max-w-[540px] -translate-x-1/2 -translate-y-1/2 gap-6 rounded-[28px] border border-zinc-200 bg-white px-7 py-6 shadow-[0_24px_60px_rgba(15,23,42,0.45)] focus-visible:outline-none">
+        <DialogPrimitive.Overlay className="app-dialog-overlay z-40" />
+        <DialogPrimitive.Content className="app-dialog-surface fixed left-1/2 top-1/2 z-50 grid w-full max-w-[540px] -translate-x-1/2 -translate-y-1/2 gap-6 px-7 py-6 focus-visible:outline-none">
           <DialogHeader>
             <DialogTitle>Modifier la fiche set</DialogTitle>
             <DialogDescription>
@@ -155,18 +155,18 @@ export function EditSetDialog({ set }: { set: SetData }) {
               <Button
                 type="button"
                 variant="outline"
-                className="h-9 rounded-full px-5 text-sm font-medium shadow-[0_8px_20px_rgba(15,23,42,0.08)]"
+                className="h-9 px-5 text-sm font-medium"
               >
                 Annuler
               </Button>
             </DialogClose>
 
-            <Button
-              type="button"
-              onClick={handleSave}
-              disabled={isPending}
-              className="h-9 rounded-full px-6 text-sm font-semibold bg-slate-900 text-white shadow-[0_18px_40px_rgba(15,23,42,0.55)] hover:bg-slate-900/90 disabled:opacity-60 disabled:cursor-not-allowed"
-            >
+              <Button
+                type="button"
+                onClick={handleSave}
+                disabled={isPending}
+                className="h-9 px-6 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+              >
               {isPending ? "Sauvegarde..." : "Enregistrer"}
             </Button>
           </DialogFooter>

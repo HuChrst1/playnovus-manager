@@ -11,7 +11,12 @@ import { SalesTable } from "@/components/sales/SalesTable";
 import { SalesStatCard } from "@/components/sales/SalesStatCard";
 import { NewSaleDialog } from "@/components/sales/NewSaleDialog";
 import { PageHeader } from "@/components/ui/page-header";
-import { FilterPopover } from "@/components/ui/filter-bar";
+import { Button } from "@/components/ui/button";
+import {
+  FilterActions,
+  FilterLabel,
+  FilterPopover,
+} from "@/components/ui/filter-bar";
 
 export const dynamic = "force-dynamic";
 
@@ -268,14 +273,14 @@ export default async function VentesPage({ searchParams }: SalesPageProps) {
         }
         actions={
           <>
-            <div className="inline-flex items-center rounded-full border border-slate-200 bg-white p-1 shadow-[0_8px_20px_rgba(15,23,42,0.08)]">
+            <div className="app-segmented bg-white">
               <Link
                 href={includeCancelledHref}
                 className={cn(
-                  "inline-flex h-7 items-center rounded-full px-3 text-[11px] font-medium transition-colors",
+                  "app-segmented-item",
                   normalized.includeCancelled
-                    ? "bg-slate-900 text-white"
-                    : "text-slate-600 hover:bg-slate-50"
+                    ? "app-segmented-item--active"
+                    : "app-segmented-item--inactive"
                 )}
               >
                 Inclure annulées
@@ -283,10 +288,10 @@ export default async function VentesPage({ searchParams }: SalesPageProps) {
               <Link
                 href={excludeCancelledHref}
                 className={cn(
-                  "inline-flex h-7 items-center rounded-full px-3 text-[11px] font-medium transition-colors",
+                  "app-segmented-item",
                   !normalized.includeCancelled
-                    ? "bg-slate-900 text-white"
-                    : "text-slate-600 hover:bg-slate-50"
+                    ? "app-segmented-item--active"
+                    : "app-segmented-item--inactive"
                 )}
               >
                 Exclure annulées
@@ -297,22 +302,24 @@ export default async function VentesPage({ searchParams }: SalesPageProps) {
               <form method="GET" className="space-y-3">
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
-                    <label className="text-[11px] font-medium text-slate-500">Du</label>
+                    <FilterLabel htmlFor="sales-from">Du</FilterLabel>
                     <input
+                      id="sales-from"
                       type="date"
                       name="from"
                       defaultValue={normalized.from ?? ""}
-                      className="h-9 w-full rounded-full border border-slate-200 bg-white px-3 text-xs shadow-sm outline-none focus:border-primary"
+                      className="app-control"
                     />
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[11px] font-medium text-slate-500">Au</label>
+                    <FilterLabel htmlFor="sales-to">Au</FilterLabel>
                     <input
+                      id="sales-to"
                       type="date"
                       name="to"
                       defaultValue={normalized.to ?? ""}
-                      className="h-9 w-full rounded-full border border-slate-200 bg-white px-3 text-xs shadow-sm outline-none focus:border-primary"
+                      className="app-control"
                     />
                   </div>
                 </div>
@@ -333,20 +340,14 @@ export default async function VentesPage({ searchParams }: SalesPageProps) {
                 <input type="hidden" name="dir" value={normalized.dir} />
                 <input type="hidden" name="page" value="1" />
 
-                <div className="flex items-center justify-end gap-2">
-                  <Link
-                    href={resetDateHref}
-                    className="inline-flex h-8 items-center rounded-full border border-slate-200 px-3 text-[11px] font-medium text-slate-600 hover:bg-slate-50"
-                  >
-                    Réinitialiser
-                  </Link>
-                  <button
-                    type="submit"
-                    className="inline-flex h-8 items-center rounded-full bg-slate-900 px-3 text-[11px] font-medium text-white hover:bg-slate-800"
-                  >
+                <FilterActions>
+                  <Button variant="outline" size="sm" asChild>
+                    <Link href={resetDateHref}>Réinitialiser</Link>
+                  </Button>
+                  <Button type="submit" size="sm">
                     Appliquer
-                  </button>
-                </div>
+                  </Button>
+                </FilterActions>
               </form>
             </FilterPopover>
 

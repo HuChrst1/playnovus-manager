@@ -7,10 +7,10 @@ import { cn } from "@/lib/utils";
 export type KpiCardColor = "indigo" | "orange" | "amber" | "emerald";
 
 const HEADER_BG_BY_COLOR: Record<KpiCardColor, string> = {
-  indigo: "#4E56C0",
-  orange: "#9B5DE0",
-  amber: "#D78FEE",
-  emerald: "#FDCFFA",
+  indigo: "#1D4ED8",
+  orange: "#EA580C",
+  amber: "#D97706",
+  emerald: "#059669",
 };
 
 type KpiTrend = {
@@ -69,7 +69,7 @@ export function KpiCard({
   return (
     <div
       className={cn(
-        "relative overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_16px_40px_rgba(15,23,42,0.16)]",
+        "relative overflow-hidden rounded-3xl border border-border bg-white shadow-[0_14px_30px_rgba(15,23,42,0.14)]",
         clickable && "cursor-pointer",
         className
       )}

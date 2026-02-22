@@ -18,10 +18,7 @@ const DialogOverlay = React.forwardRef<
   <DialogPrimitive.Overlay
     ref={ref}
     className={cn(
-      // Overlay plein écran, légèrement flouté, z très élevé
-      "fixed inset-0 z-9998 bg-black/40 backdrop-blur-sm",
-      "data-[state=open]:animate-in data-[state=closed]:animate-out",
-      "data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0",
+      "app-dialog-overlay z-[9998]",
       className
     )}
     {...props}
@@ -39,15 +36,10 @@ const DialogContent = React.forwardRef<
       ref={ref}
       {...props}
       className={cn(
-        // Positionnement centré + z très élevé par rapport à l’overlay
-        "fixed left-1/2 top-1/2 z-9999 grid w-full max-w-xl",
+        "fixed left-1/2 top-1/2 z-[9999] grid w-full max-w-xl",
         "-translate-x-1/2 -translate-y-1/2 gap-4",
-        // Card bien opaque : fond blanc, bord léger, grosse ombre
-        "rounded-[28px] border border-black/5 bg-white",
-        "shadow-[0_18px_45px_rgba(15,23,42,0.38)]",
-        // Padding responsive
+        "app-dialog-surface",
         "px-5 py-5 sm:px-7 sm:py-7",
-        // Animations d’ouverture/fermeture
         "data-[state=open]:animate-in data-[state=closed]:animate-out",
         "data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0",
         "data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95",
@@ -57,13 +49,10 @@ const DialogContent = React.forwardRef<
     >
       {children}
 
-      {/* Bouton de fermeture en haut à droite */}
       <DialogPrimitive.Close
         className={cn(
-          "absolute right-5 top-5 inline-flex h-8 w-8 items-center justify-center",
-          "rounded-full bg-slate-900/5 text-slate-500",
-          "transition hover:bg-slate-900/10 hover:text-slate-700",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/40"
+          "app-dialog-close absolute right-5 top-5",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
         )}
       >
         <X className="h-4 w-4" />

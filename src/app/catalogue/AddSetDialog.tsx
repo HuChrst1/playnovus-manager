@@ -24,18 +24,13 @@ export function AddSetDialog({ createSetAction }: AddSetDialogProps) {
     <Dialog>
       {/* Bouton bleu foncé "Ajouter un set" dans le header du catalogue */}
       <DialogTrigger asChild>
-        <Button
-          type="button"
-          variant="default"
-          size="lg"
-          className="h-10 rounded-full px-5 text-sm font-medium shadow-[0_10px_30px_rgba(15,23,42,0.35)]"
-        >
+        <Button type="button" variant="default" size="lg" className="h-10 px-5 text-sm">
           Ajouter un set
         </Button>
       </DialogTrigger>
 
       {/* Fenêtre modale : même esprit que "Ajouter une pièce" */}
-      <DialogContent className="max-w-4xl rounded-[32px] border border-black/5 bg-white px-8 py-7 sm:px-10 sm:py-8 shadow-[0_24px_70px_rgba(15,23,42,0.25)]">
+      <DialogContent className="max-w-4xl px-8 py-7 sm:px-10 sm:py-8">
         <DialogHeader className="mb-4 space-y-1 text-left">
           <DialogTitle className="text-lg font-semibold tracking-tight">
             Nouveau set
@@ -51,7 +46,7 @@ export function AddSetDialog({ createSetAction }: AddSetDialogProps) {
           {/* Ligne 1 : SetID + Nom */}
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-1.5">
-              <label className="block text-xs font-medium text-muted-foreground">
+              <label className="app-control-label block">
                 SetID
               </label>
               <Input
@@ -63,7 +58,7 @@ export function AddSetDialog({ createSetAction }: AddSetDialogProps) {
             </div>
 
             <div className="space-y-1.5">
-              <label className="block text-xs font-medium text-muted-foreground">
+              <label className="app-control-label block">
                 Nom du set
               </label>
               <Input
@@ -78,7 +73,7 @@ export function AddSetDialog({ createSetAction }: AddSetDialogProps) {
           {/* Ligne 2 : Version + Thème */}
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-1.5">
-              <label className="block text-xs font-medium text-muted-foreground">
+              <label className="app-control-label block">
                 Version
               </label>
               <Input
@@ -89,7 +84,7 @@ export function AddSetDialog({ createSetAction }: AddSetDialogProps) {
             </div>
 
             <div className="space-y-1.5">
-              <label className="block text-xs font-medium text-muted-foreground">
+              <label className="app-control-label block">
                 Thème
               </label>
               <Input
@@ -103,7 +98,7 @@ export function AddSetDialog({ createSetAction }: AddSetDialogProps) {
           {/* Ligne 3 : Début / Fin de production */}
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-1.5">
-              <label className="block text-xs font-medium text-muted-foreground">
+              <label className="app-control-label block">
                 Début de production
               </label>
               <Input
@@ -115,7 +110,7 @@ export function AddSetDialog({ createSetAction }: AddSetDialogProps) {
             </div>
 
             <div className="space-y-1.5">
-              <label className="block text-xs font-medium text-muted-foreground">
+              <label className="app-control-label block">
                 Fin de production
               </label>
               <Input
@@ -129,7 +124,7 @@ export function AddSetDialog({ createSetAction }: AddSetDialogProps) {
 
           {/* Ligne 4 : URL photo */}
           <div className="space-y-1.5">
-            <label className="block text-xs font-medium text-muted-foreground">
+            <label className="app-control-label block">
               URL de la photo
             </label>
             <Input
@@ -155,7 +150,7 @@ export function AddSetDialog({ createSetAction }: AddSetDialogProps) {
             <Button
               type="submit"
               variant="default"
-              className="h-9 rounded-full px-5 text-xs font-medium shadow-[0_10px_30px_rgba(15,23,42,0.4)]"
+              className="h-9 px-5 text-xs font-medium"
             >
               Enregistrer
             </Button>

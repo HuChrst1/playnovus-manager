@@ -2,6 +2,75 @@
 
 Ce fichier consigne les changements du projet, etapes par etapes.
 
+## 2026-02-20 - F5.2 Harmonisation styles globaux et tokens
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Harmonisation du socle global dans `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/globals.css`:
+  - ajout de tokens d'ombres (`--app-shadow-*`)
+  - normalisation surfaces (`app-card`, `app-table-head`, `app-table-row`)
+  - ajout classes utilitaires transverses:
+    - controles formulaire (`app-control`, `app-control--md`, `app-control--textarea`, `app-control-label`)
+    - filtres (`app-filter-trigger`, `app-filter-panel`, `app-filter-actions`)
+    - segments/onglets (`app-segmented`, `app-segmented-item`, etats actif/inactif)
+    - dialogs (`app-dialog-overlay`, `app-dialog-surface`, `app-dialog-close`)
+- Alignement des composants UI partages:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/ui/button.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/ui/badge.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/ui/input.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/ui/textarea.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/ui/dialog.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/ui/sheet.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/ui/alert-dialog.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/ui/filter-bar.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/ui/data-table.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/ui/kpi-card.tsx`
+- Desad-hocisation des consommateurs pour harmoniser filtres, segments, actions et modales:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/ventes/page.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/approvisionnement/page.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/stock/page.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/historique-stock/page.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/catalogue/page.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/report/ReportDialog.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/dashboard/DashboardExecutiveView.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/dashboard/DashboardModal.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/ventes/nouvelle/NewSaleForm.tsx`
+  - modales Catalogue/Approvisionnement/Ventes harmonisees (Add/Edit dialogs)
+- Suppression des variations visuelles non desirees:
+  - suppression des bordures noires sur les surfaces dialog harmonisees
+  - alignement des dimensions/paddings des modales sur un langage commun
+
+### Verifications executees
+
+- Pre-check local:
+  - `npx supabase --version`: OK (`2.65.10`)
+  - `docker info --format '{{.ServerVersion}}'`: OK (`29.2.0`)
+  - `npx supabase status`: OK
+- Supabase local:
+  - `npx supabase start`: OK (`already running`)
+  - `npx supabase db reset --local`: OK (`Finished supabase db reset on branch feat/F5.2.`)
+- Gates techniques:
+  - `npm ci`: OK
+  - `npm run lint`: OK
+  - `npm run typecheck`: OK
+  - `npm run build`: OK
+  - `npm run test:f2.0`: OK
+- Verifications SQL post-implementation:
+  - `stock_balance.quantity < 0`: `0`
+  - vues `stock_per_piece`, `stock_journal`, `piece_movements`: lisibles (`2` / `4` / `4` lignes local seed)
+  - `healthcheck_business_anomalies_v1`: `0`
+
+### Perimetre / limites
+
+- Scope strict F5.2 respecte:
+  - harmonisation visuelle et tokens uniquement
+  - aucune modification des comportements metier (query params, filtres, tri, pagination, actions, navigation)
+  - aucune migration SQL ajoutee
+  - aucune ecriture DB distante
+- F5.3 (responsive cross-routes) non traite dans ce lot.
+
 ## 2026-02-20 - F5.1 Normalisation des composants de structure (5 pages)
 
 Statut: `FAIT`
@@ -2659,3 +2728,60 @@ Statut: `FAIT`
 - Aucun changement F4.3+ (pas de visualisations/tendances/split avances).
 - `docs/DECISIONS.md` non modifie (aucune decision structurante supplementaire).
 - Validation UI HTTP automatisee sur `npm run dev` non executable dans le sandbox actuel (`listen EPERM`); controles manuels `npm run dev` requis pour les scenarios UX finaux.
+
+## 2026-02-20 - Stabilisation demarrage dev local (Turbopack + Webpack)
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/package.json`:
+  - conservation de `dev: next dev`
+  - ajout de `dev:webpack: next dev --webpack`
+  - ajout de `dev:turbo: next dev --turbopack`
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/README.md`:
+  - ajout d'un fallback explicite `npm run dev:webpack` si `npm run dev` reste bloque sur `Starting...`
+  - documentation des commandes `dev`, `dev:webpack`, `dev:turbo`
+
+### Verifications executees
+
+- `npm run dev:webpack`:
+  - serveur `Ready`
+  - reponse HTTP locale OK (`307` sur `/`)
+- `npm run dev:turbo`:
+  - reproduction du comportement bloque (`Starting...`) observe localement
+
+### Perimetre / limites
+
+- Aucun changement API/UI metier.
+- Aucun changement SQL/migration/seed.
+- Aucune ecriture sur DB distante.
+
+## 2026-02-20 - Basculer `npm run dev` vers webpack par defaut
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/package.json`:
+  - `dev` passe de `next dev` a `next dev --webpack`
+  - conservation de `dev:webpack` (alias explicite stable)
+  - conservation de `dev:turbo` (Turbopack pour debug)
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/README.md`:
+  - `npm run dev` documente comme mode stable par defaut (webpack)
+  - `npm run dev:turbo` documente comme commande de diagnostic Turbopack
+
+### Verifications executees
+
+- `npm run dev`:
+  - demarre en mode webpack (`Next.js 16.1.6 (webpack)`)
+  - serveur `Ready`
+  - reponse HTTP locale OK (`307` sur `/`)
+- `npm run dev:turbo`:
+  - reproduction du blocage local connu (`Starting...` sans reponse HTTP sous 40s)
+
+### Perimetre / limites
+
+- Aucun changement API/UI metier.
+- Aucun changement SQL/migration/seed.
+- Aucune ecriture sur DB distante.

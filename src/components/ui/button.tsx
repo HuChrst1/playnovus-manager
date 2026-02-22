@@ -6,15 +6,6 @@ import { cva, type VariantProps } from "class-variance-authority";
 
 import { cn } from "@/lib/utils";
 
-/**
- * Design system PlayNovus – Boutons
- *
- * Objectif : se rapprocher au maximum de la maquette :
- * - Pills bien arrondis (rounded-full)
- * - Version claire avec shadow douce (Sort, petits contrôles)
- * - Version sombre compacte (Add order)
- * - Boutons icône ronds / carrés très arrondis
- */
 const buttonVariants = cva(
   [
     "inline-flex items-center justify-center gap-2",
@@ -27,62 +18,52 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        /** CTA sombre – style "Add order" */
         default:
           [
             "bg-slate-900 text-white",
-            "shadow-[0_10px_26px_rgba(15,23,42,0.45)]",
+            "shadow-[0_10px_24px_rgba(15,23,42,0.32)]",
             "hover:bg-slate-800 active:bg-slate-900",
           ].join(" "),
 
-        /** Pill blanc avec bord léger + shadow douce – style "Sort: default" */
         outline:
           [
-            "bg-white text-foreground",
-            "border border-slate-200",
-            "shadow-[0_6px_18px_rgba(15,23,42,0.08)]",
+            "bg-white text-slate-700",
+            "border border-border",
+            "shadow-[0_6px_16px_rgba(15,23,42,0.1)]",
             "hover:bg-slate-50 active:bg-slate-100",
           ].join(" "),
 
-        /** Bouton neutre très léger (pagination, petites actions) */
         ghost:
           [
             "bg-transparent text-muted-foreground",
             "hover:bg-slate-100 active:bg-slate-200",
           ].join(" "),
 
-        /** Danger (suppression) – rouge doux mais visible */
         destructive:
           [
-            "bg-red-500 text-white",
-            "shadow-[0_4px_12px_rgba(239,68,68,0.45)]",
+            "bg-red-600 text-white",
+            "shadow-[0_8px_20px_rgba(220,38,38,0.35)]",
             "hover:bg-red-600 active:bg-red-700",
           ].join(" "),
 
-        /** Bouton secondaire "soft" (pour plus tard si besoin) */
         secondary:
           [
-            "bg-slate-100 text-foreground",
-            "border border-slate-200",
+            "bg-slate-100 text-slate-700",
+            "border border-border",
             "hover:bg-slate-200 active:bg-slate-300",
           ].join(" "),
 
-        /** Lien texte simple (sans pill visible) */
         link:
           "bg-transparent text-primary underline-offset-4 hover:underline p-0 h-auto",
       },
       size: {
-        /** Taille par défaut – comme les boutons de la barre du haut */
         default: "h-9 px-4 text-xs md:text-[13px]",
 
-        /** Petit bouton (Réinitialiser / Appliquer dans le panneau filtres) */
         sm: "h-8 px-3 text-[11px]",
 
-        /** Grand bouton (si besoin pour plus tard) */
         lg: "h-10 px-6 text-sm",
 
-        /** Bouton icône (rond, style sidebar / petits ronds noirs) */
-        icon: "h-9 w-9 p-0 text-sm",
+        icon: "h-8 w-8 p-0 text-sm",
       },
     },
     defaultVariants: {

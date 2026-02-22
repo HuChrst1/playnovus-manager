@@ -232,7 +232,7 @@ export function ReportDialog({ triggerClassName }: ReportDialogProps) {
 
   const triggerClass = triggerClassName
     ? cn(triggerClassName, "text-[10px] font-semibold")
-    : "inline-flex h-9 items-center justify-center rounded-full border border-slate-200 bg-white px-3 text-xs font-semibold";
+    : "app-filter-trigger text-xs font-semibold";
 
   return (
     <Dialog
@@ -253,7 +253,7 @@ export function ReportDialog({ triggerClassName }: ReportDialogProps) {
         </button>
       </DialogTrigger>
 
-      <DialogContent className="max-w-6xl rounded-[28px] bg-white p-6 sm:p-8">
+      <DialogContent className="max-w-6xl p-6 sm:p-8">
         <DialogHeader className="mb-2">
           <DialogTitle className="text-xl font-semibold tracking-tight">
             Report
@@ -263,14 +263,14 @@ export function ReportDialog({ triggerClassName }: ReportDialogProps) {
           </DialogDescription>
         </DialogHeader>
 
-        <div className="mb-4 inline-flex rounded-full bg-slate-100 p-1">
+        <div className="app-segmented mb-4">
           <button
             type="button"
             className={cn(
-              "rounded-full px-4 py-1.5 text-xs font-medium transition-colors",
+              "app-segmented-item",
               activeTab === "report"
-                ? "bg-slate-900 text-white"
-                : "text-slate-600 hover:bg-slate-200"
+                ? "app-segmented-item--active"
+                : "app-segmented-item--inactive"
             )}
             onClick={() => setActiveTab("report")}
           >
@@ -279,10 +279,10 @@ export function ReportDialog({ triggerClassName }: ReportDialogProps) {
           <button
             type="button"
             className={cn(
-              "rounded-full px-4 py-1.5 text-xs font-medium transition-colors",
+              "app-segmented-item",
               activeTab === "tickets"
-                ? "bg-slate-900 text-white"
-                : "text-slate-600 hover:bg-slate-200"
+                ? "app-segmented-item--active"
+                : "app-segmented-item--inactive"
             )}
             onClick={() => setActiveTab("tickets")}
           >
@@ -302,7 +302,7 @@ export function ReportDialog({ triggerClassName }: ReportDialogProps) {
                   onChange={(event) =>
                     setTargetScope(event.target.value as ReportTargetScope)
                   }
-                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none ring-offset-background focus:ring-1 focus:ring-ring"
+                  className="app-control app-control--md rounded-xl"
                 >
                   {REPORT_TARGET_SCOPES.map((scope) => (
                     <option key={scope} value={scope}>
@@ -321,7 +321,7 @@ export function ReportDialog({ triggerClassName }: ReportDialogProps) {
                   onChange={(event) =>
                     setCategory(event.target.value as ReportCategory)
                   }
-                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none ring-offset-background focus:ring-1 focus:ring-ring"
+                  className="app-control app-control--md rounded-xl"
                 >
                   {REPORT_CATEGORIES.map((itemCategory) => (
                     <option key={itemCategory} value={itemCategory}>
@@ -389,7 +389,7 @@ export function ReportDialog({ triggerClassName }: ReportDialogProps) {
               </p>
             )}
 
-            <div className="overflow-x-auto rounded-2xl border border-slate-200">
+            <div className="overflow-x-auto rounded-2xl border border-border">
               <table className="min-w-[1050px] text-sm">
                 <thead className="app-table-head">
                   <tr>
@@ -451,7 +451,7 @@ export function ReportDialog({ triggerClassName }: ReportDialogProps) {
                           <td className="px-3 py-2">
                             <select
                               value={statusValue}
-                              className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs"
+                              className="app-control h-8 rounded-lg px-2 text-xs"
                               disabled={rowPending}
                               onChange={(event) =>
                                 handleStatusChange(ticket, event.target.value)

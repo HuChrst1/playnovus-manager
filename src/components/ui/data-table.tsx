@@ -73,9 +73,9 @@ type TableStatusBadgeProps = {
 export function TableStatusBadge({ label, tone = "muted", className }: TableStatusBadgeProps) {
   const toneClasses =
     tone === "success"
-      ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
+      ? "bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200"
       : tone === "danger"
-      ? "bg-rose-50 text-rose-700 ring-1 ring-rose-200"
+      ? "bg-red-100 text-red-700 ring-1 ring-red-200"
       : tone === "warning"
       ? "bg-amber-50 text-amber-700 ring-1 ring-amber-200"
       : "bg-slate-100 text-slate-600 ring-1 ring-slate-200";
@@ -122,7 +122,7 @@ export function TablePagination({
       <div className="text-xs text-muted-foreground">{summary}</div>
 
       <div className="flex items-center gap-3">
-        <div className="flex items-center gap-1 rounded-full bg-background px-2 py-1 shadow-sm">
+        <div className="app-segmented bg-white">
           <Button
             variant="ghost"
             size="icon"
@@ -150,7 +150,7 @@ export function TablePagination({
                 className={cn(
                   "flex h-7 w-7 items-center justify-center rounded-full text-xs transition-colors",
                   item === currentPage
-                    ? "bg-primary text-primary-foreground shadow-sm"
+                    ? "bg-slate-900 text-white shadow-sm"
                     : "text-muted-foreground hover:bg-muted/80"
                 )}
               >

@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 import { History } from "lucide-react";
 import { SalesStatCard } from "@/components/sales/SalesStatCard";
+import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { SortableTableHeader, TableCard, TableOverflow } from "@/components/ui/data-table";
 import { FilterBar } from "@/components/ui/filter-bar";
@@ -172,27 +173,22 @@ export default async function StockPage({ searchParams }: StockPageProps) {
               name="q"
               placeholder="Filtrer par réf. pièce..."
               defaultValue={searchQuery}
-              className="w-full rounded-full border border-border bg-white px-3 py-2 text-sm shadow-[0_8px_20px_rgba(15,23,42,0.08)] outline-none focus:border-primary"
+              className="app-control app-control--md"
             />
 
             <input type="hidden" name="sort" value={activeSortKey} />
             <input type="hidden" name="dir" value={dir} />
 
-            <button
-              type="submit"
-              className="inline-flex h-9 items-center rounded-full bg-slate-900 px-4 text-xs font-medium text-white shadow-[0_10px_25px_rgba(15,23,42,0.35)] transition-colors hover:bg-slate-800"
-            >
+            <Button type="submit">
               Rechercher
-            </button>
+            </Button>
           </form>
 
-          <Link
-            href="/historique-stock"
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-white shadow-[0_10px_25px_rgba(15,23,42,0.35)] transition-colors hover:bg-slate-800"
-            aria-label="Voir l'historique des mouvements de stock"
-          >
-            <History className="h-4 w-4" />
-          </Link>
+          <Button asChild size="icon" aria-label="Voir l'historique des mouvements de stock">
+            <Link href="/historique-stock">
+              <History className="h-4 w-4" />
+            </Link>
+          </Button>
         </div>
       </FilterBar>
 

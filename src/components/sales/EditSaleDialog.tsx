@@ -62,7 +62,7 @@ export function EditSaleDialog({ saleId }: { saleId: number }) {
         </Button>
       </DialogTrigger>
 
-      <DialogContent className="max-w-4xl sm:max-w-3xl rounded-[32px] bg-white p-8 sm:p-10">
+      <DialogContent className="max-w-4xl sm:max-w-3xl p-8 sm:p-10">
         <DialogHeader className="mb-6">
           <DialogTitle className="text-xl font-semibold tracking-tight">
             Modifier la vente #{saleId}
