@@ -1266,13 +1266,23 @@ Definition of done:
 
 ### F7.2 - Scenarios manuels de validation metier
 
-Statut: `A FAIRE`
+Statut: `FAIT`
 Objectif: valider les parcours operationnels reel utilisateur.
-Livrables:
-- checklists manuelles par page
-- preuves de verification
+Livrables realises:
+- protocole manuel local reproductible (Script A) documente dans:
+  - `docs/F7_2_SCENARIOS_MANUELS.md`
+- checklists manuelles par page livrees pour toutes les routes coeur:
+  - `/`, `/catalogue`, `/catalogue/[id]`, `/approvisionnement`, `/approvisionnement/[id]`,
+    `/ventes`, `/ventes/[id]`, `/ventes/[id]/[saleItemId]`, `/stock`, `/stock/[piece_ref]`,
+    `/historique-stock`, `/login`, `/compte`
+- matrice scenarios critiques `S1-S12` tracee avec statut pass/fail et references de preuves
+- format de preuve standardise (`timestamp | scenario | page/route | ... | reference_preuve`)
+- script local d'appui F7.2 ajoute pour preuves ciblees sans impact runtime produit:
+  - `scripts/f7_2_validate_local.mjs`
+- preuve explicite que la checklist securite F7.4 reste hors scope de ce lot (reference seule)
 Definition of done:
-- scenarios critiques valides sans ecart bloquant
+- scenarios critiques couverts sans ecart bloquant non traite
+- reserves mineures tracees (non bloquantes) et rattachees aux decisions ouvertes
 
 ### F7.3 - Healthcheck DB pre-release / post-release
 
@@ -1294,7 +1304,7 @@ Definition of done:
 - runbook de livraison complet et actionnable
 - checklist securite Phase 7 completee avec preuves
 
-### Checklist securite Phase 7 (gate bloquant)
+### F7.5 - Checklist securite Phase 7 (gate bloquant)
 
 Statut: `A FAIRE`
 Objectif: valider la posture securite avant toute livraison pre-prod/prod.

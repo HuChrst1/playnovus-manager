@@ -2,6 +2,90 @@
 
 Ce fichier consigne les changements du projet, etapes par etapes.
 
+## 2026-02-23 - F7.2 Scenarios manuels de validation metier
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Documentation F7.2 livree:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/F7_2_SCENARIOS_MANUELS.md`
+  - contenu livre:
+    - strategie locale-first de validation manuelle metier
+    - Script A (`npm run dev`) avec protocole executable S1-S12
+    - Script B remote read-only (optionnel, sans ecriture)
+    - checklists manuelles par page (routes coeur)
+    - matrice pass/fail S1-S12
+    - evidence log standardise + preuves locales executees
+- Support de preuve F7.2 ajoute:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/scripts/f7_2_validate_local.mjs`
+  - scenarios couverts:
+    - refus vente PIECE en stock insuffisant
+    - vente SET avec audit `sale_item_pieces`
+    - coherence `set_with_completion` apres sortie stock
+- Roadmap mise a jour:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/ROADMAP.md`
+  - `F7.2` passe a `FAIT`
+
+### Verifications executees
+
+- Pre-check local:
+  - `npx supabase --version` -> OK (`2.65.10`)
+  - `docker info --format '{{.ServerVersion}}'` -> OK (`29.2.0`)
+  - `npx supabase status` -> OK (stack locale active)
+- Setup local:
+  - `npx supabase start` -> OK (stack deja active)
+  - `npx supabase db reset --local` -> OK (baseline + migrations + seed)
+- Gates qualite:
+  - `npm ci` -> OK (`0 vulnerabilities`)
+  - `npm run lint` -> OK
+  - `npm run typecheck` -> OK
+  - `npm run build` -> OK
+  - `npm run test` -> OK
+  - `npm run test:f2.0` -> OK
+  - `npm run lint:ui-contrast` -> OK
+- Validation F7.2 d'appui:
+  - `node scripts/f7_2_validate_local.mjs` -> OK
+    - `S4` refus stock insuffisant valide
+    - `S5` vente SET + audit pieces valide
+    - `S10` completion catalogue coherente valide
+- Validation auth route protegee (`npm run dev`):
+  - `curl -D - http://127.0.0.1:3000/` -> `307 location: /login`
+  - `curl -D - http://127.0.0.1:3000/ventes` -> `307 location: /login`
+  - `curl -D - http://127.0.0.1:3000/compte` -> `307 location: /login`
+  - `curl -D - http://127.0.0.1:3000/login` -> `200 OK`
+- Verification attribution reports:
+  - `docker exec ... psql ... information_schema.columns` -> 6 colonnes attribution presentes
+  - verification code source:
+    - `src/app/actions/report.ts` (mapping `created_by_*` / `closed_by_*`)
+    - `src/components/report/ReportDialog.tsx` (affichage "Cree par", "Cloture/Ignore par")
+
+### Validation fonctionnelle F7.2
+
+- Scenarios critiques traces dans `docs/F7_2_SCENARIOS_MANUELS.md`:
+  - S1 PASS
+  - S2 PASS
+  - S3 PASS
+  - S4 PASS
+  - S5 PASS
+  - S6 PASS
+  - S7 PASS avec reserve mineure non bloquante (H-006)
+  - S8 PASS
+  - S9 PASS
+  - S10 PASS
+  - S11 PASS partiel technique + validation visuelle manuelle guidee
+  - S12 PASS
+- Reserve mineure non bloquante:
+  - comportement par defaut `include_cancelled=true` sur `/ventes` (decision ouverte H-006)
+
+### Perimetre / limites
+
+- Scope strict F7.2 respecte.
+- Aucune migration SQL ajoutee.
+- Aucune ecriture DB distante (`--linked` write non utilise).
+- Aucun secret sensible ajoute au repo.
+- Checklist securite F7.4 non implementee dans ce lot (hors scope, reference uniquement).
+
 ## 2026-02-23 - F7.1 Tests automatiques flux critiques
 
 Statut: `FAIT`
