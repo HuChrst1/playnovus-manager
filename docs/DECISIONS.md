@@ -1,7 +1,7 @@
 # Journal des décisions
 
 Date de mise à jour initiale: 2026-02-12
-Derniere mise a jour: 2026-02-22
+Derniere mise a jour: 2026-02-23
 
 ## Décisions prises
 
@@ -536,15 +536,62 @@ Derniere mise a jour: 2026-02-22
     - aucune migration SQL
     - aucune ecriture distante
 
+### D-034 - F6.2 auth explicite obligatoire a l'entree de l'application
+
+- Statut: validee
+- Constat:
+  - `H-002` laissait ouverte la politique `sans auth` vs `auth explicite`
+  - la roadmap F6.2 demande un ecran d'entree unique et des redirections d'acces
+  - l'application ne possedait ni route login ni garde d'acces en amont
+- Impact:
+  - route publique dediee `/login` (email + mot de passe)
+  - gate d'entree applique sur les routes metier cibles:
+    - non connecte -> redirection `/login`
+    - connecte sur `/login` -> redirection `/`
+  - implementation F6.2 volontairement minimale:
+    - cookie `httpOnly` de session applicative
+    - validation du token Supabase dans le proxy Next.js (`src/proxy.ts`)
+  - limites explicites maintenues pour F6.3/F6.4:
+    - pas de gestion complete multi-session admin
+    - pas d'UI logout/compte parametres dans ce lot
+    - aucun changement schema DB
+    - aucune ecriture distante
+
+### D-035 - Session memorisee 30j/7j + flux mot de passe oublie
+
+- Statut: validee
+- Constat:
+  - la session minimale F6.2 imposait une reconnexion frequente et ne couvrait pas le besoin "rester connecte"
+  - Next.js 16 deprecie la convention `middleware` au profit de `proxy`
+  - l'absence de parcours `Mot de passe oublie` bloquait l'autonomie utilisateur en cas de perte du mot de passe
+- Impact:
+  - migration de garde d'acces vers `src/proxy.ts` (convention Next.js 16)
+  - politique session appliquee cote app:
+    - duree maximale de memorisation: `30 jours`
+    - expiration sur inactivite: `7 jours`
+    - refresh token en proxy si access token expire
+  - UX login enrichie:
+    - case `Se souvenir de moi` (cochee par defaut)
+    - lien `Mot de passe oublie`
+  - ajout du flux reset password email:
+    - page demande reset
+    - page nouveau mot de passe
+    - message neutre anti-enumeration compte
+  - limites maintenues:
+    - pas d'inscription UI
+    - pas de gestion roles/comptes avancee
+    - pas de changement schema DB
+    - aucune ecriture distante
+
 ## Hypothèses / décisions en attente
 
 ### H-002 - Politique d'authentification applicative
 
-- Statut: ouverte
+- Statut: cloturee (voir `D-034`)
 - Observation:
-  - pas de flux auth/session dans l'app
-- A décider:
-  - accès interne sans auth vs auth utilisateur explicite
+  - le besoin d'acces applicatif authentifie est desormais tranche
+- Decision prise:
+  - auth utilisateur explicite obligatoire via entree `/login` pour les routes metier cibles
 
 ### H-003 - Découpage du module `sales.ts` (actions)
 

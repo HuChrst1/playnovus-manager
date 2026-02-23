@@ -1,11 +1,18 @@
 "use client";
 
 import { ArrowLeft } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { isAuthStandalonePath } from "@/lib/auth/constants";
 
 export function AppBackButton() {
   const router = useRouter();
+  const pathname = usePathname();
+  const hideBackButton = isAuthStandalonePath(pathname);
+
+  if (hideBackButton) {
+    return null;
+  }
 
   const handleGoBack = () => {
     if (typeof window !== "undefined" && window.history.length > 1) {

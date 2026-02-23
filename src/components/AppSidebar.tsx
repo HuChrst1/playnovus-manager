@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { isAuthStandalonePath } from "@/lib/auth/constants";
 import { ReportDialog } from "@/components/report/ReportDialog";
 import { Button } from "@/components/ui/button";
 
@@ -62,10 +63,15 @@ const NAV_ITEMS: NavItem[] = [
 export function AppSidebar() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const hideNavigation = isAuthStandalonePath(pathname);
 
   useEffect(() => {
     setMobileOpen(false);
   }, [pathname]);
+
+  if (hideNavigation) {
+    return null;
+  }
 
   return (
     <header className="app-topbar">

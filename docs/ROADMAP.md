@@ -828,7 +828,7 @@ Definition of done:
 
 ## Phase 5 - Coherence UI transversale
 
-Statut global: `EN COURS`
+Statut global: `FAIT`
 
 ### F5.0 - Operations lots et ventes
 
@@ -1146,12 +1146,22 @@ Definition of done:
 
 ### F6.2 - Interface d'entree (login) vers l'application
 
-Statut: `A FAIRE`
+Statut: `FAIT`
 Objectif: imposer un ecran d'entree unique avec identifiants pour acceder a l'interface metier.
-Livrables:
+Livrables realises:
 - ecran de connexion (email + mot de passe)
 - gestion des erreurs utilisateur de connexion
 - redirection post-login vers l'interface metier
+- redirection utilisateur non connecte vers `login` sur les routes metier cibles
+- redirection utilisateur deja connecte hors page `login`
+- implementation volontairement minimale de la session en F6.2:
+  - cookie httpOnly d'acces applicatif
+  - validation du token sur les routes protegees
+  - sans UI logout ni multi-session admin (maintenu en F6.3)
+- correctif auth complementaire (stabilisation d'entree):
+  - migration Next.js `middleware` -> `proxy` (warning deprecation supprime)
+  - option `Se souvenir de moi` au login
+  - lien et flux complet `Mot de passe oublie` / reinitialisation mot de passe
 Definition of done:
 - un utilisateur non connecte est redirige vers l'ecran de connexion
 - un utilisateur connecte accede a l'interface metier
@@ -1160,6 +1170,10 @@ Definition of done:
 
 Statut: `A FAIRE`
 Objectif: fournir des sessions persistantes et permettre la multi-session admin sans differenciation de permissions.
+Avancement partiel deja livre (sans cloture F6.3):
+- memorisation de session avec politique `30j max` + `7j inactivite`
+- rotation refresh token en `proxy` si access token expire
+- garde-fou de session legacy (cookie unique) avec purge et reconnexion
 Livrables:
 - login/logout operationnels
 - persistance de session

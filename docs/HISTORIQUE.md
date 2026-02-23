@@ -2,6 +2,123 @@
 
 Ce fichier consigne les changements du projet, etapes par etapes.
 
+## 2026-02-23 - Correctif auth (proxy Next 16 + mot de passe oublie + session memorisee)
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Migration de convention Next.js:
+  - suppression de `middleware.ts` au profit de:
+    - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/proxy.ts`
+  - warning `middleware-to-proxy` supprime au demarrage `npm run dev`
+- Renforcement session applicative:
+  - nouveaux cookies auth `httpOnly`: access/refresh/issuedAt/lastSeen/remember
+  - nouvelle politique session:
+    - duree max: `30 jours`
+    - inactivite max: `7 jours`
+    - mise a jour `lastSeen` cadencee (5 minutes)
+  - refresh automatique du token en `proxy` si access token expire
+  - purge de compatibilite du cookie legacy unique (`playnovus_auth_token`)
+- UX login enrichie:
+  - case `Se souvenir de moi` (cochee par defaut)
+  - lien `Mot de passe oublie ?`
+  - message succes apres reset (`/login?reset=success`)
+- Nouveau flux `Mot de passe oublie`:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/forgot-password/page.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/forgot-password/actions.ts`
+  - envoi email reset via Supabase avec message neutre anti-enumeration
+- Nouveau flux `Reset mot de passe`:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/reset-password/page.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/reset-password/ResetPasswordClient.tsx`
+  - mise a jour mot de passe + redirection vers login
+- Procedure compte de test local documentee:
+  - Studio local: `http://127.0.0.1:54323`
+  - `Authentication > Users > Create user`
+  - email + mot de passe utilises ensuite pour les scenarios S2/S4/S5
+
+### Verifications executees
+
+- `npm ci`
+- `npm run lint`
+- `npm run typecheck`
+- `npm run build`
+- `npm run test:f2.0`
+- `npm run lint:ui-contrast`
+- `npm run dev`:
+  - demarrage sans warning `middleware-to-proxy`
+
+### Perimetre / limites
+
+- Pas d'inscription utilisateur UI.
+- Pas de gestion comptes/roles avancee (F6.4).
+- F6.3 reste ouvert malgre avancement partiel session.
+- Aucun changement schema DB.
+- Aucune ecriture DB distante.
+
+## 2026-02-23 - F6.2 Interface d'entree login + redirections d'acces
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Implementation de la route login:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/login/page.tsx`
+  - ecran focus minimal avec formulaire `email + mot de passe`
+  - feedback utilisateur explicite et actionnable en cas d'erreur de connexion
+- Implementation de l'action serveur de connexion:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/login/actions.ts`
+  - validation des champs requis
+  - authentification Supabase `signInWithPassword`
+  - pose d'un cookie applicatif `httpOnly` en cas de succes
+  - redirection post-login vers `/` (Dashboard)
+- Protection d'acces et redirections:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/proxy.ts`
+  - utilisateur non connecte -> redirection `/login` sur routes metier cibles
+  - utilisateur connecte sur `/login` -> redirection `/`
+  - nettoyage du cookie si token invalide
+- Helpers auth F6.2:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/lib/auth/constants.ts`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/lib/auth/supabase-auth.ts`
+- Ajustement shell pour un login sans navigation metier:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/AppSidebar.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/AppBackButton.tsx`
+  - masquage topbar/back uniquement sur `/login`
+- Documentation:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/ROADMAP.md` (`F6.2` passe a `FAIT`)
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/DECISIONS.md` (arbitrage auth structurel trace)
+
+### Verifications executees
+
+- Pre-check local:
+  - `npx supabase --version`
+  - `docker info`
+  - `npx supabase status`
+- Setup local:
+  - `npx supabase start`
+  - `npx supabase db reset --local`
+- Gates qualite:
+  - `npm ci`
+  - `npm run lint`
+  - `npm run typecheck`
+  - `npm run build`
+  - `npm run test:f2.0`
+  - `npm run lint:ui-contrast`
+- Validation fonctionnelle F6.2:
+  - S1 non connecte sur route metier -> `/login`
+  - S2 login valide -> `/`
+  - S3 login invalide -> erreur explicite
+  - S4 utilisateur connecte sur `/login` -> `/`
+  - S5 acces routes metier principales apres login
+
+### Perimetre / limites
+
+- Lot limite strictement a F6.2.
+- Aucun changement F6.4 (page Compte/Parametres, attribution reports).
+- Pas de gestion multi-session admin complete ni UI logout (reserve F6.3).
+- Aucun changement schema DB.
+- Aucune ecriture DB distante.
+
 ## 2026-02-23 - F6.1 Cadrage produit page Compte/Parametres
 
 Statut: `FAIT`
