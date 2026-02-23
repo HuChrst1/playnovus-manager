@@ -253,43 +253,37 @@ export function ReportDialog({ triggerClassName }: ReportDialogProps) {
         </Button>
       </DialogTrigger>
 
-      <DialogContent className="max-w-[min(1200px,96vw)] p-8 sm:p-10">
-        <DialogHeader className="mb-4 border-b border-dotted border-slate-200/80 pb-4">
-          <DialogTitle className="text-2xl font-medium tracking-tight text-slate-900">
+      <DialogContent className="app-modal-report app-modal-scroll overflow-x-hidden">
+        <DialogHeader className="app-modal-header">
+          <DialogTitle className="app-modal-title">
             Report
           </DialogTitle>
-          <DialogDescription className="mt-1 text-sm text-slate-500">
+          <DialogDescription className="app-modal-description">
             Cree des tickets internes pour bugs, evolutions et ameliorations.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="app-segmented mb-4">
-          <Button
+        <div className="app-report-tabs" role="tablist" aria-label="Vue report">
+          <button
             type="button"
-            variant="ghost"
-            className={cn(
-              "app-segmented-item",
-              activeTab === "report"
-                ? "app-segmented-item--active"
-                : "app-segmented-item--inactive"
-            )}
+            role="tab"
+            aria-selected={activeTab === "report"}
+            className="app-report-tab"
+            data-state={activeTab === "report" ? "active" : "inactive"}
             onClick={() => setActiveTab("report")}
           >
             Report
-          </Button>
-          <Button
+          </button>
+          <button
             type="button"
-            variant="ghost"
-            className={cn(
-              "app-segmented-item",
-              activeTab === "tickets"
-                ? "app-segmented-item--active"
-                : "app-segmented-item--inactive"
-            )}
+            role="tab"
+            aria-selected={activeTab === "tickets"}
+            className="app-report-tab"
+            data-state={activeTab === "tickets" ? "active" : "inactive"}
             onClick={() => setActiveTab("tickets")}
           >
             Tickets
-          </Button>
+          </button>
         </div>
 
         {activeTab === "report" ? (
@@ -397,120 +391,226 @@ export function ReportDialog({ triggerClassName }: ReportDialogProps) {
                 {ticketsError}
               </p>
             )}
-
-            <div className="appro-table-shell p-3 sm:p-4">
-              <div className="appro-table-scroll overflow-x-auto">
-                <table className="appro-table min-w-[1050px] text-sm">
-                  <thead className="appro-table-header">
-                    <tr>
-                      <th className="px-3 py-2 text-left">ID</th>
-                      <th className="px-3 py-2 text-left">Cible</th>
-                      <th className="px-3 py-2 text-left">Categorie</th>
-                      <th className="px-3 py-2 text-left">Description</th>
-                      <th className="px-3 py-2 text-left">Date depot</th>
-                      <th className="px-3 py-2 text-left">Statut</th>
-                      <th className="px-3 py-2 text-center">Cloture ?</th>
-                      <th className="px-3 py-2 text-left">Date cloture</th>
-                      <th className="px-3 py-2 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {ticketsLoading ? (
-                      <tr>
-                        <td
-                          colSpan={9}
-                          className="px-3 py-5 text-center text-sm text-muted-foreground"
-                        >
-                          Chargement des tickets...
-                        </td>
-                      </tr>
-                    ) : tickets.length === 0 ? (
-                      <tr>
-                        <td
-                          colSpan={9}
-                          className="px-3 py-5 text-center text-sm text-muted-foreground"
-                        >
-                          Aucun ticket pour le moment.
-                        </td>
-                      </tr>
-                    ) : (
-                      tickets.map((ticket) => {
-                        const rowPending = pendingTicketId === ticket.id;
-                        const closed = isTicketClosed(ticket);
-                        const statusValue =
-                          statusDraftByTicketId[ticket.id] ??
-                          (closed && isReportStatus(ticket.status)
-                            ? ticket.status
-                            : "OPEN");
-
-                        return (
-                          <tr key={ticket.id} className="appro-table-row">
-                            <td className="px-3 py-2 font-mono text-xs font-semibold">
-                              #{ticket.id}
-                            </td>
-                            <td className="px-3 py-2">{getTargetScopeLabel(ticket.target_scope)}</td>
-                            <td className="px-3 py-2">{getCategoryLabel(ticket.category)}</td>
-                            <td className="px-3 py-2">
-                              <p className="max-w-[380px] whitespace-pre-wrap break-words">
-                                {ticket.description}
-                              </p>
-                            </td>
-                            <td className="px-3 py-2 tabular-nums">
-                              {formatDateTime(ticket.created_at)}
-                            </td>
-                            <td className="px-3 py-2">
-                              <select
-                                value={statusValue}
-                                className="app-control h-8 min-w-[128px] rounded-full px-3 text-xs"
-                                disabled={rowPending}
-                                onChange={(event) =>
-                                  handleStatusChange(ticket, event.target.value)
-                                }
-                              >
-                                {REPORT_STATUSES.filter(
-                                  (status) => !closed || status !== "OPEN"
-                                ).map((status) => (
-                                  <option key={status} value={status}>
-                                    {REPORT_STATUS_LABELS[status]}
-                                  </option>
-                                ))}
-                              </select>
-                            </td>
-                            <td className="px-3 py-2 text-center">
-                              <input
-                                type="checkbox"
-                                className="h-4 w-4 accent-slate-900"
-                                checked={closed}
-                                disabled={rowPending}
-                                onChange={(event) =>
-                                  handleClosedToggle(ticket, event.target.checked)
-                                }
-                              />
-                            </td>
-                            <td className="px-3 py-2 tabular-nums">
-                              {formatDateTime(ticket.closed_at)}
-                            </td>
-                            <td className="px-3 py-2 text-right">
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 rounded-full text-slate-700 hover:bg-slate-100 hover:text-slate-900"
-                                aria-label={`Supprimer le ticket #${ticket.id}`}
-                                disabled={rowPending}
-                                onClick={() => void handleDelete(ticket.id)}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </td>
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
+            {ticketsLoading ? (
+              <div className="app-surface-muted rounded-[20px] px-4 py-5 text-sm text-muted-foreground">
+                Chargement des tickets...
               </div>
-            </div>
+            ) : tickets.length === 0 ? (
+              <div className="app-surface-muted rounded-[20px] px-4 py-5 text-sm text-muted-foreground">
+                Aucun ticket pour le moment.
+              </div>
+            ) : (
+              <>
+                <div className="hidden lg:block">
+                  <div className="appro-table-shell p-2.5 sm:p-3">
+                    <table className="appro-table w-full table-fixed text-sm">
+                      <thead className="appro-table-header">
+                        <tr>
+                          <th className="w-[72px] px-3 py-2 text-left">ID</th>
+                          <th className="w-[188px] px-3 py-2 text-left">Ticket</th>
+                          <th className="px-3 py-2 text-left">Description</th>
+                          <th className="w-[228px] px-3 py-2 text-left">Statut</th>
+                          <th className="w-[220px] px-3 py-2 text-left">Dates</th>
+                          <th className="w-[84px] px-3 py-2 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {tickets.map((ticket) => {
+                          const rowPending = pendingTicketId === ticket.id;
+                          const closed = isTicketClosed(ticket);
+                          const statusValue =
+                            statusDraftByTicketId[ticket.id] ??
+                            (closed && isReportStatus(ticket.status)
+                              ? ticket.status
+                              : "OPEN");
+
+                          return (
+                            <tr key={ticket.id} className="appro-table-row">
+                              <td className="px-3 py-2 font-mono text-xs font-semibold">#{ticket.id}</td>
+                              <td className="px-3 py-2">
+                                <p className="text-xs font-semibold text-slate-900">
+                                  {getTargetScopeLabel(ticket.target_scope)}
+                                </p>
+                                <p className="text-[11px] text-slate-500">
+                                  {getCategoryLabel(ticket.category)}
+                                </p>
+                              </td>
+                              <td className="px-3 py-2">
+                                <p className="whitespace-pre-wrap break-words text-xs text-slate-700">
+                                  {ticket.description}
+                                </p>
+                              </td>
+                              <td className="px-3 py-2">
+                                <div className="space-y-2">
+                                  <select
+                                    value={statusValue}
+                                    className="app-control h-8 w-full rounded-full px-3 text-xs"
+                                    disabled={rowPending}
+                                    onChange={(event) =>
+                                      handleStatusChange(ticket, event.target.value)
+                                    }
+                                  >
+                                    {REPORT_STATUSES.filter(
+                                      (status) => !closed || status !== "OPEN"
+                                    ).map((status) => (
+                                      <option key={status} value={status}>
+                                        {REPORT_STATUS_LABELS[status]}
+                                      </option>
+                                    ))}
+                                  </select>
+
+                                  <label className="inline-flex items-center gap-2 text-xs text-slate-600">
+                                    <input
+                                      type="checkbox"
+                                      className="h-4 w-4 accent-slate-900"
+                                      checked={closed}
+                                      disabled={rowPending}
+                                      onChange={(event) =>
+                                        handleClosedToggle(ticket, event.target.checked)
+                                      }
+                                    />
+                                    Cloture
+                                  </label>
+                                </div>
+                              </td>
+                              <td className="px-3 py-2">
+                                <p className="text-[11px] text-slate-500">
+                                  Depot:{" "}
+                                  <span className="tabular-nums text-slate-700">
+                                    {formatDateTime(ticket.created_at)}
+                                  </span>
+                                </p>
+                                <p className="mt-1 text-[11px] text-slate-500">
+                                  Cloture:{" "}
+                                  <span className="tabular-nums text-slate-700">
+                                    {formatDateTime(ticket.closed_at)}
+                                  </span>
+                                </p>
+                              </td>
+                              <td className="px-3 py-2 text-right">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="app-icon-action"
+                                  aria-label={`Supprimer le ticket #${ticket.id}`}
+                                  title={`Supprimer le ticket #${ticket.id}`}
+                                  disabled={rowPending}
+                                  onClick={() => void handleDelete(ticket.id)}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div className="space-y-3 lg:hidden">
+                  {tickets.map((ticket) => {
+                    const rowPending = pendingTicketId === ticket.id;
+                    const closed = isTicketClosed(ticket);
+                    const statusValue =
+                      statusDraftByTicketId[ticket.id] ??
+                      (closed && isReportStatus(ticket.status)
+                        ? ticket.status
+                        : "OPEN");
+
+                    return (
+                      <article
+                        key={ticket.id}
+                        className="app-surface-muted space-y-3 rounded-[22px] border border-white/80 p-4"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className="font-mono text-xs font-semibold text-slate-900">
+                              #{ticket.id}
+                            </p>
+                            <p className="text-xs text-slate-700">
+                              {getTargetScopeLabel(ticket.target_scope)}
+                            </p>
+                            <p className="text-[11px] text-slate-500">
+                              {getCategoryLabel(ticket.category)}
+                            </p>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="app-icon-action"
+                            aria-label={`Supprimer le ticket #${ticket.id}`}
+                            title={`Supprimer le ticket #${ticket.id}`}
+                            disabled={rowPending}
+                            onClick={() => void handleDelete(ticket.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+
+                        <p className="whitespace-pre-wrap break-words text-xs text-slate-700">
+                          {ticket.description}
+                        </p>
+
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                          <label className="space-y-1">
+                            <span className="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-500">
+                              Statut
+                            </span>
+                            <select
+                              value={statusValue}
+                              className="app-control h-8 w-full rounded-full px-3 text-xs"
+                              disabled={rowPending}
+                              onChange={(event) =>
+                                handleStatusChange(ticket, event.target.value)
+                              }
+                            >
+                              {REPORT_STATUSES.filter(
+                                (status) => !closed || status !== "OPEN"
+                              ).map((status) => (
+                                <option key={status} value={status}>
+                                  {REPORT_STATUS_LABELS[status]}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+
+                          <label className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/90 px-3 py-2 text-xs font-medium text-slate-700">
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 accent-slate-900"
+                              checked={closed}
+                              disabled={rowPending}
+                              onChange={(event) =>
+                                handleClosedToggle(ticket, event.target.checked)
+                              }
+                            />
+                            Cloture
+                          </label>
+                        </div>
+
+                        <div className="space-y-1 text-[11px] text-slate-500">
+                          <p>
+                            Depot:{" "}
+                            <span className="tabular-nums text-slate-700">
+                              {formatDateTime(ticket.created_at)}
+                            </span>
+                          </p>
+                          <p>
+                            Cloture:{" "}
+                            <span className="tabular-nums text-slate-700">
+                              {formatDateTime(ticket.closed_at)}
+                            </span>
+                          </p>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              </>
+            )}
           </div>
         )}
       </DialogContent>

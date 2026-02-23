@@ -187,7 +187,7 @@ export function PieceSelector({ value, onChange, disabled, errors }: PieceSelect
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="app-section-label">
           Vente de pièces (multi-lignes)
         </p>
@@ -197,7 +197,7 @@ export function PieceSelector({ value, onChange, disabled, errors }: PieceSelect
           variant="outline"
           disabled={disabled}
           onClick={() => setQuery("")}
-          className="h-9 px-4 text-xs font-medium"
+          className="h-9 w-full px-4 text-xs font-medium sm:w-auto"
         >
           Effacer recherche
         </Button>
@@ -264,145 +264,265 @@ export function PieceSelector({ value, onChange, disabled, errors }: PieceSelect
         )}
       </div>
 
-      {/* Tableau */}
+      {/* Tableau / cartes */}
       <div className="space-y-3">
         {value.length === 0 ? (
           <div className="rounded-2xl border border-white/80 bg-white/85 px-4 py-3 text-xs text-muted-foreground">
             Ajoute une ou plusieurs pièces via la recherche ci-dessus.
           </div>
         ) : (
-          <div className="appro-table-shell p-1.5">
-            <div className="appro-table-scroll overflow-x-auto">
-              <table className="appro-table w-full text-sm">
-                <thead className="appro-table-header">
-                  <tr className="text-left text-xs text-slate-600">
-                    <th className="px-4 py-3 font-medium">Pièce</th>
-                    <th className="px-4 py-3 font-medium">Stock dispo</th>
-                    <th className="px-4 py-3 font-medium">Quantité vendue</th>
-                    {showNetLineAmount && (
-                      <th className="px-4 py-3 font-medium">Tarif réparti (total ligne)</th>
-                    )}
-                    <th className="px-4 py-3 font-medium">Commentaire</th>
-                    <th className="px-4 py-3 font-medium text-right">Actions</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {value.map((line) => {
-                    const lineErr = errors?.[line.id];
-                    const available =
-                      typeof line.available_qty === "number" && Number.isFinite(line.available_qty)
-                        ? line.available_qty
-                        : null;
-
-                    const overStock = available !== null && line.quantity > available;
-
-                    return (
-                      <tr key={line.id} className="appro-table-row align-top">
-                        <td className="px-4 py-3">
-                          <div className="text-xs font-semibold text-slate-900">{line.piece_ref}</div>
-                        </td>
-
-                        <td className="px-4 py-3">
-                          <div className="text-xs text-slate-700">{available !== null ? available : "—"}</div>
-                        </td>
-
-                        <td className="px-4 py-3">
-                          <div className="space-y-1">
-                            <Input
-                              type="number"
-                              min={1}
-                              value={String(line.quantity ?? 1)}
-                              onChange={(e) => {
-                                const raw = Number(e.target.value || 1);
-                                const nextQty = clampQty(raw, line.available_qty);
-                                updateLine(line.id, { quantity: nextQty });
-                              }}
-                              className={cn(
-                                inputClassName(Boolean(lineErr?.quantity) || overStock),
-                                "w-24 pr-10"
-                              )}
-                              disabled={disabled}
-                              max={available ?? undefined}
-                            />
-                            {lineErr?.quantity ? (
-                              <p className="text-xs text-rose-600">{lineErr.quantity}</p>
-                            ) : overStock ? (
-                              <p className="text-xs text-rose-600">
-                                Quantité vendue &gt; stock disponible ({available}).
-                              </p>
-                            ) : null}
-                          </div>
-                        </td>
-
+          <>
+            <div className="hidden lg:block">
+              <div className="appro-table-shell p-1.5">
+                <div className="appro-table-scroll overflow-x-hidden">
+                  <table className="appro-table w-full table-fixed text-sm">
+                    <thead className="appro-table-header">
+                      <tr className="text-left text-xs text-slate-600">
+                        <th className="w-[140px] px-4 py-3 font-medium">Pièce</th>
+                        <th className="w-[108px] px-4 py-3 font-medium">Stock dispo</th>
+                        <th className="w-[172px] px-4 py-3 font-medium">Quantité vendue</th>
                         {showNetLineAmount && (
-                          <td className="px-4 py-3">
-                            <div className="space-y-1">
+                          <th className="w-[220px] px-4 py-3 font-medium">Tarif réparti (total ligne)</th>
+                        )}
+                        <th className="px-4 py-3 font-medium">Commentaire</th>
+                        <th className="w-[78px] px-4 py-3 font-medium text-right">Actions</th>
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      {value.map((line) => {
+                        const lineErr = errors?.[line.id];
+                        const available =
+                          typeof line.available_qty === "number" && Number.isFinite(line.available_qty)
+                            ? line.available_qty
+                            : null;
+
+                        const overStock = available !== null && line.quantity > available;
+
+                        return (
+                          <tr key={line.id} className="appro-table-row align-top">
+                            <td className="px-4 py-3">
+                              <div className="text-xs font-semibold text-slate-900">{line.piece_ref}</div>
+                            </td>
+
+                            <td className="px-4 py-3">
+                              <div className="text-xs text-slate-700">{available !== null ? available : "—"}</div>
+                            </td>
+
+                            <td className="px-4 py-3">
+                              <div className="space-y-1">
+                                <Input
+                                  type="number"
+                                  min={1}
+                                  value={String(line.quantity ?? 1)}
+                                  onChange={(e) => {
+                                    const raw = Number(e.target.value || 1);
+                                    const nextQty = clampQty(raw, line.available_qty);
+                                    updateLine(line.id, { quantity: nextQty });
+                                  }}
+                                  className={cn(
+                                    inputClassName(Boolean(lineErr?.quantity) || overStock),
+                                    "w-24 pr-10"
+                                  )}
+                                  disabled={disabled}
+                                  max={available ?? undefined}
+                                />
+                                {lineErr?.quantity ? (
+                                  <p className="text-xs text-rose-600">{lineErr.quantity}</p>
+                                ) : overStock ? (
+                                  <p className="text-xs text-rose-600">
+                                    Quantité vendue &gt; stock disponible ({available}).
+                                  </p>
+                                ) : null}
+                              </div>
+                            </td>
+
+                            {showNetLineAmount && (
+                              <td className="px-4 py-3">
+                                <div className="space-y-1">
+                                  <Input
+                                    type="text"
+                                    inputMode="decimal"
+                                    placeholder="Ex: 10,00"
+                                    value={
+                                      typeof line.net_amount === "number" && Number.isFinite(line.net_amount)
+                                        ? String(line.net_amount).replace(".", ",")
+                                        : ""
+                                    }
+                                    onChange={(e) => {
+                                      const n = parseDecimalFR(e.target.value);
+                                      updateLine(line.id, { net_amount: Number.isFinite(n) ? n : null });
+                                    }}
+                                    className={inputClassName(Boolean(lineErr?.netAmount))}
+                                    disabled={disabled}
+                                  />
+                                  {lineErr?.netAmount && (
+                                    <p className="text-xs text-rose-600">{lineErr.netAmount}</p>
+                                  )}
+                                  {typeof line.net_amount === "number" &&
+                                    Number.isFinite(line.net_amount) &&
+                                    line.net_amount > 0 && (
+                                      <p className="text-[11px] text-muted-foreground">
+                                        Total ligne : {euro.format(line.net_amount)}
+                                      </p>
+                                    )}
+                                </div>
+                              </td>
+                            )}
+
+                            <td className="px-4 py-3">
                               <Input
-                                type="text"
-                                inputMode="decimal"
-                                placeholder="Ex: 10,00"
-                                value={
-                                  typeof line.net_amount === "number" && Number.isFinite(line.net_amount)
-                                    ? String(line.net_amount).replace(".", ",")
-                                    : ""
-                                }
-                                onChange={(e) => {
-                                  const n = parseDecimalFR(e.target.value);
-                                  updateLine(line.id, { net_amount: Number.isFinite(n) ? n : null });
-                                }}
-                                className={inputClassName(Boolean(lineErr?.netAmount))}
+                                value={line.comment ?? ""}
+                                onChange={(e) => updateLine(line.id, { comment: e.target.value })}
+                                placeholder="Note..."
+                                className={inputClassName(false)}
                                 disabled={disabled}
                               />
-                              {lineErr?.netAmount && (
-                                <p className="text-xs text-rose-600">{lineErr.netAmount}</p>
-                              )}
-                              {typeof line.net_amount === "number" &&
-                                Number.isFinite(line.net_amount) &&
-                                line.net_amount > 0 && (
-                                  <p className="text-[11px] text-muted-foreground">
-                                    Total ligne : {euro.format(line.net_amount)}
-                                  </p>
-                                )}
-                            </div>
-                          </td>
-                        )}
+                            </td>
 
-                        <td className="px-4 py-3">
+                            <td className="px-4 py-3 text-right">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => removeLine(line.id)}
+                                disabled={disabled}
+                                className="app-icon-action"
+                                aria-label="Supprimer la ligne"
+                                title="Supprimer"
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-3 lg:hidden">
+              {value.map((line) => {
+                const lineErr = errors?.[line.id];
+                const available =
+                  typeof line.available_qty === "number" && Number.isFinite(line.available_qty)
+                    ? line.available_qty
+                    : null;
+                const overStock = available !== null && line.quantity > available;
+
+                return (
+                  <article
+                    key={line.id}
+                    className="app-surface-muted space-y-3 rounded-[22px] border border-white/80 p-4"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="text-xs font-semibold text-slate-900">{line.piece_ref}</p>
+                        <p className="text-[11px] text-slate-500">
+                          Stock dispo : {available !== null ? available : "—"}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeLine(line.id)}
+                        disabled={disabled}
+                        className="app-icon-action"
+                        aria-label="Supprimer la ligne"
+                        title="Supprimer"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <label className="space-y-1">
+                        <span className="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-500">
+                          Quantité vendue
+                        </span>
+                        <Input
+                          type="number"
+                          min={1}
+                          value={String(line.quantity ?? 1)}
+                          onChange={(e) => {
+                            const raw = Number(e.target.value || 1);
+                            const nextQty = clampQty(raw, line.available_qty);
+                            updateLine(line.id, { quantity: nextQty });
+                          }}
+                          className={cn(inputClassName(Boolean(lineErr?.quantity) || overStock), "w-full")}
+                          disabled={disabled}
+                          max={available ?? undefined}
+                        />
+                        {lineErr?.quantity ? (
+                          <p className="text-xs text-rose-600">{lineErr.quantity}</p>
+                        ) : overStock ? (
+                          <p className="text-xs text-rose-600">
+                            Quantité vendue &gt; stock disponible ({available}).
+                          </p>
+                        ) : null}
+                      </label>
+
+                      {showNetLineAmount ? (
+                        <label className="space-y-1">
+                          <span className="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-500">
+                            Tarif réparti
+                          </span>
                           <Input
-                            value={line.comment ?? ""}
-                            onChange={(e) => updateLine(line.id, { comment: e.target.value })}
-                            placeholder="Note..."
-                            className={inputClassName(false)}
+                            type="text"
+                            inputMode="decimal"
+                            placeholder="Ex: 10,00"
+                            value={
+                              typeof line.net_amount === "number" && Number.isFinite(line.net_amount)
+                                ? String(line.net_amount).replace(".", ",")
+                                : ""
+                            }
+                            onChange={(e) => {
+                              const n = parseDecimalFR(e.target.value);
+                              updateLine(line.id, { net_amount: Number.isFinite(n) ? n : null });
+                            }}
+                            className={inputClassName(Boolean(lineErr?.netAmount))}
                             disabled={disabled}
                           />
-                        </td>
+                          {lineErr?.netAmount && (
+                            <p className="text-xs text-rose-600">{lineErr.netAmount}</p>
+                          )}
+                        </label>
+                      ) : null}
+                    </div>
 
-                        <td className="px-4 py-3 text-right">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => removeLine(line.id)}
-                            disabled={disabled}
-                            className="h-8 w-8 rounded-full text-slate-700 hover:bg-slate-100 hover:text-slate-900"
-                            aria-label="Supprimer la ligne"
-                            title="Supprimer"
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                    <label className="space-y-1">
+                      <span className="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-500">
+                        Commentaire
+                      </span>
+                      <Input
+                        value={line.comment ?? ""}
+                        onChange={(e) => updateLine(line.id, { comment: e.target.value })}
+                        placeholder="Note..."
+                        className={inputClassName(false)}
+                        disabled={disabled}
+                      />
+                    </label>
+
+                    {showNetLineAmount &&
+                    typeof line.net_amount === "number" &&
+                    Number.isFinite(line.net_amount) &&
+                    line.net_amount > 0 ? (
+                      <p className="text-[11px] text-muted-foreground">
+                        Total ligne : {euro.format(line.net_amount)}
+                      </p>
+                    ) : null}
+                  </article>
+                );
+              })}
             </div>
 
             <div className="px-4 py-2 text-[11px] text-muted-foreground">
               Astuce : recliquer sur une pièce dans la recherche <span className="font-medium">fusionne</span> la ligne (quantité +1).
             </div>
-          </div>
+          </>
         )}
       </div>
     </div>

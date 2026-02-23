@@ -72,12 +72,12 @@ export function NewSaleDialog({
         </Button>
       </DialogTrigger>
 
-      <DialogContent className="max-w-3xl p-8 sm:p-10">
-        <DialogHeader className="mb-6">
-          <DialogTitle className="text-xl font-semibold tracking-tight">
+      <DialogContent className="app-modal-sales app-modal-scroll overflow-x-hidden">
+        <DialogHeader className="app-modal-header">
+          <DialogTitle className="app-modal-title">
             Nouvelle vente
           </DialogTitle>
-          <DialogDescription className="text-sm text-muted-foreground">
+          <DialogDescription className="app-modal-description">
             Enregistrer une vente de set ou de pièces au détail.
           </DialogDescription>
         </DialogHeader>

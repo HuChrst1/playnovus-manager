@@ -64,6 +64,12 @@ export default async function StockHistoryPage({
   const piece = (resolved.piece ?? "").toString().trim();
   const direction = (resolved.direction ?? "ALL").toString();
   const sourceType = (resolved.source_type ?? "ALL").toString();
+  const activeFilterCount =
+    Number(Boolean(from)) +
+    Number(Boolean(to)) +
+    Number(Boolean(piece)) +
+    Number(direction !== "ALL") +
+    Number(sourceType !== "ALL");
 
   // ----- Requête sur la vue stock_journal -----
   let query = supabase
@@ -234,18 +240,20 @@ export default async function StockHistoryPage({
 
       <div className="appro-actions-bar">
         <details className="group relative">
-          <summary className="appro-filter-trigger-icon" aria-label="Filtrer" title="Filtrer">
+          <summary
+            className="appro-filter-trigger-icon"
+            data-active={activeFilterCount > 0 ? "true" : "false"}
+            aria-label="Filtrer"
+            title={activeFilterCount > 0 ? `Filtrer (${activeFilterCount} actif)` : "Filtrer"}
+          >
             <Filter className="h-4 w-4" />
           </summary>
 
           <div className="appro-filter-popover-left hidden group-open:block">
-            <form
-              method="GET"
-              className="inline-flex max-w-[min(96vw,920px)] flex-nowrap items-center gap-1 overflow-x-auto whitespace-nowrap rounded-[24px] border border-white/75 bg-white/92 px-2 py-1.5 shadow-[0_16px_36px_rgba(15,23,42,0.1)] backdrop-blur-md"
-            >
+            <form method="GET" className="app-filter-toolbar-panel">
               <label
                 htmlFor="history-from"
-                className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-slate-500"
+                className="app-filter-toolbar-field app-filter-toolbar-field--compact"
               >
                 <span>Du</span>
                 <input
@@ -259,7 +267,7 @@ export default async function StockHistoryPage({
 
               <label
                 htmlFor="history-to"
-                className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-slate-500"
+                className="app-filter-toolbar-field app-filter-toolbar-field--compact"
               >
                 <span>Au</span>
                 <input
@@ -273,7 +281,7 @@ export default async function StockHistoryPage({
 
               <label
                 htmlFor="history-piece"
-                className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-slate-500"
+                className="app-filter-toolbar-field app-filter-toolbar-field--compact"
               >
                 <span>Réf.</span>
                 <input
@@ -288,7 +296,7 @@ export default async function StockHistoryPage({
 
               <label
                 htmlFor="history-direction"
-                className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-slate-500"
+                className="app-filter-toolbar-field app-filter-toolbar-field--compact"
               >
                 <span>Sens</span>
                 <select
@@ -306,7 +314,7 @@ export default async function StockHistoryPage({
 
               <label
                 htmlFor="history-source"
-                className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-slate-500"
+                className="app-filter-toolbar-field app-filter-toolbar-field--compact"
               >
                 <span>Type</span>
                 <select
@@ -322,7 +330,7 @@ export default async function StockHistoryPage({
                 </select>
               </label>
 
-              <div className="inline-flex shrink-0 items-center gap-1.5 pl-1">
+              <div className="app-filter-toolbar-actions">
                 <Button variant="outline" size="sm" asChild className="shrink-0 text-[11px]">
                   <Link href="/historique-stock">Réinitialiser</Link>
                 </Button>
@@ -333,6 +341,13 @@ export default async function StockHistoryPage({
             </form>
           </div>
         </details>
+
+        {activeFilterCount > 0 ? (
+          <span className="app-filter-active-badge" aria-live="polite">
+            {activeFilterCount} filtre actif
+            {activeFilterCount > 1 ? "s" : ""}
+          </span>
+        ) : null}
 
         <Button
           variant="outline"

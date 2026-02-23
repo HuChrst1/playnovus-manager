@@ -93,14 +93,14 @@ Perimetre: parcours metier web app (`/`, `/approvisionnement`, `/ventes`, `/stoc
 
 ## Quick wins (priorite haute, effort faible)
 
-1. Standardiser les micro-interactions des boutons icon-only (hover/focus/disabled) sur toutes les tables.
-2. Uniformiser les gabarits de modales metier (header, espace, footer) pour reduire l'effet de contexte.
-3. Ajouter des tooltips courts sur les actions ambigues (retour global, toggles de colonnes, filtres compacts).
+1. Standardisation icon-only (hover/focus/disabled) appliquee sur les zones ciblees.
+2. Gabarit modal metier unifie (header, espace, footer) sur le residuel F5.6.
+3. Feedback explicite d'etat actif ajoute sur les toolbars filtres inter-pages.
 
 ## Chantiers moyens (priorite moyenne)
 
 1. Simplifier la lecture des formulaires de ventes (ordre visuel, regroupements, labels d'aide).
-2. Harmoniser le pattern de filtres entre pages (`details/summary`, actions reset/apply, feedback selection).
+2. Poursuivre la simplification cognitive des formulaires denses (hors scope F5.6 strict).
 3. Renforcer l'etat vide/actionnable des sections detail (dashboard et catalogue detail).
 
 ## Refontes structurantes (priorite strategique)
@@ -108,13 +108,18 @@ Perimetre: parcours metier web app (`/`, `/approvisionnement`, `/ventes`, `/stoc
 1. Introduire un pattern unique de "toolbar metier" reutilisable (filtres + CTA + recherche).
 2. Definir une grammaire UX commune pour les interactions de drilldown (ouverture, fermeture, persistance d'etat).
 
+## 3bis) Niveau de severite post-F5.6
+
+- Critique: **aucun**
+- Majeur: **aucun**
+
 ## 4) Tableau des opportunites UX
 
 | Point de friction | Impact utilisateur | Recommandation | Priorite | Zone fichier/route |
 |---|---|---|---|---|
-| Variantes de modales non uniformes | Reperes visuels fluctuants | Gabarit modal unique (taille/padding/header/footer) | Haute | `src/components/sales/*Dialog.tsx`, `src/components/catalogue/*dialog*.tsx`, `src/components/report/ReportDialog.tsx` |
-| Actions icon-only heterogenes | Interpretation moins immediate | Harmoniser style + focus + labels aria/title | Haute | `src/components/sales/SalesTable.tsx`, `src/components/catalogue/delete-piece-button.tsx`, `src/app/catalogue/DeleteSetButton.tsx` |
-| Filtres multi-pages avec comportements proches mais non identiques | Apprentissage repetitif | Pattern unifie de filtres (layout + feedback + reset/apply) | Moyenne | `/approvisionnement`, `/ventes`, `/stock`, `/catalogue`, `/historique-stock` |
+| Variantes de modales non uniformes | Reperes visuels fluctuants | Gabarit modal unique (taille/padding/header/footer) applique | Traite (F5.6) | `src/components/sales/*Dialog.tsx`, `src/components/catalogue/*dialog*.tsx`, `src/components/report/ReportDialog.tsx` |
+| Actions icon-only heterogenes | Interpretation moins immediate | Harmonisation style + focus + labels aria/title appliquee | Traite (F5.6) | `src/components/sales/SalesTable.tsx`, `src/components/catalogue/delete-piece-button.tsx`, `src/app/catalogue/DeleteSetButton.tsx` |
+| Filtres multi-pages avec comportements proches mais non identiques | Apprentissage repetitif | Pattern convergent (layout + feedback actif + reset/apply) applique | Traite (F5.6) | `/approvisionnement`, `/ventes`, `/stock`, `/catalogue`, `/historique-stock`, `/` |
 | Formulaires ventes denses | Charge cognitive elevee | Decoupage visuel et aides contextuelles par mode | Moyenne | `src/app/ventes/nouvelle/NewSaleForm.tsx` |
 | Toggle QTE detail catalogue peu discoverable | Perte d'information potentielle | Affordance explicite + aide micro-copy | Basse | `src/components/catalogue/set-parts-list.tsx` |
 

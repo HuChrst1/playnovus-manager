@@ -289,6 +289,28 @@
     --tw-ring-offset-color: rgba(255, 255, 255, 0.98);
   }
 
+  .app-icon-action {
+    @apply inline-flex h-8 w-8 items-center justify-center rounded-full border text-slate-700 transition-[background-color,border-color,color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-55;
+    border-color: var(--app-button-soft-border);
+    background: var(--app-button-soft-bg);
+    box-shadow: var(--app-shadow-xs), inset 0 1px 0 rgba(255, 255, 255, 0.88);
+  }
+
+  .app-icon-action:hover {
+    background: rgba(255, 255, 255, 0.99);
+    color: var(--app-button-soft-text-hover);
+  }
+
+  .app-icon-action:focus-visible {
+    --tw-ring-color: var(--app-focus-ring);
+    --tw-ring-offset-color: rgba(255, 255, 255, 0.98);
+  }
+
+  .app-icon-action svg {
+    @apply h-4 w-4;
+    stroke-width: 2;
+  }
+
   .app-btn-danger {
     @apply inline-flex h-9 items-center justify-center gap-2 rounded-full border px-4 text-xs font-medium text-white transition-[background-color,border-color,color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:pointer-events-none disabled:opacity-55;
     background-color: #dc2626;
@@ -347,7 +369,7 @@
   }
 
   .appro-actions-bar {
-    @apply flex flex-wrap items-start justify-between gap-2 px-1 md:px-2 sm:justify-end;
+    @apply flex flex-wrap items-start justify-end gap-2 px-1 md:px-2;
   }
 
   .appro-filter-trigger-icon {
@@ -367,16 +389,31 @@
     --tw-ring-offset-color: rgba(255, 255, 255, 0.98);
   }
 
+  .appro-filter-trigger-icon[data-active="true"] {
+    @apply border-sky-300 bg-sky-100 text-sky-900;
+  }
+
   .appro-filter-trigger-icon::-webkit-details-marker {
     display: none;
   }
 
-  .appro-filter-popover-left {
+  .appro-filter-popover-left,
+  .app-filter-popover-side {
     position: absolute;
-    right: 0;
-    top: calc(100% + 8px);
+    right: calc(100% + 10px);
+    top: 50%;
     z-index: 30;
-    max-width: min(96vw, 980px);
+    transform: translateY(-50%);
+    max-width: min(94vw, 920px);
+  }
+
+  @media (max-width: 420px) {
+    .appro-filter-popover-left,
+    .app-filter-popover-side {
+      right: 0;
+      top: calc(100% + 8px);
+      transform: none;
+    }
   }
 
   .catalogue-toolbar-shell {
@@ -708,9 +745,34 @@
     --tw-ring-offset-color: rgba(255, 255, 255, 0.98);
   }
 
+  .app-filter-trigger[data-active="true"] {
+    @apply border-sky-300 bg-sky-100 text-sky-900;
+  }
+
   .app-filter-panel {
     @apply rounded-[26px] border border-white/75 bg-white/96 p-4;
     box-shadow: var(--app-shadow-md);
+  }
+
+  .app-filter-toolbar-panel {
+    @apply inline-flex max-w-[min(94vw,920px)] flex-nowrap items-center gap-1.5 overflow-x-auto overflow-y-hidden rounded-[22px] border border-white/75 bg-white/94 px-2 py-1.5 shadow-[0_16px_36px_rgba(15,23,42,0.1)] backdrop-blur-md;
+    white-space: nowrap;
+  }
+
+  .app-filter-toolbar-field {
+    @apply inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-[11px] font-medium text-slate-500;
+  }
+
+  .app-filter-toolbar-field--compact {
+    @apply shrink-0;
+  }
+
+  .app-filter-toolbar-actions {
+    @apply inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap pl-0.5;
+  }
+
+  .app-filter-active-badge {
+    @apply inline-flex h-6 items-center rounded-full border border-sky-200 bg-sky-50 px-2.5 text-[11px] font-semibold text-sky-800;
   }
 
   .app-filter-actions {
@@ -746,6 +808,58 @@
   .app-dialog-close {
     @apply inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/80 bg-white/90 text-slate-500 transition-colors hover:text-slate-900;
     box-shadow: var(--app-shadow-xs);
+  }
+
+  .app-modal-standard {
+    @apply max-w-3xl p-8 sm:p-10;
+  }
+
+  .app-modal-wide {
+    @apply max-w-[min(1200px,96vw)] p-8 sm:p-10;
+  }
+
+  .app-modal-sales {
+    @apply max-w-[min(1420px,98vw)] p-8 sm:p-10;
+  }
+
+  .app-modal-report {
+    @apply max-w-[min(1360px,98vw)] p-7 sm:p-9;
+  }
+
+  .app-modal-scroll {
+    @apply max-h-[86vh] overflow-y-auto;
+  }
+
+  .app-modal-header {
+    @apply mb-4 border-b border-dotted border-slate-200/80 pb-4;
+  }
+
+  .app-modal-title {
+    @apply text-xl font-semibold tracking-tight text-slate-900;
+  }
+
+  .app-modal-description {
+    @apply mt-1 text-sm text-slate-500;
+  }
+
+  .app-modal-footer {
+    @apply mt-6 flex flex-row items-center justify-end gap-3;
+  }
+
+  .app-report-tabs {
+    @apply mb-4 inline-flex items-center gap-1 rounded-full border border-slate-200/90 bg-slate-100/85 p-1;
+  }
+
+  .app-report-tab {
+    @apply inline-flex h-8 items-center rounded-full px-3.5 text-xs font-semibold transition-colors;
+  }
+
+  .app-report-tab[data-state="active"] {
+    @apply bg-slate-900 text-white shadow-[0_10px_20px_rgba(15,23,42,0.24)];
+  }
+
+  .app-report-tab[data-state="inactive"] {
+    @apply text-slate-700 hover:bg-white hover:text-slate-900;
   }
 
   .app-progress-track {

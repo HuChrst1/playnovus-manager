@@ -1065,19 +1065,9 @@ export function NewSaleForm({
 
   return (
     <div
-      className={cn(
-        "px-1 sm:px-2",
-        // Hauteur MAX (pas forcée) : laisse de l'air en haut/bas, scroll interne si besoin
-        "max-h-[calc(100dvh-12rem)] overflow-y-auto overscroll-contain pr-3 py-4",
-        // Scrollbar visible à droite (WebKit)
-        "[&::-webkit-scrollbar]:w-2",
-        "[&::-webkit-scrollbar-track]:bg-transparent",
-        "[&::-webkit-scrollbar-thumb]:rounded-full",
-        "[&::-webkit-scrollbar-thumb]:bg-slate-300/70",
-        "hover:[&::-webkit-scrollbar-thumb]:bg-slate-400/80"
-      )}
+      className="w-full min-w-0 px-1 sm:px-2"
     >
-      <form onSubmit={handleSubmit} className="space-y-6 pb-8">
+      <form onSubmit={handleSubmit} className="min-w-0 space-y-7 pb-8">
       {/* 3.4.4.3 – Bannière erreur */}
       {submitError && (
         <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
@@ -1085,7 +1075,7 @@ export function NewSaleForm({
         </div>
       )}
       {/* TYPE DE VENTE */}
-      <section className="app-surface-muted space-y-3 p-4 sm:p-5">
+      <section className="app-surface-muted space-y-3 p-5 sm:p-6">
         <p className="app-section-label">
           Type de vente
         </p>
@@ -1124,18 +1114,20 @@ export function NewSaleForm({
       </section>
 
       {/* Infos générales de la vente */}
-      <section className="app-surface-muted p-4 sm:p-5">
+      <section className="app-surface-muted p-5 sm:p-6">
         <p className="app-section-label mb-3">Informations de vente</p>
         <div
           className={cn(
-            "grid gap-4",
-            mode === "edit" ? "md:grid-cols-4" : "md:grid-cols-3"
+            "grid gap-5",
+            mode === "edit"
+              ? "md:grid-cols-2 xl:grid-cols-4"
+              : "md:grid-cols-2 xl:grid-cols-3"
           )}
         >
         <div className="min-w-0 space-y-1.5">
           <Label
             htmlFor="paid_at"
-            className="app-control-label whitespace-nowrap"
+            className="app-control-label flex min-h-[3.1rem] items-end leading-snug tracking-[0.1em]"
           >
             Date de paiement
           </Label>
@@ -1159,7 +1151,7 @@ export function NewSaleForm({
         <div className="min-w-0 space-y-1.5">
           <Label
             htmlFor="sales_channel"
-            className="app-control-label whitespace-nowrap"
+            className="app-control-label flex min-h-[3.1rem] items-end leading-snug tracking-[0.1em]"
           >
             Canal de vente
           </Label>
@@ -1182,7 +1174,7 @@ export function NewSaleForm({
 
         {mode === "edit" && (
           <div className="min-w-0 space-y-1.5">
-            <Label className="app-control-label whitespace-nowrap">
+            <Label className="app-control-label flex min-h-[3.1rem] items-end leading-snug tracking-[0.1em]">
               Statut
             </Label>
             <select
@@ -1202,7 +1194,7 @@ export function NewSaleForm({
         <div className="min-w-0 space-y-1.5">
           <Label
             htmlFor="net_amount"
-            className="app-control-label whitespace-nowrap"
+            className="app-control-label flex min-h-[3.1rem] items-end leading-snug tracking-[0.1em]"
           >
             Montant net vendeur (€)
           </Label>
@@ -1234,7 +1226,7 @@ export function NewSaleForm({
       </section>
 
       {/* Commentaire global */}
-      <section className="app-surface-muted space-y-1.5 p-4 sm:p-5">
+      <section className="app-surface-muted space-y-1.5 p-5 sm:p-6">
         <Label
           htmlFor="comment"
           className="app-control-label"
@@ -1255,7 +1247,7 @@ export function NewSaleForm({
       </section>
 
       {/* Lignes de vente */}
-      <section className="app-surface-muted space-y-3 p-4 sm:p-5">
+      <section className="app-surface-muted space-y-3 p-5 sm:p-6">
       <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-slate-900">Lignes de vente</h2>
         </div>
@@ -1343,7 +1335,7 @@ export function NewSaleForm({
       </section>
 
       {draft && (
-        <section className="app-surface-muted p-4 sm:p-5">
+        <section className="app-surface-muted p-5 sm:p-6">
           <p className="app-section-label">
             Brouillon en mémoire
           </p>
@@ -1373,9 +1365,9 @@ export function NewSaleForm({
       )}
 
       {/* FOOTER FORMULAIRE */}
-      <section className="app-surface-muted flex items-center justify-between gap-3 px-4 py-3 sm:px-5">
+      <section className="app-surface-muted flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
         {(formMessage || footerAutoMessage) && (
-          <p className="text-xs text-muted-foreground">
+          <p className="order-2 w-full break-words text-xs text-muted-foreground sm:order-1 sm:w-auto">
             {formMessage ?? footerAutoMessage}
           </p>
         )}
@@ -1384,7 +1376,7 @@ export function NewSaleForm({
           type="submit"
           disabled={isSubmitting || !canSubmit}
           className={cn(
-            "inline-flex items-center h-10 px-8 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60",
+            "order-1 h-10 w-full px-8 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60 sm:order-2 sm:w-auto",
             isSubmitting && "opacity-80 cursor-not-allowed"
           )}
         >

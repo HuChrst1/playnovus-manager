@@ -113,14 +113,14 @@ export function SetPiecesDialog({
         onClick={onClose}
       />
 
-      <div className="absolute left-1/2 top-10 w-[min(1020px,calc(100%-2rem))] -translate-x-1/2">
-        <div className="app-dialog-surface p-5 sm:p-6">
-          <div className="flex items-start justify-between gap-4">
+      <div className="absolute left-1/2 top-10 w-[min(1200px,calc(100%-2rem))] -translate-x-1/2">
+        <div className="app-dialog-surface app-modal-wide app-modal-scroll">
+          <div className="app-modal-header flex items-start justify-between gap-4">
             <div>
-              <p className="text-lg font-medium tracking-tight text-slate-900">
+              <p className="app-modal-title">
                 Pièces du set
               </p>
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="app-modal-description">
                 {setId ? `Set ID : ${setId}` : "Sélectionne d'abord un set."}
                 {" · "}
                 Qté sets : {Math.max(1, setQty)}
@@ -137,8 +137,9 @@ export function SetPiecesDialog({
               variant="icon"
               size="icon"
               onClick={onClose}
-              className="h-9 w-9"
+              className="app-icon-action"
               aria-label="Fermer"
+              title="Fermer"
             >
               <X className="h-4 w-4" />
             </Button>

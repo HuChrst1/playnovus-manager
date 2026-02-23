@@ -198,6 +198,12 @@ export default async function CataloguePage({
   const selectedThemes = themeParamValues.filter((theme) => themeOptionsSet.has(theme));
   const legacyThemeFilter =
     !isThemeMultiMode && themeParamValues.length > 0 ? themeParamValues[0] : "";
+  const activeFilterCount =
+    selectedVersions.length +
+    selectedYears.length +
+    selectedThemes.length +
+    Number(Boolean(productionFilter)) +
+    Number(Boolean(searchQuery));
 
   const from = (currentPage - 1) * pageSize;
   const to = from + pageSize - 1;
@@ -594,6 +600,13 @@ const setsForDisplay: SetRow[] = setsWithCompletion;
               </details>
 
               <div className="catalogue-filter-actions">
+                {activeFilterCount > 0 ? (
+                  <span className="app-filter-active-badge" aria-live="polite">
+                    {activeFilterCount} filtre
+                    {activeFilterCount > 1 ? "s" : ""} actif
+                    {activeFilterCount > 1 ? "s" : ""}
+                  </span>
+                ) : null}
                 <Button variant="outline" size="sm" asChild className="h-9 px-4 text-xs font-medium">
                   <Link href="/catalogue">Réinitialiser</Link>
                 </Button>

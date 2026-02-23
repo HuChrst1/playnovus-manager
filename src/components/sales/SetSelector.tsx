@@ -274,7 +274,7 @@ export function SetSelector({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="app-section-label">
           Lignes de set
         </p>
@@ -284,7 +284,7 @@ export function SetSelector({
           variant="outline"
           onClick={addLine}
           disabled={disabled}
-          className="h-9 gap-2 px-4 text-xs font-medium"
+          className="h-9 w-full gap-2 px-4 text-xs font-medium sm:w-auto"
         >
           <Plus className="h-4 w-4" />
           Ajouter un set
@@ -333,8 +333,9 @@ export function SetSelector({
                     variant="ghost"
                     size="icon"
                     onClick={() => removeLine(line.id)}
-                    className="h-8 w-8 rounded-full text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+                    className="app-icon-action"
                     aria-label="Supprimer la ligne"
+                    title="Supprimer la ligne"
                     disabled={disabled}
                   >
                     <X className="h-4 w-4" />

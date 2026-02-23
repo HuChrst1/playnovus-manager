@@ -925,8 +925,8 @@ Definition of done:
 - suppression d'un ticket effective
 - aucune regression des flux existants (`lint/typecheck/build/test:f2.0`)
 - trajectoire auth/session explicite:
-  - authentification multi-session admin planifiee en `F6.5`
-  - attribution utilisateur reports + reglages comptes essentiels planifies en `F6.6`
+  - authentification multi-session admin planifiee en `F6.2/F6.3`
+  - attribution utilisateur reports + reglages comptes essentiels planifies en `F6.4`
 
 Impacts API/interfaces/types publics:
 - F5.0.1: entree CSV structuree (`piece_ref`, `quantity`) depuis UI lot
@@ -1081,86 +1081,91 @@ Definition of done:
 
 ### F5.6 - Finitions UI/UX post-refonte (residuel priorise)
 
-Statut: `A FAIRE`
+Statut: `FAIT`
 Objectif: fermer les ecarts residuels identifies par les audits UI/UX post-F5.5 sans toucher au metier.
-Livrables cibles:
-- harmonisation finale des actions icon-only (edit/delete/close) sur un style unique
-- normalisation du chrome modal restant (largeur, header, densite verticale, footer)
-- unification des toolbar filtres inter-pages (placement, feedback etats actifs, reset/apply)
-- reduction des styles ad hoc restants au profit de classes shared
-- checklist UX par parcours metier (navigation, dashboard, appro, ventes, stock, catalogue)
+Livrables realises:
+- harmonisation stricte des actions icon-only metier (`edit/delete/close`) via classe shared `app-icon-action`:
+  - ventes (`SalesTable`, `EditSaleDialog`, `SetSelector`, `PieceSelector`, `SetPiecesDialog`)
+  - catalogue (`DeleteSetButton`, `delete-piece-button`, triggers edition)
+  - report (`ReportDialog`)
+- normalisation du chrome modal residuel avec classes shared:
+  - tailles tokenisees `app-modal-standard` / `app-modal-wide`
+  - header/description/footer homogenises (`app-modal-header`, `app-modal-description`, `app-modal-footer`)
+  - modales ciblees: `EditSaleDialog`, `ReportDialog`, `edit-set-dialog`, `edit-piece-dialog`, `SetPiecesDialog`
+- unification des toolbars filtres inter-pages:
+  - panel shared `app-filter-toolbar-panel`
+  - labels/actions shared (`app-filter-toolbar-field`, `app-filter-toolbar-actions`)
+  - feedback actif explicite (`app-filter-active-badge` + etat `data-active`)
+  - pages: `/approvisionnement`, `/ventes`, `/stock`, `/historique-stock`, `/catalogue`, dashboard `/`
+- reduction des styles ad hoc au profit de classes shared dans `globals.css` et consommateurs UI cibles
+- checklist UX couverte sur parcours:
+  - navigation globale/topbar
+  - dashboard (filtres)
+  - approvisionnement
+  - ventes
+  - stock / historique-stock
+  - catalogue
+- invariants preserves:
+  - aucun changement logique metier
+  - aucun changement API/DB
+  - aucun changement routes/query params/tri/pagination
+  - aucune ecriture DB distante
 Definition of done:
 - plus aucun ecart `Critique` ni `Majeur` dans `docs/UI_AUDIT_F5.5.md` et `docs/UX_AUDIT_F5.5.md`
 - cohherence visuelle stable desktop/mobile sur les routes metier principales
 - validations techniques vertes:
+  - `npm ci`
   - `npm run lint`
   - `npm run typecheck`
   - `npm run build`
   - `npm run test:f2.0`
+  - `npm run lint:ui-contrast`
 
-## Phase 6 - Validation finale et readiness deploiement
+## Phase 6 - Acces applicatif, sessions et comptes
 
 Statut global: `A FAIRE`
 
-### F6.1 - Tests automatiques flux critiques
+### F6.1 - Reflexion produit + cadrage page Compte/Parametres
 
 Statut: `A FAIRE`
-Objectif: proteger les regles d'or metier.
-Portee minimale:
-- FIFO
-- confirmation lot
-- annulation vente
-- coherence KPIs
-Definition of done:
-- suites test unitaires + integration executables en local
-
-### F6.2 - Scenarios manuels de validation metier
-
-Statut: `A FAIRE`
-Objectif: valider les parcours operationnels reel utilisateur.
+Objectif: verrouiller l'UX, la navigation et le perimetre fonctionnel de la page compte/parametres avant implementation.
 Livrables:
-- checklists manuelles par page
-- preuves de verification
+- specification produit validee pour la page `Compte/Parametres` (sections, actions, contraintes d'acces)
+- cadrage explicite de la place des reglages comptes dans la navigation globale
+- cadrage de la tracabilite report (auteur, cloture/ignorance) au niveau produit
 Definition of done:
-- scenarios critiques valides sans ecart bloquant
+- spec produit complete validee (sections, actions, contraintes, acces)
 
-### F6.3 - Healthcheck DB pre-release / post-release
+### F6.2 - Interface d'entree (login) vers l'application
 
 Statut: `A FAIRE`
-Objectif: confirmer l'integrite des donnees avant/apres livraison.
-Definition of done:
-- healthcheck retourne 0 anomalie avant validation finale
-
-### F6.4 - Checklist de livraison et rollback
-
-Statut: `A FAIRE`
-Objectif: livrer de facon predictable.
-Livrables:
-- plan rollback
-- checklist verification stock/coherence
-- monitoring minimal des erreurs critiques
-Definition of done:
-- runbook de livraison complet et actionnable
-
-### F6.5 - Authentification applicative multi-session admin
-
-Statut: `A FAIRE`
-Objectif: imposer un acces applicatif via identifiant/mot de passe avec sessions separees, tout en conservant des permissions identiques entre admins.
+Objectif: imposer un ecran d'entree unique avec identifiants pour acceder a l'interface metier.
 Livrables:
 - ecran de connexion (email + mot de passe)
-- login/logout et persistance de session
-- protection des routes applicatives metier (acces refuse si non connecte)
-- initialisation de 2 comptes admin de demarrage (modele extensible)
-- autorisations identiques pour les comptes admin (pas de roles differencies dans ce lot)
+- gestion des erreurs utilisateur de connexion
+- redirection post-login vers l'interface metier
+Definition of done:
+- un utilisateur non connecte est redirige vers l'ecran de connexion
+- un utilisateur connecte accede a l'interface metier
+
+### F6.3 - Creation et gestion des sessions
+
+Statut: `A FAIRE`
+Objectif: fournir des sessions persistantes et permettre la multi-session admin sans differenciation de permissions.
+Livrables:
+- login/logout operationnels
+- persistance de session
+- protection des routes applicatives metier
+- support de sessions admin simultanees (compte A / compte B)
 Definition of done:
 - compte A et compte B peuvent se connecter chacun de leur cote au meme logiciel
 - les 2 comptes ont la meme visibilite data et les memes actions metier
-- un utilisateur non connecte est redirige vers la connexion
+- protections d'acces appliquees sur les routes metier
 
-### F6.6 - Reglages comptes essentiels + attribution des reports
+### F6.4 - Developpement page Compte/Parametres + attribution reports
 
 Statut: `A FAIRE`
-Objectif: preparer l'evolution multi-utilisateur avec un premier niveau de tracabilite operationnelle.
+Objectif: livrer les reglages comptes essentiels et la tracabilite utilisateur des tickets report.
 Livrables:
 - section `Reglages > Comptes` avec operations essentielles:
   - vue des comptes admins existants
@@ -1196,6 +1201,102 @@ Hypotheses et defaults explicites (auth/reglages):
 - pas d'audit complet ventes/lots/stock dans ce lot
 - priorite a l'attribution utilisateur des reports
 - gestion avancee comptes (creation/desactivation/reset via UI) hors scope initial
+
+## Phase 7 - Validation finale et readiness deploiement
+
+Statut global: `A FAIRE`
+
+### F7.1 - Tests automatiques flux critiques
+
+Statut: `A FAIRE`
+Objectif: proteger les regles d'or metier.
+Portee minimale:
+- FIFO
+- confirmation lot
+- annulation vente
+- coherence KPIs
+Definition of done:
+- suites test unitaires + integration executables en local
+
+### F7.2 - Scenarios manuels de validation metier
+
+Statut: `A FAIRE`
+Objectif: valider les parcours operationnels reel utilisateur.
+Livrables:
+- checklists manuelles par page
+- preuves de verification
+Definition of done:
+- scenarios critiques valides sans ecart bloquant
+
+### F7.3 - Healthcheck DB pre-release / post-release
+
+Statut: `A FAIRE`
+Objectif: confirmer l'integrite des donnees avant/apres livraison.
+Definition of done:
+- healthcheck retourne 0 anomalie avant validation finale
+
+### F7.4 - Checklist de livraison et rollback
+
+Statut: `A FAIRE`
+Objectif: livrer de facon predictable.
+Livrables:
+- plan rollback
+- checklist verification stock/coherence
+- monitoring minimal des erreurs critiques
+Definition of done:
+- runbook de livraison complet et actionnable
+
+## Phase 8 - Deploiement SaaS initial
+
+Statut global: `A FAIRE`
+
+### F8.1 - Preparation deploiement production
+
+Statut: `A FAIRE`
+Objectif: preparer un deploiement previsible et reproductible.
+Livrables:
+- runbook de deploiement production
+- checklist variables d'environnement et secrets
+- checklist go-live et smoke checks metier critiques
+Definition of done:
+- prerequis techniques et operationnels valides avant mise en service
+
+### F8.2 - Deploiement du logiciel (mise en service)
+
+Statut: `A FAIRE`
+Objectif: mettre le SaaS en service dans un environnement utilisable en conditions reelles.
+Livrables:
+- execution du deploiement production
+- verification post-deploiement immediate (smoke checks)
+- confirmation de disponibilite des parcours metier critiques
+Definition of done:
+- application accessible et utilisable en production sans blocage critique
+
+### F8.3 - Stabilisation post go-live
+
+Statut: `A FAIRE`
+Objectif: stabiliser les premiers jours d'exploitation apres mise en service.
+Livrables:
+- surveillance des incidents critiques
+- corrections bloquantes priorisees
+- validation de stabilite operationnelle
+Definition of done:
+- aucun incident critique ouvert bloquant l'usage metier principal
+
+## Phase 9 - Mise a jour fonctionnelle post-deploiement
+
+Statut global: `A FAIRE`
+
+### F9.1 - Mise a jour fonctionnelle post-lancement
+
+Statut: `A FAIRE`
+Objectif: livrer un premier lot de fonctionnalites supplementaires apres usage reel du SaaS.
+Livrables:
+- priorisation des retours utilisateurs post-lancement
+- specification du lot fonctionnel additionnel
+- livraison du lot sans regression metier
+Definition of done:
+- release post-lancement livree sans regression sur les flux coeur
 
 ## Scenarios d'acceptation globaux (gate final)
 
@@ -1258,5 +1359,11 @@ Hypotheses et defaults explicites (auth/reglages):
 41. F6.2
 42. F6.3
 43. F6.4
-44. F6.5
-45. F6.6
+44. F7.1
+45. F7.2
+46. F7.3
+47. F7.4
+48. F8.1
+49. F8.2
+50. F8.3
+51. F9.1

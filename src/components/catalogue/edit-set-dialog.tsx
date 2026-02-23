@@ -73,8 +73,9 @@ export function EditSetDialog({ set, variant = "default" }: EditSetDialogProps) 
             type="button"
             variant="outline"
             size="icon"
-            className="h-9 w-9 rounded-full text-slate-600"
+            className="app-icon-action"
             aria-label="Modifier fiche"
+            title="Modifier fiche"
           >
             <Edit className="h-4 w-4" />
           </Button>
@@ -92,10 +93,10 @@ export function EditSetDialog({ set, variant = "default" }: EditSetDialogProps) 
 
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="app-dialog-overlay z-40" />
-        <DialogPrimitive.Content className="app-dialog-surface fixed left-1/2 top-1/2 z-50 grid w-full max-w-[min(680px,92vw)] max-h-[86vh] -translate-x-1/2 -translate-y-1/2 gap-5 overflow-y-auto px-6 py-5 sm:px-7 sm:py-6 focus-visible:outline-none">
-          <DialogHeader className="space-y-1">
-            <DialogTitle>Modifier la fiche set</DialogTitle>
-            <DialogDescription>
+        <DialogPrimitive.Content className="app-dialog-surface app-modal-standard app-modal-scroll fixed left-1/2 top-1/2 z-50 grid w-full -translate-x-1/2 -translate-y-1/2 gap-5 focus-visible:outline-none">
+          <DialogHeader className="app-modal-header">
+            <DialogTitle className="app-modal-title">Modifier la fiche set</DialogTitle>
+            <DialogDescription className="app-modal-description">
               Modifiez les informations principales du set.
             </DialogDescription>
           </DialogHeader>
@@ -202,7 +203,7 @@ export function EditSetDialog({ set, variant = "default" }: EditSetDialogProps) 
             </div>
           </div>
 
-          <DialogFooter className="mt-1 flex justify-end gap-2">
+          <DialogFooter className="app-modal-footer">
             <DialogClose asChild>
               <Button type="button" variant="outline" className="h-9 px-4 text-xs font-medium">
                 Annuler

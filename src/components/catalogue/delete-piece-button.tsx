@@ -28,7 +28,8 @@ export function DeletePieceButton({ id, setId, refName }: DeletePieceButtonProps
       size="icon"
       onClick={handleDelete}
       disabled={isPending}
-      className="h-8 w-8 rounded-full text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+      className="app-icon-action"
+      aria-label="Supprimer cette pièce"
       title="Supprimer cette pièce"
     >
       {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}

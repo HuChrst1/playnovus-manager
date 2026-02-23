@@ -243,8 +243,9 @@ export function SalesTable({
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-9 w-9 rounded-full text-slate-700 hover:bg-slate-100 hover:text-slate-900 sm:h-8 sm:w-8"
+                              className="app-icon-action"
                               aria-label="Supprimer la vente"
+                              title="Supprimer la vente"
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>

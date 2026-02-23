@@ -2,6 +2,94 @@
 
 Ce fichier consigne les changements du projet, etapes par etapes.
 
+## 2026-02-22 - Reordonnancement ROADMAP pre-Phase 6 (auth -> validation -> deploiement -> post-deploiement)
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Reorganisation chronologique des travaux restants dans `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/ROADMAP.md`:
+  - `Phase 6` recadree sur acces applicatif, sessions et comptes
+  - `Phase 7` dediee a la validation finale pre-deploiement
+  - `Phase 8` ajoutee pour le deploiement SaaS initial
+  - `Phase 9` ajoutee pour la mise a jour fonctionnelle post-deploiement
+- Deplacement sans changement de fond des items validation:
+  - ancien `F6.1` -> `F7.1`
+  - ancien `F6.2` -> `F7.2`
+  - ancien `F6.3` -> `F7.3`
+  - ancien `F6.4` -> `F7.4`
+- Mise a jour des references internes impactees:
+  - references F5.0.4 alignees vers `F6.2/F6.3/F6.4`
+  - ordre recommande des features etendu jusqu'a `F9.1`
+
+### Verifications executees
+
+- Verification documentaire locale:
+  - enchainement explicite `Phase 6 -> Phase 7 -> Phase 8 -> Phase 9`
+  - coherence des renvois internes (`F5.0.4`, ordre recommande)
+  - disparition des anciennes references operationnelles `F6.5/F6.6`
+
+### Perimetre / limites
+
+- Lot strictement documentaire (`ROADMAP` + `HISTORIQUE`).
+- Aucun changement code applicatif.
+- Aucun changement API/DB/routes/query params.
+
+## 2026-02-22 - F5.6 Finitions UI/UX post-refonte (residuel priorise)
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Harmonisation icon-only stricte sur les actions metier (`edit/delete/close`) via `app-icon-action`:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/sales/SalesTable.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/sales/EditSaleDialog.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/sales/SetSelector.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/sales/PieceSelector.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/sales/SetPiecesDialog.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/report/ReportDialog.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/catalogue/DeleteSetButton.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/catalogue/delete-piece-button.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/catalogue/edit-set-dialog.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/catalogue/edit-piece-dialog.tsx`
+- Normalisation du chrome modal residuel:
+  - ajout classes shared (`app-modal-standard`, `app-modal-wide`, `app-modal-header`, `app-modal-description`, `app-modal-footer`)
+  - alignement des modales residuelles cibles (`EditSaleDialog`, `ReportDialog`, `edit-set-dialog`, `edit-piece-dialog`, `SetPiecesDialog`)
+- Unification des toolbars filtres inter-pages:
+  - ajout classes shared (`app-filter-toolbar-panel`, `app-filter-toolbar-field`, `app-filter-toolbar-actions`, `app-filter-active-badge`)
+  - feedback actif explicite (`data-active` + badge) sur:
+    - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/approvisionnement/page.tsx`
+    - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/ventes/page.tsx`
+    - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/stock/page.tsx`
+    - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/historique-stock/page.tsx`
+    - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/catalogue/page.tsx`
+    - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/dashboard/DashboardExecutiveView.tsx`
+- Reduction de styles ad hoc au profit du socle shared dans:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/globals.css`
+- Documentation F5.6 alignee:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/ROADMAP.md`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/UI_AUDIT_F5.5.md`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/UX_AUDIT_F5.5.md`
+
+### Verifications executees
+
+- `npm ci`: OK
+- `npm run lint`: OK
+- `npm run typecheck`: OK
+- `npm run build`: OK
+- `npm run test:f2.0`: OK
+- `npm run lint:ui-contrast`: OK
+
+### Perimetre / limites
+
+- Scope strict F5.6 respecte:
+  - finitions UI/UX residuelles uniquement
+  - aucun changement metier
+  - aucun changement API/DB
+  - aucun changement routes/query params/tri/pagination
+  - aucune ecriture DB distante
+- Aucun arbitrage structurant supplementaire necessitant MAJ `docs/DECISIONS.md`.
+
 ## 2026-02-22 - F5.3 Verification responsive des routes cles
 
 Statut: `FAIT`

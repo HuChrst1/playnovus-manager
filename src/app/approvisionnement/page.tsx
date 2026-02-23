@@ -290,6 +290,7 @@ export default async function ApprovisionnementPage({
   resetDateParams.set("sort", normalized.sort);
   resetDateParams.set("dir", normalized.dir);
   const resetDateHref = `/approvisionnement?${resetDateParams.toString()}`;
+  const activeFilterCount = Number(Boolean(normalized.from)) + Number(Boolean(normalized.to));
 
   return (
     <main className="space-y-6">
@@ -346,18 +347,20 @@ export default async function ApprovisionnementPage({
 
       <div className="appro-actions-bar">
         <details className="group relative">
-          <summary className="appro-filter-trigger-icon" aria-label="Filtrer" title="Filtrer">
+          <summary
+            className="appro-filter-trigger-icon"
+            data-active={activeFilterCount > 0 ? "true" : "false"}
+            aria-label="Filtrer"
+            title={activeFilterCount > 0 ? `Filtrer (${activeFilterCount} actif)` : "Filtrer"}
+          >
             <Filter className="h-4 w-4" />
           </summary>
 
           <div className="appro-filter-popover-left hidden group-open:block">
-            <form
-              method="GET"
-              className="flex w-[min(96vw,760px)] max-w-full flex-wrap items-end gap-2 rounded-[24px] border border-white/75 bg-white/92 px-2.5 py-2 shadow-[0_16px_36px_rgba(15,23,42,0.1)] backdrop-blur-md"
-            >
+            <form method="GET" className="app-filter-toolbar-panel">
               <label
                 htmlFor="lots-from"
-                className="inline-flex min-w-0 basis-full items-center gap-1 text-[11px] font-medium text-slate-500 sm:basis-auto"
+                className="app-filter-toolbar-field"
               >
                 <span>Du</span>
                 <input
@@ -365,13 +368,13 @@ export default async function ApprovisionnementPage({
                   type="date"
                   name="from"
                   defaultValue={normalized.from ?? ""}
-                  className="app-control h-8 w-full px-3 text-[11px] sm:w-[132px]"
+                  className="app-control h-8 w-[132px] px-3 text-[11px]"
                 />
               </label>
 
               <label
                 htmlFor="lots-to"
-                className="inline-flex min-w-0 basis-full items-center gap-1 text-[11px] font-medium text-slate-500 sm:basis-auto"
+                className="app-filter-toolbar-field"
               >
                 <span>Au</span>
                 <input
@@ -379,31 +382,40 @@ export default async function ApprovisionnementPage({
                   type="date"
                   name="to"
                   defaultValue={normalized.to ?? ""}
-                  className="app-control h-8 w-full px-3 text-[11px] sm:w-[132px]"
+                  className="app-control h-8 w-[132px] px-3 text-[11px]"
                 />
               </label>
 
               <input type="hidden" name="sort" value={normalized.sort} />
               <input type="hidden" name="dir" value={normalized.dir} />
 
-              <Button
-                variant="outline"
-                size="sm"
-                asChild
-                className="w-full shrink-0 text-[11px] sm:w-auto"
-              >
-                <Link href={resetDateHref}>Réinitialiser</Link>
-              </Button>
-              <Button
-                type="submit"
-                size="sm"
-                className="w-full shrink-0 text-[11px] font-semibold sm:w-auto"
-              >
-                Appliquer
-              </Button>
+              <div className="app-filter-toolbar-actions">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  asChild
+                  className="text-[11px]"
+                >
+                  <Link href={resetDateHref}>Réinitialiser</Link>
+                </Button>
+                <Button
+                  type="submit"
+                  size="sm"
+                  className="text-[11px] font-semibold"
+                >
+                  Appliquer
+                </Button>
+              </div>
             </form>
           </div>
         </details>
+
+        {activeFilterCount > 0 ? (
+          <span className="app-filter-active-badge" aria-live="polite">
+            {activeFilterCount} filtre actif
+            {activeFilterCount > 1 ? "s" : ""}
+          </span>
+        ) : null}
 
         <NewLotDialog
           supplierOptions={supplierOptions}

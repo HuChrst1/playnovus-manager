@@ -1330,6 +1330,7 @@ export function DashboardExecutiveView({ dashboard }: { dashboard: DashboardExec
     return trendMap;
   }, [dashboard.kpis, dayTrendPoints]);
   const kpiHubDefaultKey = (visibleKpis[0]?.key ?? dashboard.kpis[0]?.key ?? "netRevenue") as DashboardFinancialKpiKey;
+  const hasActiveFilters = dashboard.filters.preset !== "total";
   const isProcurementBlockPartial =
     dashboard.forecast.quality === "partial" ||
     dashboard.salesChannelCohorts.quality === "partial" ||
@@ -1390,77 +1391,88 @@ export function DashboardExecutiveView({ dashboard }: { dashboard: DashboardExec
           </h1>
 
           <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:items-end">
-            <button
-              type="button"
-              onClick={openDesktopFilterPanel}
-              className="app-filter-trigger h-10 justify-center text-sm sm:justify-start"
-            >
-              <Filter className="h-4 w-4" />
-              Filtrer
-            </button>
+            <div className="relative inline-flex self-start sm:self-end">
+              <button
+                type="button"
+                onClick={openDesktopFilterPanel}
+                className="app-filter-trigger h-10 justify-center text-sm sm:justify-start"
+                data-active={hasActiveFilters ? "true" : "false"}
+              >
+                <Filter className="h-4 w-4" />
+                Filtrer
+              </button>
 
-            {isDesktopFilterOpen ? (
-              <div className="flex w-[min(96vw,980px)] max-w-full flex-wrap items-end gap-2 rounded-[24px] border border-white/75 bg-white/92 px-2.5 py-2 shadow-[0_16px_36px_rgba(15,23,42,0.1)] backdrop-blur-md">
-                <FilterTimeline selectedPreset={draftPreset} onSelect={applyPresetInstant} />
+              {isDesktopFilterOpen ? (
+                <div className="app-filter-popover-side">
+                  <div className="app-filter-toolbar-panel">
+                    <FilterTimeline selectedPreset={draftPreset} onSelect={applyPresetInstant} />
 
-                <button
-                  type="button"
-                  onClick={() => setDraftPreset("custom")}
-                  className={cn(
-                    "app-segmented-item h-8 w-full shrink-0 sm:w-auto",
-                    draftPreset === "custom"
-                      ? "app-segmented-item--active"
-                      : "app-segmented-item--inactive border border-border bg-white"
-                  )}
-                >
-                  Personnalise
-                </button>
+                    <button
+                      type="button"
+                      onClick={() => setDraftPreset("custom")}
+                      className={cn(
+                        "app-segmented-item h-8 shrink-0",
+                        draftPreset === "custom"
+                          ? "app-segmented-item--active"
+                          : "app-segmented-item--inactive border border-border bg-white"
+                      )}
+                    >
+                      Personnalise
+                    </button>
 
-                <label className="inline-flex min-w-0 basis-full items-center gap-1 text-[11px] font-medium text-slate-500 sm:basis-auto">
-                  <span>Du</span>
-                  <input
-                    type="date"
-                    value={draftFrom}
-                    onChange={(event) => setDraftFrom(event.target.value)}
-                    disabled={draftPreset !== "custom"}
-                    className="app-control h-8 w-full px-3 text-[11px] disabled:cursor-not-allowed disabled:opacity-60 sm:w-[132px]"
-                  />
-                </label>
+                    <label className="app-filter-toolbar-field">
+                      <span>Du</span>
+                      <input
+                        type="date"
+                        value={draftFrom}
+                        onChange={(event) => setDraftFrom(event.target.value)}
+                        disabled={draftPreset !== "custom"}
+                        className="app-control h-8 w-[132px] px-3 text-[11px] disabled:cursor-not-allowed disabled:opacity-60"
+                      />
+                    </label>
 
-                <label className="inline-flex min-w-0 basis-full items-center gap-1 text-[11px] font-medium text-slate-500 sm:basis-auto">
-                  <span>Au</span>
-                  <input
-                    type="date"
-                    value={draftTo}
-                    onChange={(event) => setDraftTo(event.target.value)}
-                    disabled={draftPreset !== "custom"}
-                    className="app-control h-8 w-full px-3 text-[11px] disabled:cursor-not-allowed disabled:opacity-60 sm:w-[132px]"
-                  />
-                </label>
+                    <label className="app-filter-toolbar-field">
+                      <span>Au</span>
+                      <input
+                        type="date"
+                        value={draftTo}
+                        onChange={(event) => setDraftTo(event.target.value)}
+                        disabled={draftPreset !== "custom"}
+                        className="app-control h-8 w-[132px] px-3 text-[11px] disabled:cursor-not-allowed disabled:opacity-60"
+                      />
+                    </label>
 
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={applyFilters}
-                  disabled={draftPreset !== "custom"}
-                  className="w-full shrink-0 text-[11px] font-semibold sm:w-auto"
-                >
-                  Appliquer
-                </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={applyFilters}
+                      disabled={draftPreset !== "custom"}
+                      className="shrink-0 text-[11px] font-semibold"
+                    >
+                      Appliquer
+                    </Button>
 
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    router.push("/?preset=total");
-                    setIsDesktopFilterOpen(false);
-                  }}
-                  className="w-full shrink-0 text-[11px] sm:w-auto"
-                >
-                  Reinitialiser
-                </Button>
-              </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        router.push("/?preset=total");
+                        setIsDesktopFilterOpen(false);
+                      }}
+                      className="shrink-0 text-[11px]"
+                    >
+                      Reinitialiser
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            {hasActiveFilters ? (
+              <span className="app-filter-active-badge sm:self-end">
+                {dashboard.filters.activePeriodLabel}
+              </span>
             ) : null}
           </div>
         </div>

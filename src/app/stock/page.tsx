@@ -2,7 +2,7 @@
 
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
-import { Boxes, Calculator, History, Wallet } from "lucide-react";
+import { Boxes, Calculator, Filter, History, Wallet } from "lucide-react";
 import { SalesStatCard } from "@/components/sales/SalesStatCard";
 import { Button } from "@/components/ui/button";
 import { SortableTableHeader, TableCard, TableOverflow } from "@/components/ui/data-table";
@@ -139,6 +139,11 @@ export default async function StockPage({ searchParams }: StockPageProps) {
     const qs = params.toString();
     return qs ? `/stock?${qs}` : "/stock";
   };
+  const resetSearchParams = new URLSearchParams();
+  resetSearchParams.set("sort", activeSortKey);
+  resetSearchParams.set("dir", dir);
+  const resetSearchHref = `/stock?${resetSearchParams.toString()}`;
+  const activeFilterCount = Number(Boolean(searchQuery));
 
   // --------- RENDER ---------
   if (error) {
@@ -203,39 +208,62 @@ export default async function StockPage({ searchParams }: StockPageProps) {
         />
       </section>
 
-      <section className="grid gap-2 px-1 md:grid-cols-2 md:items-center md:px-2 xl:grid-cols-3">
-        <form
-          method="GET"
-          className="col-span-1 grid grid-cols-1 items-center gap-2 sm:grid-cols-[minmax(0,1fr)_auto]"
-        >
-          <input
-            type="text"
-            name="q"
-            placeholder="Filtrer par réf. pièce..."
-            defaultValue={searchQuery}
-            className="app-control app-control--md h-9 w-full min-w-0"
-          />
-
-          <input type="hidden" name="sort" value={activeSortKey} />
-          <input type="hidden" name="dir" value={dir} />
-
-          <Button type="submit" className="h-9 w-full px-4 text-xs font-medium sm:w-auto">
-            Rechercher
-          </Button>
-        </form>
-
-        <div className="col-span-1 flex items-start justify-start md:col-start-2 md:justify-end xl:col-start-3">
-          <Button
-            asChild
-            className="h-9 w-full gap-2 px-4 text-xs font-medium sm:w-auto"
+      <div className="appro-actions-bar">
+        <details className="group relative">
+          <summary
+            className="appro-filter-trigger-icon"
+            data-active={activeFilterCount > 0 ? "true" : "false"}
+            aria-label="Filtrer"
+            title={activeFilterCount > 0 ? "Filtrer (1 actif)" : "Filtrer"}
           >
-            <Link href="/historique-stock">
-              <History className="h-4 w-4" />
-              Historique
-            </Link>
-          </Button>
-        </div>
-      </section>
+            <Filter className="h-4 w-4" />
+          </summary>
+
+          <div className="appro-filter-popover-left hidden group-open:block">
+            <form method="GET" className="app-filter-toolbar-panel">
+              <label htmlFor="stock-piece-filter" className="app-filter-toolbar-field">
+                <span>Réf.</span>
+                <input
+                  id="stock-piece-filter"
+                  type="text"
+                  name="q"
+                  placeholder="Filtrer par réf. pièce..."
+                  defaultValue={searchQuery}
+                  className="app-control h-8 w-[220px] px-3 text-[11px]"
+                />
+              </label>
+
+              <input type="hidden" name="sort" value={activeSortKey} />
+              <input type="hidden" name="dir" value={dir} />
+
+              <div className="app-filter-toolbar-actions">
+                <Button variant="outline" size="sm" asChild className="text-[11px]">
+                  <Link href={resetSearchHref}>Réinitialiser</Link>
+                </Button>
+                <Button type="submit" size="sm" className="text-[11px] font-semibold">
+                  Appliquer
+                </Button>
+              </div>
+            </form>
+          </div>
+        </details>
+
+        {activeFilterCount > 0 ? (
+          <span className="app-filter-active-badge" aria-live="polite">
+            1 filtre actif
+          </span>
+        ) : null}
+
+        <Button
+          asChild
+          className="h-9 w-full gap-2 px-4 text-xs font-medium sm:w-auto"
+        >
+          <Link href="/historique-stock">
+            <History className="h-4 w-4" />
+            Historique
+          </Link>
+        </Button>
+      </div>
 
       {/* TABLEAU STOCK */}
       <TableCard className="appro-table-shell">

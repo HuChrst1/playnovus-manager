@@ -60,19 +60,20 @@ export function EditSaleDialog({ saleId }: { saleId: number }) {
         <Button
           variant="ghost"
           size="icon"
-          className="h-8 w-8 rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+          className="app-icon-action"
           aria-label="Éditer la vente"
+          title="Éditer la vente"
         >
           <Pencil className="h-4 w-4" />
         </Button>
       </DialogTrigger>
 
-      <DialogContent className="max-w-[min(1080px,94vw)] p-8 sm:p-10">
-        <DialogHeader className="mb-4 border-b border-dotted border-slate-200/80 pb-4">
-          <DialogTitle className="text-2xl font-medium tracking-tight text-slate-900">
+      <DialogContent className="app-modal-sales app-modal-scroll overflow-x-hidden">
+        <DialogHeader className="app-modal-header">
+          <DialogTitle className="app-modal-title">
             Modifier la vente #{saleId}
           </DialogTitle>
-          <DialogDescription className="mt-1 text-sm text-slate-500">
+          <DialogDescription className="app-modal-description">
             Même formulaire que “Nouvelle vente”, mais sauvegarde sur la même vente (même ID).
           </DialogDescription>
         </DialogHeader>

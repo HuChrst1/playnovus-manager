@@ -37,10 +37,11 @@ export function DeleteSetButton({
         type="submit"
         variant="ghost"
         size="icon"
-        className="h-7 w-7 rounded-full text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+        className="app-icon-action"
         onClick={handleClick}
         data-row-action="true" // évite de déclencher le clic sur la ligne
         aria-label="Supprimer le set"
+        title="Supprimer le set"
       >
         <Trash2 className="h-4 w-4" />
       </Button>

@@ -47,12 +47,13 @@ Perimetre: `src/app/**`, `src/components/**`, `src/app/globals.css`, primitives 
 
 ### Boutons
 
-- Etat: **partiellement harmonise** (majoritairement conforme).
+- Etat: **conforme**.
 - Points conformes:
-  - style ghost rond des actions edit/delete aligne sur appro pour les zones metier principales
+  - actions icon-only metier uniformisees via classe shared (`app-icon-action`)
+  - style/focus/disabled coherents sur edit/delete/close des zones cibles
   - topbar icon buttons unifies (`app-topbar-icon`)
 - Ecarts residuels:
-  - coexistence de classes ad hoc sur certains boutons non metier (modales techniques et actions secondaires)
+  - aucune incoherence majeure detectee dans le perimetre F5.6.
 
 ### Cards / surfaces
 
@@ -83,12 +84,13 @@ Perimetre: `src/app/**`, `src/components/**`, `src/app/globals.css`, primitives 
 
 ### Modales
 
-- Etat: **partiellement harmonise**.
+- Etat: **conforme**.
 - Points conformes:
-  - base dialog convergente (rayon, padding, footer action, labels)
+  - chrome modal unifie sur les modales residuelles (largeur/token, header, densite, footer)
+  - classes shared appliquees (`app-modal-standard`, `app-modal-wide`, `app-modal-header`, `app-modal-footer`)
   - dark tone cible pour la modale opportunites dashboard
 - Ecarts residuels:
-  - certaines modales gardent des largeurs/headers specifiques non alignes au pattern principal.
+  - aucune derive critique/majeure detectee sur les modales ciblees F5.6.
 
 ### Topbar / navigation globale
 
@@ -107,31 +109,16 @@ Perimetre: `src/app/**`, `src/components/**`, `src/app/globals.css`, primitives 
 
 ## Majeur
 
-1. Variantes de style boutons encore ad hoc dans certains composants complexes.
-   - Impact: perception d'incoherence visuelle entre modules.
-   - Fichiers:
-     - `src/components/sales/SetPiecesDialog.tsx`
-     - `src/components/sales/SetSelector.tsx`
-     - `src/components/sales/PieceSelector.tsx`
-     - `src/components/report/ReportDialog.tsx`
-2. Chrome modal non totalement standardise sur quelques ecrans.
-   - Impact: rythmes de lecture et densite inegaux selon modal.
-   - Fichiers:
-     - `src/components/sales/EditSaleDialog.tsx`
-     - `src/components/catalogue/edit-set-dialog.tsx`
-     - `src/components/catalogue/edit-piece-dialog.tsx`
+- Aucun point majeur bloqueur detecte apres application F5.6.
 
 ## Mineur
 
-1. Heterogeneite ponctuelle des etats icon-only (taille/stroke/focus) hors topbar.
+1. Variantes contextuelles de densite encore assumees sur quelques modales techniques hors lot F5.6.
    - Fichiers:
-     - `src/components/sales/SalesTable.tsx`
-     - `src/app/catalogue/DeleteSetButton.tsx`
-     - `src/components/catalogue/delete-piece-button.tsx`
-2. Quelques micro-ecarts de spacing horizontal des toolbar filtres entre pages.
+     - `src/app/approvisionnement/[id]/LotCsvImportDialog.tsx`
+     - `src/app/approvisionnement/[id]/LotInvoiceAttachmentPanel.tsx`
+2. Pattern filtres catalogue conserve en drilldown pills (choix UX assume), avec coherence active/reset/apply renforcee.
    - Fichiers:
-     - `src/app/ventes/page.tsx`
-     - `src/app/stock/page.tsx`
      - `src/app/catalogue/page.tsx`
 
 ## 5) Conformite contraste (WCAG AA strict)
@@ -146,20 +133,9 @@ Perimetre: `src/app/**`, `src/components/**`, `src/app/globals.css`, primitives 
 - Etat actuel:
   - audit contraste **PASS** sur les combinaisons DS critiques (boutons, champs, placeholders, focus ring, icones).
 
-## 6) Ecarts residuels et plan court terme
+## 6) Statut post-F5.6
 
-### Quick wins (faible effort, impact rapide)
-
-1. Remplacer les dernieres classes boutons ad hoc par les variantes DS (`ghost`, `outline`, `icon`) dans les composants identifies en majeur.
-2. Aligner les headers/footers de modales restantes sur un seul gabarit (`max-w`, `padding`, `DialogHeader`, `DialogFooter`).
-3. Uniformiser la taille et le focus des actions icon-only en table.
-
-### Chantiers moyens
-
-1. Convergence des toolbar filtres (gaps, alignements, fallback mobile) avec un pattern unique.
-2. Reduction des styles inline localises au profit de classes scopees reutilisables.
-
-### Cible de sortie
-
-- Boutons, cards, champs, tableaux et modales suivent un principe visuel unique.
+- Cible F5.6 atteinte:
+  - aucune finding `Critique` ou `Majeur`
+  - harmonisation icon-only + modales + filtres inter-pages livree
 - Contraste et focus restent controles automatiquement via lint.
