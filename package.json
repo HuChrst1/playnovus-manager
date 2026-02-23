@@ -16,9 +16,10 @@
     "audit:prod": "npm audit --omit=dev --audit-level=moderate",
     "audit:deps": "npm ls ajv @eslint/eslintrc eslint || true",
     "test:f2.0": "node scripts/f2_0_validate_local.mjs",
-    "test": "npm run test:unit && npm run test:e2e",
-    "test:unit": "node -e \"console.log('[TODO][F0.1] Aucun framework de test unitaire configure.');\"",
-    "test:e2e": "node -e \"console.log('[TODO][F0.1] Aucun framework de test e2e configure.');\""
+    "test": "npm run test:unit && npm run test:integration",
+    "test:unit": "node --test tests/unit/fifo.test.mjs",
+    "test:integration": "node scripts/f7_1_validate_local.mjs && npm run test:f2.0",
+    "test:e2e": "node -e \"console.log('[INFO] E2E browser tests hors scope F7.1.');\""
   },
   "dependencies": {
     "@radix-ui/react-alert-dialog": "^1.1.15",

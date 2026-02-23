@@ -1229,13 +1229,34 @@ Hypotheses et defaults explicites (auth/reglages):
 
 ## Phase 7 - Validation finale et readiness deploiement
 
-Statut global: `A FAIRE`
+Statut global: `EN COURS`
 
 ### F7.1 - Tests automatiques flux critiques
 
-Statut: `A FAIRE`
+Statut: `FAIT`
 Objectif: proteger les regles d'or metier.
-Portee minimale:
+Livrables realises:
+- infrastructure tests locale reproductible:
+  - `test:unit`: `node --test tests/unit/fifo.test.mjs`
+  - `test:integration`: `node scripts/f7_1_validate_local.mjs && npm run test:f2.0`
+  - `test`: orchestration unique `test:unit` + `test:integration`
+- extraction FIFO testable sans I/O:
+  - `src/lib/stock-fifo.ts` (buckets oldest-first, gestion multi-lots, ignore `ADJUST`)
+  - `src/lib/stock.ts` aligne sur le module FIFO partage
+- suite unitaire FIFO:
+  - consume oldest-first
+  - epuisement partiel/total multi-lots
+  - lignes `ADJUST` et quantites invalides ignorees
+- suite integration F7.1 locale (`scripts/f7_1_validate_local.mjs`) avec garde local-only:
+  - refus d'execution si `npx supabase status -o env` ne pointe pas vers `localhost/127.0.0.1`
+  - S1 FIFO oldest-first (`sale_item_pieces` + `stock_movements`)
+  - S2 confirmation lot draft non vide -> `PURCHASE/IN` coherent
+  - S3 confirmation lot vide/incoherent refusee (aucun `PURCHASE`)
+  - S4 annulation vente `CONFIRMED` -> `CANCELLED` + `SALE_CANCEL/IN` miroirs + stock restaure
+  - S5 coherence KPI exhaustive `/ventes` + dashboard sur plage date isolee
+- non-regression preservee:
+  - `npm run test:f2.0` conserve et execute dans `test:integration`
+Portee couverte:
 - FIFO
 - confirmation lot
 - annulation vente
@@ -1267,9 +1288,28 @@ Objectif: livrer de facon predictable.
 Livrables:
 - plan rollback
 - checklist verification stock/coherence
+- checklist securite pre-release (rate limits, RLS, CAPTCHA, validation serveur, API keys, env vars, CORS, dependency audit)
 - monitoring minimal des erreurs critiques
 Definition of done:
 - runbook de livraison complet et actionnable
+- checklist securite Phase 7 completee avec preuves
+
+### Checklist securite Phase 7 (gate bloquant)
+
+Statut: `A FAIRE`
+Objectif: valider la posture securite avant toute livraison pre-prod/prod.
+Portee minimale:
+- rate limits verifies sur endpoints critiques (auth + mutations metier)
+- Row Level Security active et policies conformes sur tables exposees
+- CAPTCHA active sur auth + formulaires sensibles
+- validation server-side obligatoire sur toutes les entrees utilisateur
+- API keys securisees (server-only, scope minimal, aucune fuite client)
+- variables d'environnement correctement renseignees et segmentees par environnement
+- restrictions CORS limitees aux origines autorisees
+- dependency audit execute et traite avant release
+Definition of done:
+- chaque point de checklist est valide (ou bloque explicitement la livraison)
+- preuves de verification archivees dans le lot de release
 
 ## Phase 8 - Deploiement SaaS initial
 
@@ -1339,6 +1379,14 @@ Definition of done:
 11. transition `confirmed -> draft` retire les mouvements `PURCHASE` si aucune vente liee, sinon echoue explicitement
 12. auth bloquante: utilisateur non connecte ne peut pas acceder a l'app metier
 13. multi-session admin: A et B voient les memes donnees et les reports tracent auteur + cloture
+14. rate limits actifs sur les endpoints critiques
+15. RLS activee et validee sur les tables exposees
+16. CAPTCHA active sur auth et formulaires sensibles
+17. validations server-side bloquent les payloads invalides/malicieux
+18. API keys non exposees cote client et scopes minimaux verifies
+19. variables d'environnement critiques presentes et correctes par environnement
+20. CORS restreint aux origines autorisees
+21. audit dependances sans alerte bloquante non traitee
 
 ## Ordre recommande de lancement des agents Codex (feature par feature)
 

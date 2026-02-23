@@ -2,7 +2,16 @@
 
 import "server-only";
 import { supabaseServer as supabase } from "@/lib/supabase-server";
+import {
+  buildFifoBuckets,
+  toNullableBigintString,
+} from "@/lib/stock-fifo";
 import type { Tables, TablesInsert } from "@/types/supabase";
+import type {
+  FifoAllocationResult,
+  FifoBucket,
+  FifoChunk,
+} from "@/lib/stock-fifo";
 
 type StockMovementDbRow = Tables<"stock_movements">;
 type StockMovementDbInsert = TablesInsert<"stock_movements">;
@@ -17,22 +26,8 @@ export type StockForPiece = {
   totalValue: number;
 };
 
-const toNullableBigintString = (v: unknown): string | null => {
-  if (v === null || v === undefined) return null;
-
-  if (typeof v === "bigint") return v.toString();
-
-  if (typeof v === "string") {
-    const s = v.trim();
-    return s.length ? s : null;
-  }
-
-  if (typeof v === "number" && Number.isFinite(v)) {
-    return String(Math.trunc(v));
-  }
-
-  return null;
-};
+export { buildFifoBuckets };
+export type { FifoAllocationResult, FifoBucket, FifoChunk };
 
 const toNullableInt = (v: unknown): number | null => {
   if (v === null || v === undefined) return null;
@@ -117,74 +112,6 @@ export type StockMovementInput = {
   sourceId?: string | null;
   comment?: string | null;
 };
-
-export type FifoChunk = {
-  pieceRef: string;
-  // bigint-safe
-  lotId: string | null;
-  quantity: number;
-  unitCost: number;
-  movementId?: number;
-};
-
-export type FifoAllocationResult = {
-  pieceRef: string;
-  requestedQuantity: number;
-  totalQuantity: number;
-  totalCost: number;
-  chunks: FifoChunk[];
-};
-
-export type FifoBucket = {
-  pieceRef: string;
-  // bigint-safe
-  lotId: string | null;
-  unitCost: number;
-  quantityAvailable: number;
-  firstMovementId?: number;
-};
-
-export function buildFifoBuckets(movements: StockMovementRowBigint[]): FifoBucket[] {
-  const buckets: FifoBucket[] = [];
-
-  for (const m of movements) {
-    const pieceRef = m.piece_ref;
-    if (!pieceRef) continue;
-
-    const qty = Number(m.quantity ?? 0);
-    if (!Number.isFinite(qty) || qty <= 0) continue;
-
-    const unitCost =
-      m.unit_cost !== null && m.unit_cost !== undefined ? Number(m.unit_cost) : 0;
-
-    const lotId = toNullableBigintString(m.lot_id);
-
-    if (m.direction === "IN") {
-      buckets.push({
-        pieceRef,
-        lotId,
-        unitCost,
-        quantityAvailable: qty,
-        firstMovementId: m.id ?? undefined,
-      });
-    } else if (m.direction === "OUT") {
-      let remaining = qty;
-
-      for (const bucket of buckets) {
-        if (remaining <= 0) break;
-        if (bucket.quantityAvailable <= 0) continue;
-
-        const take = Math.min(bucket.quantityAvailable, remaining);
-        bucket.quantityAvailable -= take;
-        remaining -= take;
-      }
-    } else if (m.direction === "ADJUST") {
-      continue;
-    }
-  }
-
-  return buckets.filter((b) => b.quantityAvailable > 0);
-}
 
 export async function fetchMovementsForPiece(
   pieceRef: string

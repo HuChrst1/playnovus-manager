@@ -583,6 +583,27 @@ Derniere mise a jour: 2026-02-23
     - pas de changement schema DB
     - aucune ecriture distante
 
+### D-036 - Strategie de tests critiques locale-first (F7.1)
+
+- Statut: validee
+- Constat:
+  - la protection metier des flux FIFO/lot/annulation/KPI necessitait une suite executable localement en une commande
+  - le projet ne disposait pas de `test` automatise couvrant ces regressions critiques
+  - la politique de securite impose zero ecriture distante pour ce lot
+- Impact:
+  - scripts npm normalises:
+    - `test:unit` pour la logique FIFO pure
+    - `test:integration` pour les scenarios metier F7.1 sur Supabase local
+    - `test` comme orchestration unique (`unit + integration`)
+  - garde local-only obligatoire dans la suite integration (`supabase status -o env` + verification `localhost/127.0.0.1`)
+  - couverture metier minimale verrouillee:
+    - FIFO oldest-first
+    - confirmation lot (nominal + refus incoherent)
+    - annulation vente avec restauration stock
+    - coherence KPI ventes/dashboard
+  - non-regression F2.0 imposee dans la campagne integration (`npm run test:f2.0`)
+  - aucun changement schema SQL requis pour la strategie de test
+
 ## Hypothèses / décisions en attente
 
 ### H-002 - Politique d'authentification applicative
@@ -603,11 +624,11 @@ Derniere mise a jour: 2026-02-23
 
 ### H-004 - Couverture de tests
 
-- Statut: ouverte
+- Statut: cloturee (voir `D-036`)
 - Observation:
-  - pas de script `test` dans `package.json`
-- A décider:
-  - niveau minimal de tests automatisés sur flux critiques (FIFO, annulation, confirmation lot)
+  - la couverture minimale critique est desormais formalisee et executable localement
+- Decision prise:
+  - strategie locale-first unitaire + integration sur FIFO, confirmation lot, annulation vente et coherence KPI, avec non-regression `test:f2.0` obligatoire
 
 ### H-005 - Alignement implémentation avec décisions produit validées
 

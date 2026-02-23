@@ -2,6 +2,86 @@
 
 Ce fichier consigne les changements du projet, etapes par etapes.
 
+## 2026-02-23 - F7.1 Tests automatiques flux critiques
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Infrastructure de test F7.1 branchee dans:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/package.json`
+  - scripts ajoutes/mis a jour:
+    - `test:unit` -> `node --test tests/unit/fifo.test.mjs`
+    - `test:integration` -> `node scripts/f7_1_validate_local.mjs && npm run test:f2.0`
+    - `test` -> orchestration `test:unit` + `test:integration`
+    - `test:f2.0` conserve strictement (non-regression)
+- Extraction FIFO pure et testable:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/lib/stock-fifo.ts`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/lib/stock.ts`
+  - objectif: isoler la logique buckets FIFO oldest-first sans changer le comportement metier
+- Suite unitaire FIFO:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/tests/unit/fifo.test.mjs`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/tests/helpers/fifo-fixtures.mjs`
+  - coverage:
+    - consommation oldest-first
+    - depletion partielle/complete multi-lots
+    - ignorance des lignes `ADJUST` et quantites invalides
+- Suite integration F7.1 locale:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/scripts/f7_1_validate_local.mjs`
+  - garde local-only:
+    - lecture `npx supabase status -o env`
+    - echec immediat si `API_URL` n'est pas `localhost/127.0.0.1`
+  - execution des server actions compilees avec mock defensif `revalidatePath`
+  - fixtures isolees via token run (`F71_*`) et nettoyage best-effort
+  - scenarios valides:
+    - S1 FIFO oldest-first
+    - S2 confirmation lot non vide -> `PURCHASE/IN` coherent
+    - S3 confirmation lot vide/incoherent refusee
+    - S4 annulation vente -> `CANCELLED` + mouvements IN miroirs + stock restaure
+    - S5 coherence KPI exhaustive (`/ventes` + dashboard)
+- Documentation:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/ROADMAP.md` (`F7.1` passe a `FAIT`, phase 7 passe a `EN COURS`)
+
+### Verifications executees
+
+- Pre-check local:
+  - `npx supabase --version` -> OK (`2.65.10`)
+  - `docker info --format '{{.ServerVersion}}'` -> OK (`29.2.0`)
+  - `npx supabase status` -> OK (stack locale active)
+- Setup local:
+  - `npx supabase start` -> OK (stack deja active)
+  - `npx supabase db reset --local` -> OK (baseline + migrations F1.x/F5.0.4/F6.4 + seed)
+- Checks qualite:
+  - `npm ci` -> OK (`added 188 packages`, `0 vulnerabilities`)
+  - `npm run lint` -> OK
+  - `npm run typecheck` -> OK
+  - `npm run build` -> OK
+  - `npm run test` -> OK (`test:unit` + `test:integration` + `test:f2.0`)
+  - `npm run test:f2.0` -> OK
+  - `npm run lint:ui-contrast` -> OK
+
+### Validation fonctionnelle F7.1
+
+- Valide automatiquement/localement:
+  - FIFO protegee par tests unitaires + integration (S1)
+  - confirmation lot protegee sur cas nominal et refus metier (S2/S3)
+  - annulation vente protegee avec restauration stock/mouvements miroir (S4)
+  - coherence KPI ventes/dashboard verifiee de maniere exhaustive sur fenetre date isolee (S5)
+  - non-regression F2.0 confirmee (S6)
+  - commande unique de campagne complete disponible (`npm run test`) (S7)
+- A valider manuellement en navigateur local (`npm run dev`):
+  - verification visuelle finale des cartes KPI `/ventes` et `/`
+  - verification de la lisibilite metier des compteurs sur la plage de test
+
+### Perimetre / limites
+
+- Scope strict F7.1 respecte:
+  - pas de migration SQL ajoutee
+  - pas de changement de schema DB
+  - pas de changement d'API/UI produit
+- Aucune ecriture DB distante (`--linked` non utilise).
+- Aucun secret sensible ajoute au repo.
+
 ## 2026-02-23 - F6.4 Compte/Parametres + attribution reports
 
 Statut: `FAIT`
