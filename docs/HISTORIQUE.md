@@ -2,6 +2,47 @@
 
 Ce fichier consigne les changements du projet, etapes par etapes.
 
+## 2026-02-23 - F6.1 Cadrage produit page Compte/Parametres
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Creation du cadrage produit F6.1 dans:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/F6_1_CADRAGE_COMPTE_PARAMETRES.md`
+- Contenu formalise et valide dans le cadrage:
+  - vision/objectifs/non-objectifs
+  - parcours utilisateur desktop/mobile
+  - architecture d'information et priorisation (MVP vs plus tard)
+  - regles UX attendues (succes/erreur/vide/chargement)
+  - cadrage attribution reports (auteur creation + cloture/ignorance) au niveau produit
+  - frontieres explicites F6.1 -> F6.2/F6.3/F6.4
+  - criteres d'acceptation et script de revue documentaire
+- Mise a jour ROADMAP:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/ROADMAP.md`
+  - `F6.1` passe a `FAIT`
+  - `F6.2/F6.3/F6.4` maintenus a `A FAIRE`
+
+### Verifications executees
+
+- Verification documentaire locale:
+  - coherence du cadrage F6.1 avec la section Phase 6 de la roadmap
+  - coherence de scope: aucun glissement vers implementation F6.2/F6.3/F6.4
+  - absence de contradiction avec les contraintes AS-IS/CDC (pas d'auth active implementee, pas d'admin avancee)
+- Verification diff:
+  - modifications limitees aux documents de pilotage (`docs/*`)
+  - aucune modification dans `src/`
+  - aucune modification dans `supabase/migrations/`
+
+### Perimetre / limites
+
+- Lot strictement documentaire (F6.1 uniquement).
+- Aucun changement code applicatif.
+- Aucun changement API/DB/routes/query params.
+- Aucune migration SQL.
+- Aucune ecriture DB distante.
+- Aucun nouvel arbitrage structurant ajoute dans `docs/DECISIONS.md`.
+
 ## 2026-02-22 - Reordonnancement ROADMAP pre-Phase 6 (auth -> validation -> deploiement -> post-deploiement)
 
 Statut: `FAIT`

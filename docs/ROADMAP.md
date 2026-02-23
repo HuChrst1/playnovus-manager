@@ -1127,12 +1127,20 @@ Statut global: `A FAIRE`
 
 ### F6.1 - Reflexion produit + cadrage page Compte/Parametres
 
-Statut: `A FAIRE`
+Statut: `FAIT`
 Objectif: verrouiller l'UX, la navigation et le perimetre fonctionnel de la page compte/parametres avant implementation.
-Livrables:
-- specification produit validee pour la page `Compte/Parametres` (sections, actions, contraintes d'acces)
-- cadrage explicite de la place des reglages comptes dans la navigation globale
-- cadrage de la tracabilite report (auteur, cloture/ignorance) au niveau produit
+Livrables realises:
+- specification produit complete dans `docs/F6_1_CADRAGE_COMPTE_PARAMETRES.md`:
+  - vision, objectifs, non-objectifs
+  - parcours desktop/mobile
+  - architecture d'information et priorisation MVP
+  - regles UX (succes/erreur/vide/chargement)
+  - cadrage attribution reports (auteur creation + cloture/ignorance)
+- cadrage explicite de la place des reglages comptes dans la navigation globale:
+  - acces direct a `Compte/Parametres` depuis l'entree `Compte` (desktop/mobile)
+- frontieres explicites et actionnables F6.1 -> F6.2/F6.3/F6.4:
+  - F6.1 = cadrage produit
+  - F6.2/F6.3/F6.4 = implementation login/sessions/page compte + attribution reports
 Definition of done:
 - spec produit complete validee (sections, actions, contraintes, acces)
 
