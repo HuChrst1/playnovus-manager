@@ -42,6 +42,7 @@ const DEFAULT_TARGET_SCOPE: ReportTargetScope = "GLOBAL";
 const DEFAULT_CATEGORY: ReportCategory = "BUG";
 const DEFAULT_CLOSED_STATUS: ReportStatus = "RESOLVED";
 const DESCRIPTION_MAX_LENGTH = 2000;
+const TICKET_ATTRIBUTION_FALLBACK = "Non renseigne";
 
 function getTargetScopeLabel(value: string): string {
   return isReportTargetScope(value) ? REPORT_TARGET_SCOPE_LABELS[value] : value;
@@ -60,6 +61,37 @@ function formatDateTime(value: string | null): string {
 
 function isTicketClosed(ticket: ReportTicketRow): boolean {
   return ticket.status !== "OPEN" || ticket.closed_at !== null;
+}
+
+function getTicketActorLabel(...candidates: Array<string | null | undefined>): string {
+  for (const candidate of candidates) {
+    if (typeof candidate !== "string") {
+      continue;
+    }
+
+    const normalized = candidate.trim();
+    if (normalized.length > 0) {
+      return normalized;
+    }
+  }
+
+  return TICKET_ATTRIBUTION_FALLBACK;
+}
+
+function getCreatedByLabel(ticket: ReportTicketRow): string {
+  return getTicketActorLabel(
+    ticket.created_by_display_name,
+    ticket.created_by_email,
+    ticket.created_by_user_id
+  );
+}
+
+function getClosedByLabel(ticket: ReportTicketRow): string {
+  return getTicketActorLabel(
+    ticket.closed_by_display_name,
+    ticket.closed_by_email,
+    ticket.closed_by_user_id
+  );
 }
 
 type ReportDialogProps = {
@@ -411,6 +443,7 @@ export function ReportDialog({ triggerClassName }: ReportDialogProps) {
                           <th className="px-3 py-2 text-left">Description</th>
                           <th className="w-[228px] px-3 py-2 text-left">Statut</th>
                           <th className="w-[220px] px-3 py-2 text-left">Dates</th>
+                          <th className="w-[230px] px-3 py-2 text-left">Attribution</th>
                           <th className="w-[84px] px-3 py-2 text-right">Actions</th>
                         </tr>
                       </thead>
@@ -484,6 +517,20 @@ export function ReportDialog({ triggerClassName }: ReportDialogProps) {
                                   Cloture:{" "}
                                   <span className="tabular-nums text-slate-700">
                                     {formatDateTime(ticket.closed_at)}
+                                  </span>
+                                </p>
+                              </td>
+                              <td className="px-3 py-2">
+                                <p className="text-[11px] text-slate-500">
+                                  Cree par:{" "}
+                                  <span className="text-slate-700">
+                                    {getCreatedByLabel(ticket)}
+                                  </span>
+                                </p>
+                                <p className="mt-1 text-[11px] text-slate-500">
+                                  Cloture/Ignore par:{" "}
+                                  <span className="text-slate-700">
+                                    {getClosedByLabel(ticket)}
                                   </span>
                                 </p>
                               </td>
@@ -602,6 +649,18 @@ export function ReportDialog({ triggerClassName }: ReportDialogProps) {
                             Cloture:{" "}
                             <span className="tabular-nums text-slate-700">
                               {formatDateTime(ticket.closed_at)}
+                            </span>
+                          </p>
+                          <p>
+                            Cree par:{" "}
+                            <span className="text-slate-700">
+                              {getCreatedByLabel(ticket)}
+                            </span>
+                          </p>
+                          <p>
+                            Cloture/Ignore par:{" "}
+                            <span className="text-slate-700">
+                              {getClosedByLabel(ticket)}
                             </span>
                           </p>
                         </div>

@@ -8,7 +8,6 @@ import {
   BookOpen,
   Boxes,
   Home,
-  LogOut,
   Menu,
   ShoppingCart,
   Truck,
@@ -18,10 +17,8 @@ import {
 
 import { cn } from "@/lib/utils";
 import { isAuthStandalonePath } from "@/lib/auth/constants";
-import { logoutCurrentSession } from "@/app/login/actions";
 import { ReportDialog } from "@/components/report/ReportDialog";
 import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 type NavItem = {
   href: string;
@@ -67,6 +64,7 @@ export function AppSidebar() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const hideNavigation = isAuthStandalonePath(pathname);
+  const isAccountActive = pathname === "/compte" || pathname.startsWith("/compte/");
 
   useEffect(() => {
     setMobileOpen(false);
@@ -147,38 +145,17 @@ export function AppSidebar() {
 
       <div className="app-topbar-actions">
         <ReportDialog triggerClassName="app-filter-trigger h-9 px-4 text-xs" />
-
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button
-              type="button"
-              variant="icon"
-              className="app-topbar-icon text-slate-700 [&_svg]:h-4 [&_svg]:w-4 [&_svg]:stroke-[2.1] [&_svg]:text-slate-700"
-              aria-label="Compte"
-              title="Compte"
-            >
-              <UserRound className="shrink-0" />
-            </Button>
-          </PopoverTrigger>
-
-          <PopoverContent
-            align="end"
-            sideOffset={10}
-            className="w-64 rounded-[22px] border border-white/75 bg-white/96 p-3 shadow-[0_16px_36px_rgba(15,23,42,0.12)]"
-          >
-            <p className="px-1 pb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Compte</p>
-            <form action={logoutCurrentSession}>
-              <Button
-                type="submit"
-                variant="outline"
-                className="h-9 w-full justify-start gap-2 text-xs text-slate-700"
-              >
-                <LogOut className="h-4 w-4" />
-                Se deconnecter (cette session)
-              </Button>
-            </form>
-          </PopoverContent>
-        </Popover>
+        <Link
+          href="/compte"
+          className={cn(
+            "app-topbar-icon inline-flex items-center justify-center text-slate-700 [&_svg]:h-4 [&_svg]:w-4 [&_svg]:stroke-[2.1]",
+            isAccountActive && "bg-slate-900 text-white [&_svg]:text-white"
+          )}
+          aria-label="Compte"
+          title="Compte"
+        >
+          <UserRound className="shrink-0" />
+        </Link>
       </div>
     </header>
   );

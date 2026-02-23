@@ -185,6 +185,7 @@ export const config = {
   matcher: [
     "/",
     "/login",
+    "/compte/:path*",
     "/approvisionnement/:path*",
     "/ventes/:path*",
     "/stock/:path*",

@@ -2,6 +2,83 @@
 
 Ce fichier consigne les changements du projet, etapes par etapes.
 
+## 2026-02-23 - F6.4 Compte/Parametres + attribution reports
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Navigation `Compte` alignee F6.4:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/AppSidebar.tsx`
+  - clic direct vers `/compte` (desktop/mobile topbar), suppression du popover logout F6.3
+- Protection route compte:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/proxy.ts`
+  - ajout de `/compte/:path*` dans le matcher
+- Nouvelle page `Compte / Parametres`:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/compte/page.tsx`
+  - sections livrees:
+    - `Reglages > Comptes` (liste admins existants via Supabase Auth Admin API, lecture seule)
+    - `Securite` (formulaire changement mot de passe direct)
+    - `Session` (logout session active via action serveur existante)
+- Nouvelles actions serveur compte:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/compte/actions.ts`
+  - verification mot de passe actuel + mise a jour mot de passe du compte connecte
+- Attribution utilisateur des reports:
+  - migration SQL:
+    - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/supabase/migrations/20260223120000_f6_4_report_tickets_attribution.sql`
+  - types Supabase:
+    - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/types/supabase.ts`
+  - actions report:
+    - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/actions/report.ts`
+    - attribution renseignee a la creation (`created_by_*`) et a la cloture/ignorance (`closed_by_*`)
+    - reouverture = reset des champs `closed_by_*`
+  - UI report tickets:
+    - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/report/ReportDialog.tsx`
+    - affichage `Cree par` / `Cloture/Ignore par` (fallback legacy: `Non renseigne`)
+- Documentation:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/ROADMAP.md` (`F6.4` passe a `FAIT`)
+
+### Verifications executees
+
+- Pre-check local:
+  - `npx supabase --version` -> OK (`2.65.10`)
+  - `docker info` -> OK
+  - `npx supabase status` -> OK
+- Setup local:
+  - `npx supabase start` -> OK (stack deja active)
+  - `npx supabase db reset --local` -> OK (inclut migration F6.4)
+- Checks qualite:
+  - `npm ci` -> OK
+  - `npm run lint` -> OK
+  - `npm run typecheck` -> OK
+  - `npm run build` -> OK
+  - `npm run test:f2.0` -> OK
+  - `npm run lint:ui-contrast` -> OK
+- Verification schema locale F6.4:
+  - `docker exec -e PGPASSWORD=postgres -i supabase_db_playnovus-manager psql -U postgres -d postgres -P pager=off -c "select column_name, data_type from information_schema.columns where table_schema='public' and table_name='report_tickets' and column_name in ('created_by_user_id','created_by_email','created_by_display_name','closed_by_user_id','closed_by_email','closed_by_display_name') order by column_name;"` -> OK (6 colonnes presentes)
+- Verification route protegee (non connecte):
+  - `npm run dev` + `curl -I -s http://127.0.0.1:3000/compte` -> `307 location: /login`
+  - `pkill -f "next dev"` -> arret du serveur de dev local
+
+### Validation fonctionnelle F6.4
+
+- Valide automatiquement/localement:
+  - build/typecheck/lint verts avec nouvelle route `/compte`
+  - redirection non connecte `/compte -> /login`
+  - migration locale et type-check des nouveaux champs attribution
+  - non-regression globale via `npm run test:f2.0`
+- A valider manuellement en navigateur local (guide fourni dans rendu final):
+  - affichage liste admins A/B dans `Compte / Parametres`
+  - changement mot de passe puis relogin
+  - logout depuis page compte
+  - creation ticket par A puis cloture/ignorance par B avec attribution visible
+
+### Perimetre / limites
+
+- Aucun ajout de gestion avancee comptes/roles.
+- Aucune ecriture DB distante SQL/migration/linked.
+- DECISIONS non modifie: pas de nouvelle decision structurante dans ce lot.
+
 ## 2026-02-23 - F6.3 Creation et gestion des sessions (logout + expiration explicite)
 
 Statut: `FAIT`

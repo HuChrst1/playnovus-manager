@@ -1123,7 +1123,7 @@ Definition of done:
 
 ## Phase 6 - Acces applicatif, sessions et comptes
 
-Statut global: `A FAIRE`
+Statut global: `FAIT`
 
 ### F6.1 - Reflexion produit + cadrage page Compte/Parametres
 
@@ -1187,9 +1187,9 @@ Definition of done:
 
 ### F6.4 - Developpement page Compte/Parametres + attribution reports
 
-Statut: `A FAIRE`
+Statut: `FAIT`
 Objectif: livrer les reglages comptes essentiels et la tracabilite utilisateur des tickets report.
-Livrables:
+Livrables realises:
 - section `Reglages > Comptes` avec operations essentielles:
   - vue des comptes admins existants
   - changement de mot de passe
@@ -1198,6 +1198,8 @@ Livrables:
   - auteur de creation
   - utilisateur de cloture/ignorance
 - affichage de ces attributions dans l'onglet `Tickets` du module Report
+- acces direct a la page `/compte` depuis l'entree `Compte` (desktop/mobile topbar)
+- protection d'acces route `/compte` via `proxy` (redirect `/login` si non connecte)
 Definition of done:
 - chaque report affiche qui l'a cree et qui l'a cloture/ignore
 - les reglages comptes essentiels sont operationnels sans administration avancee des utilisateurs
@@ -1282,6 +1284,7 @@ Livrables:
 - checklist variables d'environnement et secrets
 - checklist go-live et smoke checks metier critiques
 Definition of done:
+- Choix des outils/Stack pour déployer/héberger le logiciel/webapp
 - prerequis techniques et operationnels valides avant mise en service
 
 ### F8.2 - Deploiement du logiciel (mise en service)

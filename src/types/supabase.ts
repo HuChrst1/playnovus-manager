@@ -94,7 +94,13 @@ export type Database = {
       report_tickets: {
         Row: {
           category: string
+          closed_by_display_name: string | null
+          closed_by_email: string | null
+          closed_by_user_id: string | null
           closed_at: string | null
+          created_by_display_name: string | null
+          created_by_email: string | null
+          created_by_user_id: string | null
           created_at: string
           description: string
           id: number
@@ -103,7 +109,13 @@ export type Database = {
         }
         Insert: {
           category: string
+          closed_by_display_name?: string | null
+          closed_by_email?: string | null
+          closed_by_user_id?: string | null
           closed_at?: string | null
+          created_by_display_name?: string | null
+          created_by_email?: string | null
+          created_by_user_id?: string | null
           created_at?: string
           description: string
           id?: number
@@ -112,7 +124,13 @@ export type Database = {
         }
         Update: {
           category?: string
+          closed_by_display_name?: string | null
+          closed_by_email?: string | null
+          closed_by_user_id?: string | null
           closed_at?: string | null
+          created_by_display_name?: string | null
+          created_by_email?: string | null
+          created_by_user_id?: string | null
           created_at?: string
           description?: string
           id?: number

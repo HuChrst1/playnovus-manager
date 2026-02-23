@@ -1,7 +1,11 @@
 "use server";
 
+import { cookies } from "next/headers";
+import type { User } from "@supabase/supabase-js";
 import { supabaseServer as supabase } from "@/lib/supabase-server";
 import type { Tables, TablesInsert, TablesUpdate } from "@/types/supabase";
+import { readAuthSessionFromCookies } from "@/lib/auth/session";
+import { createSupabaseAuthClient } from "@/lib/auth/supabase-auth";
 import {
   isReportCategory,
   isReportClosedStatus,
@@ -17,6 +21,11 @@ type ReportTicketInsert = TablesInsert<"report_tickets">;
 type ReportTicketUpdate = TablesUpdate<"report_tickets">;
 
 type ReportTicketStatusRank = 0 | 1;
+type ReportTicketActor = {
+  userId: string;
+  email: string | null;
+  displayName: string | null;
+};
 
 export type ReportTicketResult = {
   success: boolean;
@@ -48,6 +57,61 @@ export type UpdateReportTicketInput = {
 };
 
 const MAX_DESCRIPTION_LENGTH = 2000;
+
+function readMetadataValue(metadata: unknown, key: string): string | null {
+  if (typeof metadata !== "object" || metadata === null) {
+    return null;
+  }
+
+  const rawValue = (metadata as Record<string, unknown>)[key];
+  if (typeof rawValue !== "string") {
+    return null;
+  }
+
+  const normalized = rawValue.trim();
+  return normalized.length > 0 ? normalized : null;
+}
+
+function resolveDisplayName(user: User): string | null {
+  const userMetadata = user.user_metadata;
+  const appMetadata = user.app_metadata;
+
+  return (
+    readMetadataValue(userMetadata, "display_name") ??
+    readMetadataValue(userMetadata, "full_name") ??
+    readMetadataValue(userMetadata, "name") ??
+    readMetadataValue(userMetadata, "alias") ??
+    readMetadataValue(userMetadata, "username") ??
+    readMetadataValue(userMetadata, "preferred_username") ??
+    readMetadataValue(appMetadata, "display_name") ??
+    readMetadataValue(appMetadata, "alias")
+  );
+}
+
+async function resolveCurrentActor(): Promise<ReportTicketActor | null> {
+  const cookieStore = await cookies();
+  const session = readAuthSessionFromCookies(cookieStore);
+
+  if (!session.accessToken) {
+    return null;
+  }
+
+  const supabaseAuth = createSupabaseAuthClient();
+  if (!supabaseAuth) {
+    return null;
+  }
+
+  const { data, error } = await supabaseAuth.auth.getUser(session.accessToken);
+  if (error || !data.user?.id) {
+    return null;
+  }
+
+  return {
+    userId: data.user.id,
+    email: data.user.email ?? null,
+    displayName: resolveDisplayName(data.user),
+  };
+}
 
 function getErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof Error && error.message.trim().length > 0) {
@@ -129,12 +193,23 @@ export async function createReportTicketAction(
   }
 
   const description = normalizeDescription(input.description);
+  const actor = await resolveCurrentActor();
+  if (!actor) {
+    return { success: false, error: "Session invalide. Reconnecte-toi puis reessaie." };
+  }
+
   const payload: ReportTicketInsert = {
     target_scope: input.target_scope,
     category: input.category,
     description,
     status: "OPEN",
     closed_at: null,
+    created_by_user_id: actor.userId,
+    created_by_email: actor.email,
+    created_by_display_name: actor.displayName,
+    closed_by_user_id: null,
+    closed_by_email: null,
+    closed_by_display_name: null,
   };
 
   const { data, error } = await supabase
@@ -198,6 +273,14 @@ export async function updateReportTicketAction(
   }
 
   const payload: ReportTicketUpdate = {};
+  const actor = await resolveCurrentActor();
+
+  if (!actor) {
+    return {
+      success: false,
+      error: "Session invalide. Reconnecte-toi puis reessaie.",
+    };
+  }
 
   if (input.closed) {
     if (!isReportClosedStatus(input.status)) {
@@ -209,9 +292,15 @@ export async function updateReportTicketAction(
 
     payload.status = input.status;
     payload.closed_at = existing.closed_at ?? new Date().toISOString();
+    payload.closed_by_user_id = actor.userId;
+    payload.closed_by_email = actor.email;
+    payload.closed_by_display_name = actor.displayName;
   } else {
     payload.status = "OPEN";
     payload.closed_at = null;
+    payload.closed_by_user_id = null;
+    payload.closed_by_email = null;
+    payload.closed_by_display_name = null;
   }
 
   const { data, error } = await supabase
