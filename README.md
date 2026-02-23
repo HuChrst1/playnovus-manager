@@ -57,6 +57,9 @@ npm install
 NEXT_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon-key>
 SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
+NEXT_PUBLIC_TURNSTILE_SITE_KEY=<turnstile-site-key>
+SUPABASE_AUTH_CAPTCHA_SECRET=<turnstile-secret-key>
+APP_ALLOWED_ORIGINS=http://127.0.0.1:3000,http://localhost:3000
 ```
 
 3. Lancer le serveur de dev (mode stable par defaut: webpack):
@@ -84,6 +87,15 @@ npm run dev:turbo
 - `SUPABASE_SERVICE_ROLE_KEY`
   - clé serveur uniquement
   - utilisée par `src/lib/supabase-server.ts`
+- `NEXT_PUBLIC_TURNSTILE_SITE_KEY`
+  - clé publique Turnstile (UI auth)
+  - utilisée par `src/components/security/TurnstileField.tsx`
+- `SUPABASE_AUTH_CAPTCHA_SECRET`
+  - secret CAPTCHA Supabase Auth
+  - lu via `supabase/config.toml` (`[auth.captcha].secret = env(...)`)
+- `APP_ALLOWED_ORIGINS`
+  - liste CSV des origines autorisées pour CORS sur les routes API exposées
+  - fallback local côté code si variable absente: `http://127.0.0.1:3000,http://localhost:3000`
 
 ## Commandes utiles
 
@@ -93,17 +105,23 @@ npm run dev:webpack  # alias explicite webpack
 npm run dev:turbo    # Turbopack (debug/diagnostic)
 npm run build    # build de production
 npm run start    # exécution du build
-npm run lint     # lint ESLint (bloquant)
+npm run lint     # lint Biome + gardes UI (bloquant)
+npm run test:f2.0
+npm run test:f7.3:pre
+npm run test:f7.3:post
+npm run test:f7.4
+npm run test:f7.5
 ```
 
 ## Qualite / Verification
 
 ```bash
 npm run typecheck  # verification TypeScript
-npm run lint       # verification ESLint (bloquant)
-npm run test       # lance test:unit puis test:e2e
-npm run test:unit  # TODO F0.1: brancher un framework de tests unitaires
-npm run test:e2e   # TODO F0.1: brancher un framework de tests e2e
+npm run lint       # verification lint (bloquant)
+npm run build      # verification build production
+npm run test       # unit + integration locale
+npm run audit:prod # audit npm production
+npm run audit:deps # audit dependances cibles
 ```
 
 ## Structure du repo
@@ -124,12 +142,12 @@ supabase/config.toml      # config Supabase CLI locale
   - client public: `src/lib/supabase.ts`
   - client serveur: `src/lib/supabase-server.ts`
 - Auth:
-  - aucune couche d'auth applicative n'est implémentée dans ce repo aujourd'hui
+  - couche applicative active (login/logout, cookies de session, guard proxy)
+  - garde session serveur partagée: `src/lib/auth/require-active-session.ts`
+  - CAPTCHA Turnstile sur login/forgot-password
 - Migrations:
-  - le dossier `supabase/migrations` est absent
-  - `schema_paths` est vide dans `supabase/config.toml`
-  - `sql_paths` référence `./seed.sql` mais ce fichier est absent
-  - conclusion: la stratégie de migrations versionnées n'est pas encore en place
+  - migrations versionnées présentes dans `supabase/migrations`
+  - reset local supporté par `npx supabase db reset --local` (migrations + `supabase/seed.sql`)
 
 ## Documentation projet
 

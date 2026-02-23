@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { TurnstileField } from "@/components/security/TurnstileField";
 import { LOGIN_PATH } from "@/lib/auth/constants";
 
 type RawForgotPasswordSearchParams = Record<string, string | string[] | undefined>;
@@ -23,6 +24,12 @@ function getErrorMessage(errorCode: string | undefined): string | null {
       return "Renseigne ton email pour recevoir un lien de reinitialisation.";
     case "configuration_error":
       return "Configuration indisponible. Contacte un administrateur.";
+    case "captcha_required":
+      return "Verification anti-bot manquante. Complete le CAPTCHA puis reessaie.";
+    case "captcha_invalid":
+      return "Verification anti-bot invalide ou expiree. Reessaie apres avoir complete le CAPTCHA.";
+    case "rate_limited":
+      return "Trop de demandes de reinitialisation. Patiente quelques minutes avant de reessayer.";
     default:
       return null;
   }
@@ -79,6 +86,8 @@ export default async function ForgotPasswordPage({ searchParams }: ForgotPasswor
             <Button type="submit" variant="default" className="h-10 w-full text-sm">
               Envoyer le lien
             </Button>
+
+            <TurnstileField action="forgot_password" />
           </form>
 
           <div className="text-center text-sm">

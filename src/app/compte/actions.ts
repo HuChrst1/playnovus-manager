@@ -1,13 +1,21 @@
 "use server";
 
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { readAuthSessionFromCookies } from "@/lib/auth/session";
 import { createSupabaseAuthClient } from "@/lib/auth/supabase-auth";
 import { supabaseServer } from "@/lib/supabase-server";
+import {
+  getAuthSessionErrorMessage,
+  requireActiveSession,
+} from "@/lib/auth/require-active-session";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 
 const COMPTE_PATH = "/compte";
 const MIN_PASSWORD_LENGTH = 8;
+const CHANGE_PASSWORD_RATE_LIMIT = {
+  scope: "compte_change_password",
+  limit: 5,
+  windowMs: 15 * 60 * 1000,
+} as const;
 
 type PasswordErrorCode =
   | "missing_fields"
@@ -17,6 +25,7 @@ type PasswordErrorCode =
   | "session_invalid"
   | "invalid_current_password"
   | "configuration_error"
+  | "rate_limited"
   | "update_failed";
 
 function normalizeFieldValue(value: FormDataEntryValue | null): string {
@@ -57,10 +66,28 @@ export async function changePasswordAction(formData: FormData): Promise<never> {
     redirectWithPasswordError("same_password");
   }
 
-  const cookieStore = await cookies();
-  const snapshot = readAuthSessionFromCookies(cookieStore);
+  let actor;
+  try {
+    actor = await requireActiveSession();
+  } catch (error) {
+    const mappedError = getAuthSessionErrorMessage(error);
+    if (mappedError.toLowerCase().includes("configuration")) {
+      redirectWithPasswordError("configuration_error");
+    }
+    redirectWithPasswordError("session_invalid");
+  }
 
-  if (!snapshot.accessToken) {
+  const rateLimit = enforceRateLimit(
+    CHANGE_PASSWORD_RATE_LIMIT.scope,
+    actor.userId,
+    CHANGE_PASSWORD_RATE_LIMIT.limit,
+    CHANGE_PASSWORD_RATE_LIMIT.windowMs
+  );
+  if (!rateLimit.allowed) {
+    redirectWithPasswordError("rate_limited");
+  }
+
+  if (!actor.email) {
     redirectWithPasswordError("session_invalid");
   }
 
@@ -69,7 +96,9 @@ export async function changePasswordAction(formData: FormData): Promise<never> {
     redirectWithPasswordError("configuration_error");
   }
 
-  const { data: currentUserData, error: currentUserError } = await supabaseAuth.auth.getUser(snapshot.accessToken);
+  const { data: currentUserData, error: currentUserError } = await supabaseAuth.auth.getUser(
+    actor.accessToken
+  );
   const currentUser = currentUserData.user;
 
   if (currentUserError || !currentUser?.id || !currentUser.email) {
@@ -77,7 +106,7 @@ export async function changePasswordAction(formData: FormData): Promise<never> {
   }
 
   const { error: reauthError, data: reauthData } = await supabaseAuth.auth.signInWithPassword({
-    email: currentUser.email,
+    email: actor.email,
     password: currentPassword,
   });
 

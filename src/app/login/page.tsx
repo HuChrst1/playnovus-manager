@@ -1,11 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
 import { loginWithPassword } from "@/app/login/actions";
-import Link from "next/link";
+import { LoginFormClient } from "@/app/login/LoginFormClient";
 import {
-  FORGOT_PASSWORD_PATH,
   LOGIN_NOTICE_LOGOUT_SUCCESS,
   LOGIN_NOTICE_QUERY_PARAM,
   LOGIN_NOTICE_SESSION_EXPIRED,
@@ -30,6 +26,12 @@ function getLoginErrorMessage(errorCode: string | undefined): string | null {
       return "Email ou mot de passe incorrect. Verifie tes informations puis reessaie.";
     case "configuration_error":
       return "Configuration de connexion indisponible. Contacte un administrateur.";
+    case "captcha_required":
+      return "Verification anti-bot manquante. Complete le CAPTCHA puis reessaie.";
+    case "captcha_invalid":
+      return "Verification anti-bot invalide ou expiree. Reessaie apres avoir complete le CAPTCHA.";
+    case "rate_limited":
+      return "Trop de tentatives de connexion. Patiente quelques minutes avant de reessayer.";
     default:
       return null;
   }
@@ -105,52 +107,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             </p>
           ) : null}
 
-          <form action={loginWithPassword} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                name="email"
-                type="email"
-                autoComplete="email"
-                placeholder="admin@playnovus.local"
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="password">Mot de passe</Label>
-              <Input
-                id="password"
-                name="password"
-                type="password"
-                autoComplete="current-password"
-                placeholder="********"
-                required
-              />
-            </div>
-
-            <div className="flex items-center justify-between gap-3">
-              <label className="inline-flex items-center gap-2 text-sm text-slate-600" htmlFor="remember">
-                <input
-                  id="remember"
-                  name="remember"
-                  type="checkbox"
-                  defaultChecked
-                  className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-sky-500"
-                />
-                <span>Se souvenir de moi</span>
-              </label>
-
-              <Link href={FORGOT_PASSWORD_PATH} className="text-sm font-medium text-slate-700 underline">
-                Mot de passe oublie ?
-              </Link>
-            </div>
-
-            <Button type="submit" variant="default" className="h-10 w-full text-sm">
-              Se connecter
-            </Button>
-          </form>
+          <LoginFormClient action={loginWithPassword} />
         </CardContent>
       </Card>
     </main>

@@ -3,42 +3,110 @@
 import { redirect } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import type { TablesInsert } from "@/types/supabase";
+import { requireActiveSession } from "@/lib/auth/require-active-session";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
+import { LOGIN_PATH } from "@/lib/auth/constants";
+
+const CATALOGUE_RATE_LIMIT = {
+  scope: "catalogue_mutations",
+  limit: 30,
+  windowMs: 5 * 60 * 1000,
+} as const;
+
+const SET_ID_REGEX = /^[A-Za-z0-9_-]+$/;
+
+function redirectToCatalogueWithError(code: string): never {
+  redirect(`/catalogue?error=${encodeURIComponent(code)}`);
+}
+
+function normalizeOptionalText(value: FormDataEntryValue | null, maxLength: number): string | null {
+  const normalized = value?.toString().trim() ?? "";
+  if (!normalized) return null;
+  if (normalized.length > maxLength) {
+    return null;
+  }
+  return normalized;
+}
+
+function parseOptionalYear(value: FormDataEntryValue | null): number | null {
+  const raw = value?.toString().trim() ?? "";
+  if (!raw) return null;
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed) || parsed < 1900 || parsed > 2100) {
+    return null;
+  }
+  return parsed;
+}
+
+function normalizeOptionalImageUrl(
+  value: FormDataEntryValue | null
+): { value: string | null; valid: boolean } {
+  const raw = value?.toString().trim() ?? "";
+  if (!raw) return { value: null, valid: true };
+
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return { value: null, valid: false };
+    }
+    return { value: parsed.toString(), valid: true };
+  } catch {
+    return { value: null, valid: false };
+  }
+}
+
+async function enforceCatalogueMutationGuard(): Promise<void> {
+  try {
+    const actor = await requireActiveSession();
+    const limit = enforceRateLimit(
+      CATALOGUE_RATE_LIMIT.scope,
+      actor.userId,
+      CATALOGUE_RATE_LIMIT.limit,
+      CATALOGUE_RATE_LIMIT.windowMs
+    );
+
+    if (!limit.allowed) {
+      redirectToCatalogueWithError("rate_limited");
+    }
+  } catch {
+    redirect(`${LOGIN_PATH}?error=session_invalid`);
+  }
+}
 
 /**
  * Création d’un set
  */
 export async function createSet(formData: FormData) {
-  const display_ref = formData.get("display_ref")?.toString().trim() ?? "";
-  const name = formData.get("name")?.toString().trim() ?? "";
-  const version = formData.get("version")?.toString().trim() || null;
-  const theme = formData.get("theme")?.toString().trim() || null;
-  const image_url = formData.get("image_url")?.toString().trim() || null;
+  await enforceCatalogueMutationGuard();
 
-  const yearStartRaw = formData.get("year_start")?.toString().trim();
-  const yearEndRaw = formData.get("year_end")?.toString().trim();
+  const displayRef = normalizeOptionalText(formData.get("display_ref"), 64);
+  const name = normalizeOptionalText(formData.get("name"), 160);
+  const version = normalizeOptionalText(formData.get("version"), 64);
+  const theme = normalizeOptionalText(formData.get("theme"), 120);
+  const imageUrl = normalizeOptionalImageUrl(formData.get("image_url"));
+  const yearStart = parseOptionalYear(formData.get("year_start"));
+  const yearEnd = parseOptionalYear(formData.get("year_end"));
 
-  const year_start =
-    yearStartRaw && !Number.isNaN(Number(yearStartRaw))
-      ? Number(yearStartRaw)
-      : null;
+  if (!displayRef || !name) {
+    redirectToCatalogueWithError("invalid_payload");
+  }
 
-  const year_end =
-    yearEndRaw && !Number.isNaN(Number(yearEndRaw))
-      ? Number(yearEndRaw)
-      : null;
+  if (yearStart !== null && yearEnd !== null && yearStart > yearEnd) {
+    redirectToCatalogueWithError("invalid_year_range");
+  }
 
-  if (!display_ref || !name) {
-    return;
+  if (!imageUrl.valid) {
+    redirectToCatalogueWithError("invalid_image_url");
   }
 
   const insertPayload = {
-    display_ref,
+    display_ref: displayRef,
     name,
     version,
     theme,
-    image_url,
-    year_start,
-    year_end,
+    image_url: imageUrl.value,
+    year_start: yearStart,
+    year_end: yearEnd,
   } satisfies Omit<TablesInsert<"sets_catalog">, "id">;
 
   const { data, error } = await supabase
@@ -59,11 +127,13 @@ export async function createSet(formData: FormData) {
  * Suppression d’un set
  */
 export async function deleteSet(formData: FormData) {
-  const id = formData.get("id")?.toString().trim();
+  await enforceCatalogueMutationGuard();
 
-  if (!id) {
+  const id = formData.get("id")?.toString().trim() ?? "";
+
+  if (!SET_ID_REGEX.test(id)) {
     console.error("deleteSet appelé sans id");
-    redirect("/catalogue");
+    redirectToCatalogueWithError("invalid_set_id");
   }
 
   const { error } = await supabase

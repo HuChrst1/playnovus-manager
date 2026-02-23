@@ -2,6 +2,196 @@
 
 Ce fichier consigne les changements du projet, etapes par etapes.
 
+## 2026-02-23 - F7.5 Gate securite Phase 7 (GO strict)
+
+Statut: `FAIT` / Decision release courante: `GO`
+
+### Changements realises
+
+- Socle securite partage ajoute:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/lib/auth/require-active-session.ts`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/lib/security/rate-limit.ts`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/lib/security/cors.ts`
+- CAPTCHA Turnstile active cote config Supabase locale:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/supabase/config.toml`
+- CAPTCHA branche sur login / forgot-password:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/security/TurnstileField.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/login/LoginFormClient.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/login/page.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/login/actions.ts`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/forgot-password/page.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/forgot-password/actions.ts`
+  - verrou UX login actif: soumission impossible tant que CAPTCHA non valide (bouton desactive)
+- CORS allowlist explicite + OPTIONS + auth session + rate-limit sur API exposee:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/api/sets/[setId]/bom-stock/route.ts`
+- Garde session + rate-limit + validation serveur homogenises sur mutations cibles:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/actions/update-bom.ts`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/actions/update-set-info.ts`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/actions/update-set.ts`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/catalogue/actions.ts`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/actions/stock-movements.ts`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/approvisionnement/action.ts`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/actions/sales.ts`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/actions/report.ts`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/compte/actions.ts`
+- Compatibilite scripts locaux preservee pour validations existantes:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/scripts/f2_0_validate_local.mjs`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/scripts/f7_1_validate_local.mjs`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/scripts/f7_2_validate_local.mjs`
+  - variable locale explicite: `PLAYNOVUS_LOCAL_VALIDATION_BYPASS=1`
+- Gate F7.5 livre:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/scripts/f7_5_validate_local.mjs`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/package.json` (`test:f7.5`)
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/F7_5_CHECKLIST_SECURITE_PHASE7.md`
+- README securite/env mis a jour:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/README.md`
+
+### Verifications executees
+
+- Pre-check local:
+  - `npx supabase --version` -> OK (`2.65.10`)
+  - `docker info --format '{{.ServerVersion}}'` -> OK (`29.2.0`)
+  - `npx supabase status` -> OK (stack locale active)
+  - `npx supabase start` -> OK
+  - `npx supabase db reset --local` -> OK
+- Qualite:
+  - revalidation ciblee verrou CAPTCHA login: `npm run lint` + `npm run typecheck` + `npm run build` -> OK
+  - `npm ci` -> OK (`0 vulnerabilities`)
+  - `npm run lint` -> OK
+  - `npm run typecheck` -> OK
+  - `npm run build` -> OK
+  - `npm run test` -> OK
+  - `npm run test:f2.0` -> OK
+  - `npm run test:f7.3:pre` -> OK
+  - `npm run test:f7.3:post` -> OK
+  - `npm run lint:ui-contrast` -> OK
+  - `npm run audit:prod` -> OK (`found 0 vulnerabilities`)
+  - `npm run audit:deps` -> OK (`(empty)`)
+  - `npm run test:f7.4` -> OK (`decision=GO`)
+- Gate F7.5:
+  - `npm run test:f7.5` -> OK (`decision=GO`)
+  - `node scripts/f7_5_validate_local.mjs --checkpoint pre-release --enforce-go` -> `GO` (exit `0`)
+  - `node scripts/f7_5_validate_local.mjs --checkpoint post-release --enforce-go` -> `GO` (exit `0`)
+
+### Etat gate F7.5
+
+- `S1` PASS
+- `S2` PASS
+- `S3` PASS
+- `S4` PASS
+- `S5` PASS
+- `S6` PASS
+- `S7` PASS
+- `S8` PASS (test runtime: origin interdite `403`, sans session `401`)
+- `S9` PASS
+- `S10` PASS
+- decision stricte: `GO`
+
+### Resolution des blocages initiaux
+
+- Variables locales renseignees:
+  - `NEXT_PUBLIC_TURNSTILE_SITE_KEY`
+  - `SUPABASE_AUTH_CAPTCHA_SECRET`
+  - `APP_ALLOWED_ORIGINS`
+- Stack Supabase relancee avec secret CAPTCHA exporte dans le shell avant `npx supabase start`.
+- Revalidation stricte `--enforce-go` reussie sur checkpoints `pre-release` et `post-release`.
+
+### Perimetre / limites
+
+- Aucune migration SQL ajoutee.
+- Aucune ecriture DB distante.
+- Aucun secret sensible ajoute au repo.
+- F7.5 est ferme en local-first (`GO` strict), avec widget production/variables production a finaliser en Phase 8.
+
+## 2026-02-23 - F7.4 Checklist de livraison et rollback
+
+Statut: `FAIT` (dispositif) / Decision release courante: `NO_GO`
+
+### Changements realises
+
+- Runbook F7.4 livre:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/F7_4_CHECKLIST_LIVRAISON_ROLLBACK.md`
+  - contenu livre:
+    - Script A local obligatoire (pre-check, reset, gates qualite, non-regression, audits, decision)
+    - Script B remote read-only optionnel (sans ecriture distante)
+    - checklist stock/coherence (C1-C7) avec preuves attendues
+    - checklist securite pre-release (S1-S10) avec statuts `PASS|FAIL|BLOCKED`
+    - matrice `GO/NO_GO` deterministe (policy `block_always_on_security_non_compliance`)
+    - protocole rollback local oriente retour service rapide
+    - monitoring minimal erreurs critiques (M1-M5)
+- Script local F7.4 ajoute:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/scripts/f7_4_validate_local.mjs`
+  - comportement:
+    - garde local-only via `npx supabase status -o env`
+    - sortie standardisee:
+      - `PASS_FAIL_BLOCKED_MATRIX`
+      - `EVIDENCE_LOG`
+      - `DECISION` (`GO` ou `NO_GO`)
+    - mode enforcement optionnel:
+      - `--enforce-go` (exit `2` si decision `NO_GO`)
+- Script npm ajoute:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/package.json`
+  - `test:f7.4`
+- Documentation gouvernance mise a jour:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/ROADMAP.md` (`F7.4` passe a `FAIT`)
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/DECISIONS.md` (nouvelle decision `D-038`)
+
+### Verifications executees
+
+- Pre-check local:
+  - `npx supabase --version` -> OK (`2.65.10`)
+  - `docker info --format '{{.ServerVersion}}'` -> OK (`29.2.0`)
+  - `npx supabase status` -> OK (stack locale active)
+- Setup local:
+  - `npx supabase start` -> OK (stack deja active)
+  - `npx supabase db reset --local` -> OK (baseline + migrations + seed)
+- Gates techniques:
+  - `npm ci` -> OK
+  - `npm run lint` -> OK
+  - `npm run typecheck` -> OK
+  - `npm run build` -> OK
+  - `npm run test` -> OK
+  - `npm run test:f2.0` -> OK
+  - `npm run test:f7.3:pre` -> OK
+  - `npm run test:f7.3:post` -> OK
+  - `npm run lint:ui-contrast` -> OK
+  - `npm run audit:prod` -> OK (`found 0 vulnerabilities`)
+  - `npm run audit:deps` -> OK (`(empty)`)
+- Validation F7.4:
+  - `npm run test:f7.4` -> OK (execution)
+    - checkpoint: `pre-release`
+    - gate technique: `PASS`
+    - gate securite: `NO_GO`
+    - decision: `NO_GO`
+    - controles non-PASS:
+      - `S5_captcha_enabled = BLOCKED`
+      - `S8_cors_restrictions = BLOCKED`
+  - `node scripts/f7_4_validate_local.mjs --checkpoint post-release` -> OK (execution)
+    - gate technique: `PASS`
+    - gate securite: `NO_GO`
+    - decision: `NO_GO`
+    - controles non-PASS:
+      - `S5_captcha_enabled = BLOCKED`
+      - `S8_cors_restrictions = BLOCKED`
+
+### Validation fonctionnelle F7.4
+
+- S1 runbook pre-release executable localement: PASS
+- S2 checklist stock/coherence avec preuves: PASS
+- S3 decision `GO/NO_GO` explicite et reproductible: PASS (`NO_GO` courant explicite)
+- S4 protocole rollback local documente et testable (simulation guidee): PASS
+- S5 checklist securite pre-release completee avec statuts + preuves: PASS
+- S6 monitoring minimal erreurs critiques documente avec action immediate: PASS
+- S7 non-regression des validations existantes: PASS
+
+### Perimetre / limites
+
+- Scope strict F7.4 respecte.
+- Aucune migration SQL ajoutee.
+- Aucune ecriture DB distante.
+- Aucun secret sensible ajoute au repo.
+- Les points securite `CAPTCHA` et `CORS` restent bloques (`NO_GO`) et sont a traiter en F7.5.
+
 ## 2026-02-23 - F7.3 Healthcheck DB pre-release / post-release
 
 Statut: `FAIT`

@@ -99,6 +99,8 @@ function getPasswordFeedback(searchParams: RawCompteSearchParams): {
       return { tone: "error", message: "Session invalide. Reconnecte-toi puis reessaie." };
     case "configuration_error":
       return { tone: "error", message: "Configuration indisponible. Contacte un administrateur." };
+    case "rate_limited":
+      return { tone: "error", message: "Trop de tentatives. Patiente quelques minutes avant de reessayer." };
     case "update_failed":
       return { tone: "error", message: "Impossible de mettre a jour le mot de passe pour le moment." };
     default:

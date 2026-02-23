@@ -5,10 +5,20 @@ import { createClient } from "@supabase/supabase-js";
 import { parse } from "csv-parse/sync";
 import { revalidatePath } from "next/cache";
 import type { Database, TablesUpdate } from "@/types/supabase";
+import {
+  getAuthSessionErrorMessage,
+  requireActiveSession,
+} from "@/lib/auth/require-active-session";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 
 type LotStatus = "draft" | "confirmed";
 const DIRECT_CONFIRMED_CREATE_ERROR =
   "La création directe d'un lot confirmé n'est pas autorisée. Crée d'abord le lot en brouillon.";
+const APPRO_MUTATION_RATE_LIMIT = {
+  scope: "appro_mutations",
+  limit: 60,
+  windowMs: 5 * 60 * 1000,
+} as const;
 
 export type CreateLotInput = {
   purchaseDate: string;          // YYYY-MM-DD
@@ -29,6 +39,42 @@ type NormalizedLot = {
   status: "draft" | "confirmed";
   notes: string | null;
 };
+
+type ApproGuardResult =
+  | { ok: true; userId: string }
+  | { ok: false; error: string };
+
+async function enforceApproSessionGuard(): Promise<ApproGuardResult> {
+  try {
+    const actor = await requireActiveSession();
+    return { ok: true, userId: actor.userId };
+  } catch (error) {
+    return { ok: false, error: getAuthSessionErrorMessage(error) };
+  }
+}
+
+async function enforceApproMutationGuard(): Promise<ApproGuardResult> {
+  const sessionGuard = await enforceApproSessionGuard();
+  if (!sessionGuard.ok) {
+    return sessionGuard;
+  }
+
+  const limit = enforceRateLimit(
+    APPRO_MUTATION_RATE_LIMIT.scope,
+    sessionGuard.userId,
+    APPRO_MUTATION_RATE_LIMIT.limit,
+    APPRO_MUTATION_RATE_LIMIT.windowMs
+  );
+
+  if (!limit.allowed) {
+    return {
+      ok: false,
+      error: `Trop de requetes. Reessaie dans ${limit.retryAfterSeconds}s.`,
+    };
+  }
+
+  return sessionGuard;
+}
 
 const LOT_CODE_PREFIX = "LOT_";
 const LOT_CODE_REGEX = /^LOT_(\d+)$/;
@@ -907,6 +953,14 @@ async function insertLot(normalized: NormalizedLot) {
  * On la garde telle quelle mais elle passe maintenant par insertLot().
  */
 export async function createLot(formData: FormData) {
+  const guard = await enforceApproMutationGuard();
+  if (!guard.ok) {
+    return {
+      success: false as const,
+      error: guard.error,
+    };
+  }
+
   const purchaseDate =
     (formData.get("purchase_date") as string | null) ?? "";
   const label = (formData.get("label") as string | null) ?? "";
@@ -970,6 +1024,11 @@ export async function createLot(formData: FormData) {
  * On l’appellera depuis le composant client NewLotDialog.
  */
 export async function createLotFromDialog(input: CreateLotInput) {
+  const guard = await enforceApproMutationGuard();
+  if (!guard.ok) {
+    throw new Error(guard.error);
+  }
+
   if (!input.purchaseDate) {
     throw new Error("La date du lot est obligatoire.");
   }
@@ -1280,6 +1339,15 @@ export async function updateLotFromDialog(
     notes?: string;
   }
 ): Promise<UpdateLotResult> {
+  const guard = await enforceApproMutationGuard();
+  if (!guard.ok) {
+    return {
+      success: false,
+      error: guard.error,
+      reason: "UPDATE_FAILED",
+    };
+  }
+
   if (!lotId || lotId <= 0) {
     return {
       success: false,
@@ -1665,6 +1733,11 @@ export async function updateLotFromDialog(
 }
 
 export async function deleteLot(lotId: number): Promise<DeleteLotResult> {
+  const guard = await enforceApproMutationGuard();
+  if (!guard.ok) {
+    return { success: false, error: guard.error, reason: "DELETE_FAILED" };
+  }
+
   // Sécurité minimale
   if (!lotId || Number.isNaN(lotId)) {
     return { success: false, error: "Lot invalide.", reason: "DELETE_FAILED" };
@@ -1794,6 +1867,11 @@ export async function addPieceToLot(
     quantity: number;
   }
 ) {
+  const guard = await enforceApproMutationGuard();
+  if (!guard.ok) {
+    return { success: false, error: guard.error };
+  }
+
   if (!lotId || Number.isNaN(lotId)) {
     return { success: false, error: "Lot invalide." };
   }
@@ -1976,6 +2054,15 @@ export async function importLotPiecesFromCsv(
     csvContent: string;
   }
 ): Promise<ImportLotPiecesFromCsvResult> {
+  const guard = await enforceApproMutationGuard();
+  if (!guard.ok) {
+    return {
+      success: false,
+      error: guard.error,
+      reason: "IMPORT_FAILED",
+    };
+  }
+
   if (!lotId || Number.isNaN(lotId)) {
     return {
       success: false,
@@ -2255,6 +2342,15 @@ export async function importLotPiecesFromCsv(
 export async function getLotInvoiceAttachment(
   lotId: number
 ): Promise<GetLotInvoiceAttachmentResult> {
+  const guard = await enforceApproSessionGuard();
+  if (!guard.ok) {
+    return {
+      success: false,
+      error: guard.error,
+      reason: "READ_FAILED",
+    };
+  }
+
   const lotCheck = await ensureLotExistsForInvoice(lotId);
   if (!lotCheck.success) {
     return lotCheck;
@@ -2307,6 +2403,15 @@ export async function uploadLotInvoiceAttachment(
   lotId: number,
   formData: FormData
 ): Promise<UploadLotInvoiceAttachmentResult> {
+  const guard = await enforceApproMutationGuard();
+  if (!guard.ok) {
+    return {
+      success: false,
+      reason: "UPLOAD_FAILED",
+      error: guard.error,
+    };
+  }
+
   const lotCheck = await ensureLotExistsForInvoice(lotId);
   if (!lotCheck.success) {
     return lotCheck;
@@ -2396,6 +2501,15 @@ export async function uploadLotInvoiceAttachment(
 export async function deleteLotInvoiceAttachment(
   lotId: number
 ): Promise<DeleteLotInvoiceAttachmentResult> {
+  const guard = await enforceApproMutationGuard();
+  if (!guard.ok) {
+    return {
+      success: false,
+      reason: "DELETE_FAILED",
+      error: guard.error,
+    };
+  }
+
   const lotCheck = await ensureLotExistsForInvoice(lotId);
   if (!lotCheck.success) {
     return lotCheck;
@@ -2442,6 +2556,11 @@ export async function deleteLotInvoiceAttachment(
 }
 
 export async function deleteInventoryLine(lotId: number, lineId: number) {
+  const guard = await enforceApproMutationGuard();
+  if (!guard.ok) {
+    return { success: false, error: guard.error };
+  }
+
   if (!lotId || !lineId || Number.isNaN(lotId) || Number.isNaN(lineId)) {
     return { success: false, error: "Paramètres invalides." };
   }
@@ -2580,6 +2699,11 @@ export async function updateInventoryLine(
     quantity: number;
   }
 ) {
+  const guard = await enforceApproMutationGuard();
+  if (!guard.ok) {
+    return { success: false, error: guard.error };
+  }
+
   if (!lotId || !lineId || Number.isNaN(lotId) || Number.isNaN(lineId)) {
     return { success: false, error: "Paramètres invalides." };
   }

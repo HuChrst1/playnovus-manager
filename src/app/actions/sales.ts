@@ -14,6 +14,11 @@ import type {
 import type { Tables, TablesInsert } from "@/types/supabase";
 import type { PostgrestError } from "@supabase/supabase-js";
 import { parseBusinessSaleNumber } from "@/lib/sale-number";
+import {
+  getAuthSessionErrorMessage,
+  requireActiveSession,
+} from "@/lib/auth/require-active-session";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 type SaleItemDbRow = Tables<"sale_items">;
 type SaleItemInsertDb = TablesInsert<"sale_items"> & {
   overrides?: unknown | null;
@@ -57,6 +62,47 @@ type SaleTotalsSnapshot = Pick<
 >;
 
 const SALE_NUMBER_INSERT_RETRY_MAX = 3;
+const SALES_MUTATION_RATE_LIMIT = {
+  scope: "sales_mutations",
+  limit: 60,
+  windowMs: 5 * 60 * 1000,
+} as const;
+
+type SalesGuardResult =
+  | { ok: true; userId: string }
+  | { ok: false; error: string };
+
+async function enforceSalesSessionGuard(): Promise<SalesGuardResult> {
+  try {
+    const actor = await requireActiveSession();
+    return { ok: true, userId: actor.userId };
+  } catch (error) {
+    return { ok: false, error: getAuthSessionErrorMessage(error) };
+  }
+}
+
+async function enforceSalesMutationGuard(): Promise<SalesGuardResult> {
+  const sessionGuard = await enforceSalesSessionGuard();
+  if (!sessionGuard.ok) {
+    return sessionGuard;
+  }
+
+  const limit = enforceRateLimit(
+    SALES_MUTATION_RATE_LIMIT.scope,
+    sessionGuard.userId,
+    SALES_MUTATION_RATE_LIMIT.limit,
+    SALES_MUTATION_RATE_LIMIT.windowMs
+  );
+
+  if (!limit.allowed) {
+    return {
+      ok: false,
+      error: `Trop de requetes. Reessaie dans ${limit.retryAfterSeconds}s.`,
+    };
+  }
+
+  return sessionGuard;
+}
 
 function normalizeOverrides(v: unknown): Record<string, number> | null {
   if (!v || typeof v !== "object" || Array.isArray(v)) return null;
@@ -356,6 +402,11 @@ function validateSaleItemDraft(
 export async function createSaleAction(
   draft: SaleDraft
 ): Promise<CreateSaleActionResult> {
+  const guard = await enforceSalesMutationGuard();
+  if (!guard.ok) {
+    return { success: false, error: guard.error };
+  }
+
   try {
     const validationErrors = validateSaleDraft(draft);
 
@@ -911,6 +962,14 @@ export type CancelSaleResult =
 export async function cancelSaleAction(
   saleId: number
 ): Promise<CancelSaleResult> {
+  const guard = await enforceSalesMutationGuard();
+  if (!guard.ok) {
+    return {
+      ok: false,
+      errors: [{ field: "root", message: guard.error }],
+    };
+  }
+
   let loaded;
   try {
     loaded = await loadSaleOutMovementsForCancel(saleId);
@@ -1116,6 +1175,14 @@ export async function updateSaleMetaAction(
   saleId: number,
   payload: UpdateSaleMetaPayload
 ): Promise<UpdateSaleMetaResult> {
+  const guard = await enforceSalesMutationGuard();
+  if (!guard.ok) {
+    return {
+      ok: false,
+      errors: [{ field: "root", message: guard.error }],
+    };
+  }
+
   const errors = validateUpdateSaleMetaInput(saleId, payload);
 
   if (errors.length > 0) {
@@ -1211,6 +1278,11 @@ export async function updateSaleMetaAction(
 
 // 3.6.x - Suppression d'une vente (hard delete)
 export async function deleteSaleAction(saleId: number) {
+  const guard = await enforceSalesMutationGuard();
+  if (!guard.ok) {
+    return { success: false as const, error: guard.error };
+  }
+
   const id = Number(saleId);
 
   if (!Number.isFinite(id) || id <= 0) {
@@ -1323,6 +1395,11 @@ export async function updateSaleAction(
   saleId: number,
   draft: SaleDraft
 ): Promise<UpdateSaleActionResult> {
+  const guard = await enforceSalesMutationGuard();
+  if (!guard.ok) {
+    return { success: false, error: guard.error };
+  }
+
   try {
     const id = Number(saleId);
     if (!Number.isFinite(id) || id <= 0) return { success: false, error: "saleId invalide" };
@@ -1661,6 +1738,11 @@ export type GetSaleDraftForEditResult =
 export async function getSaleDraftForEditAction(
   saleId: number
 ): Promise<GetSaleDraftForEditResult> {
+  const guard = await enforceSalesSessionGuard();
+  if (!guard.ok) {
+    return { ok: false, error: guard.error };
+  }
+
   const id = Number(saleId);
   if (!Number.isFinite(id) || id <= 0) return { ok: false, error: "saleId invalide" };
 

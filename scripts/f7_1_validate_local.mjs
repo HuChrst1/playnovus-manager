@@ -82,6 +82,7 @@ function setupLocalEnv(localEnv) {
   process.env.NEXT_PUBLIC_SUPABASE_URL = localEnv.API_URL;
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = localEnv.ANON_KEY;
   process.env.SUPABASE_SERVICE_ROLE_KEY = localEnv.SERVICE_ROLE_KEY;
+  process.env.PLAYNOVUS_LOCAL_VALIDATION_BYPASS = "1";
 }
 
 function runLocalOnlyBuild(localEnv) {

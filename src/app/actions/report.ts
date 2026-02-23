@@ -1,11 +1,12 @@
 "use server";
 
-import { cookies } from "next/headers";
-import type { User } from "@supabase/supabase-js";
 import { supabaseServer as supabase } from "@/lib/supabase-server";
 import type { Tables, TablesInsert, TablesUpdate } from "@/types/supabase";
-import { readAuthSessionFromCookies } from "@/lib/auth/session";
-import { createSupabaseAuthClient } from "@/lib/auth/supabase-auth";
+import {
+  getAuthSessionErrorMessage,
+  requireActiveSession,
+} from "@/lib/auth/require-active-session";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 import {
   isReportCategory,
   isReportClosedStatus,
@@ -58,59 +59,36 @@ export type UpdateReportTicketInput = {
 
 const MAX_DESCRIPTION_LENGTH = 2000;
 
-function readMetadataValue(metadata: unknown, key: string): string | null {
-  if (typeof metadata !== "object" || metadata === null) {
-    return null;
-  }
-
-  const rawValue = (metadata as Record<string, unknown>)[key];
-  if (typeof rawValue !== "string") {
-    return null;
-  }
-
-  const normalized = rawValue.trim();
-  return normalized.length > 0 ? normalized : null;
-}
-
-function resolveDisplayName(user: User): string | null {
-  const userMetadata = user.user_metadata;
-  const appMetadata = user.app_metadata;
-
-  return (
-    readMetadataValue(userMetadata, "display_name") ??
-    readMetadataValue(userMetadata, "full_name") ??
-    readMetadataValue(userMetadata, "name") ??
-    readMetadataValue(userMetadata, "alias") ??
-    readMetadataValue(userMetadata, "username") ??
-    readMetadataValue(userMetadata, "preferred_username") ??
-    readMetadataValue(appMetadata, "display_name") ??
-    readMetadataValue(appMetadata, "alias")
-  );
-}
+const REPORT_RATE_LIMIT = {
+  scope: "report_mutations",
+  limit: 60,
+  windowMs: 5 * 60 * 1000,
+} as const;
 
 async function resolveCurrentActor(): Promise<ReportTicketActor | null> {
-  const cookieStore = await cookies();
-  const session = readAuthSessionFromCookies(cookieStore);
-
-  if (!session.accessToken) {
+  try {
+    const actor = await requireActiveSession();
+    return {
+      userId: actor.userId,
+      email: actor.email,
+      displayName: actor.displayName,
+    };
+  } catch {
     return null;
   }
+}
 
-  const supabaseAuth = createSupabaseAuthClient();
-  if (!supabaseAuth) {
-    return null;
+function enforceReportMutationRateLimit(userId: string): string | null {
+  const limit = enforceRateLimit(
+    REPORT_RATE_LIMIT.scope,
+    userId,
+    REPORT_RATE_LIMIT.limit,
+    REPORT_RATE_LIMIT.windowMs
+  );
+  if (!limit.allowed) {
+    return `Trop de requetes. Reessaie dans ${limit.retryAfterSeconds}s.`;
   }
-
-  const { data, error } = await supabaseAuth.auth.getUser(session.accessToken);
-  if (error || !data.user?.id) {
-    return null;
-  }
-
-  return {
-    userId: data.user.id,
-    email: data.user.email ?? null,
-    displayName: resolveDisplayName(data.user),
-  };
+  return null;
 }
 
 function getErrorMessage(error: unknown, fallback: string): string {
@@ -197,6 +175,10 @@ export async function createReportTicketAction(
   if (!actor) {
     return { success: false, error: "Session invalide. Reconnecte-toi puis reessaie." };
   }
+  const rateLimitError = enforceReportMutationRateLimit(actor.userId);
+  if (rateLimitError) {
+    return { success: false, error: rateLimitError };
+  }
 
   const payload: ReportTicketInsert = {
     target_scope: input.target_scope,
@@ -229,6 +211,15 @@ export async function createReportTicketAction(
 }
 
 export async function listReportTicketsAction(): Promise<ReportTicketsResult> {
+  try {
+    await requireActiveSession();
+  } catch (error) {
+    return {
+      success: false,
+      error: getAuthSessionErrorMessage(error),
+    };
+  }
+
   const { data, error } = await supabase
     .from("report_tickets")
     .select("*")
@@ -281,6 +272,10 @@ export async function updateReportTicketAction(
       error: "Session invalide. Reconnecte-toi puis reessaie.",
     };
   }
+  const rateLimitError = enforceReportMutationRateLimit(actor.userId);
+  if (rateLimitError) {
+    return { success: false, error: rateLimitError };
+  }
 
   if (input.closed) {
     if (!isReportClosedStatus(input.status)) {
@@ -325,6 +320,16 @@ export async function deleteReportTicketAction(
 ): Promise<DeleteReportTicketResult> {
   if (!Number.isFinite(id) || id <= 0) {
     return { success: false, error: "Ticket invalide." };
+  }
+
+  const actor = await resolveCurrentActor();
+  if (!actor) {
+    return { success: false, error: "Session invalide. Reconnecte-toi puis reessaie." };
+  }
+
+  const rateLimitError = enforceReportMutationRateLimit(actor.userId);
+  if (rateLimitError) {
+    return { success: false, error: rateLimitError };
   }
 
   const { data, error } = await supabase

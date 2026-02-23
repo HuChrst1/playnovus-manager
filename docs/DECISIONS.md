@@ -631,6 +631,59 @@ Derniere mise a jour: 2026-02-23
   - aucun changement schema SQL
   - aucune ecriture distante autorisee
 
+### D-038 - Gouvernance release F7.4: checklist unifiee + `GO/NO_GO` strict securite
+
+- Statut: validee
+- Constat:
+  - les preuves de validation existaient, mais dispersees entre F7.1/F7.2/F7.3
+  - la release Phase 7 necessitait un runbook unique avec regle de decision explicite
+  - le besoin produit impose un blocage release en cas de non-conformite securite, meme non critique
+- Impact:
+  - ajout d'un runbook F7.4 unique:
+    - `docs/F7_4_CHECKLIST_LIVRAISON_ROLLBACK.md`
+  - ajout d'un script local de collecte F7.4:
+    - `scripts/f7_4_validate_local.mjs`
+    - sortie standardisee `PASS|FAIL|BLOCKED` par controle + evidence log horodate
+    - decision finale `GO|NO_GO`
+    - mode enforcement optionnel `--enforce-go`
+  - scripts npm:
+    - `test:f7.4`
+  - politique de decision release verrouillee:
+    - `block_always_on_security_non_compliance`
+    - `GO` uniquement si controles critiques techniques et securite sont tous `PASS`
+    - tout `FAIL`/`BLOCKED` securite implique `NO_GO`
+  - protocole rollback local-first formalise:
+    - objectif prioritaire: retour service rapide
+    - verification immediate post-rollback des controles critiques
+  - aucun changement SQL/migration
+  - aucune ecriture DB distante
+
+### D-039 - Gouvernance F7.5: gate securite strict `--enforce-go` + blocage sur secrets/env manquants
+
+- Statut: validee
+- Constat:
+  - F7.4 a formalise le runbook et la matrice `GO/NO_GO`, mais la fermeture securite Phase 7 necessite un gate technique dedie
+  - les ecarts restants critiques sont applicatifs (CAPTCHA/CORS/gardes session/rate-limit), pas un durcissement RLS SQL massif
+  - les preuves de securite doivent etre reproductibles en local, sans ecriture distante
+- Impact:
+  - ajout d'un gate local dedie `scripts/f7_5_validate_local.mjs` + script npm `test:f7.5`
+  - politique de cloture verrouillee:
+    - F7.5 `FAIT` uniquement si `node scripts/f7_5_validate_local.mjs --checkpoint <pre|post>-release --enforce-go` passe
+    - tout `FAIL`/`BLOCKED` sur `S1..S10` implique `NO_GO`
+  - exigences env/secret explicites dans le gate:
+    - `NEXT_PUBLIC_TURNSTILE_SITE_KEY`
+    - `SUPABASE_AUTH_CAPTCHA_SECRET`
+    - `APP_ALLOWED_ORIGINS`
+  - couverture securite F7.5 standardisee:
+    - rate limits auth + mutations + route API
+    - RLS/policies/security_invoker verifies (mode compat conserve)
+    - CAPTCHA Turnstile active et branchee auth
+    - garde session + validation serveur sur mutations cibles
+    - CORS allowlist avec test runtime (origin interdite `403`, sans session `401`)
+    - audits dependances (`audit:prod`, `audit:deps`)
+  - aucune migration SQL nouvelle imposee par F7.5
+  - aucune ecriture DB distante autorisee
+
 ## Hypothèses / décisions en attente
 
 ### H-002 - Politique d'authentification applicative

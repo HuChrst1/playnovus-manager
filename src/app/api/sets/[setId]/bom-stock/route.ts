@@ -1,8 +1,20 @@
 // src/app/api/sets/[setId]/bom-stock/route.ts
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase-server";
+import {
+  getAuthSessionErrorMessage,
+  requireActiveSession,
+} from "@/lib/auth/require-active-session";
+import { buildCorsHeaders, isOriginAllowed, resolveAllowedOrigins } from "@/lib/security/cors";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 
 export const dynamic = "force-dynamic";
+
+const API_BOM_STOCK_RATE_LIMIT = {
+  scope: "api_bom_stock_read",
+  limit: 120,
+  windowMs: 5 * 60 * 1000,
+} as const;
 
 type BomStockRow = {
   piece_ref: string;
@@ -14,24 +26,124 @@ type BomStockRow = {
   missing_qty: number;
 };
 
+function getRequestOrigin(request: Request): string | null {
+  const origin = request.headers.get("origin");
+  if (!origin?.trim()) return null;
+  return origin.trim();
+}
+
+function getRequestIpKey(request: Request): string {
+  const forwardedFor = request.headers.get("x-forwarded-for");
+  if (forwardedFor) {
+    const firstIp = forwardedFor.split(",")[0]?.trim();
+    if (firstIp) return firstIp;
+  }
+
+  const realIp = request.headers.get("x-real-ip");
+  if (realIp?.trim()) {
+    return realIp.trim();
+  }
+
+  return request.headers.get("host") ?? "unknown-host";
+}
+
+function jsonWithCors(
+  body: Record<string, unknown>,
+  init: { status: number },
+  corsHeaders: Headers
+): NextResponse {
+  const response = NextResponse.json(body, init);
+  for (const [headerName, headerValue] of corsHeaders.entries()) {
+    response.headers.set(headerName, headerValue);
+  }
+  return response;
+}
+
+function createCorsContext(request: Request): {
+  requestOrigin: string | null;
+  originAllowed: boolean;
+  corsHeaders: Headers;
+} {
+  const requestOrigin = getRequestOrigin(request);
+  const allowedOrigins = resolveAllowedOrigins();
+  const originAllowed = isOriginAllowed(requestOrigin, allowedOrigins);
+  const corsHeaders = buildCorsHeaders({
+    requestOrigin,
+    allowedOrigins,
+    allowMethods: ["GET", "OPTIONS"],
+    allowHeaders: ["Content-Type", "Authorization"],
+  });
+
+  return { requestOrigin, originAllowed, corsHeaders };
+}
+
+export async function OPTIONS(req: Request) {
+  const cors = createCorsContext(req);
+  if (cors.requestOrigin && !cors.originAllowed) {
+    return jsonWithCors({ error: "Origin non autorisee." }, { status: 403 }, cors.corsHeaders);
+  }
+
+  const response = new NextResponse(null, { status: 204 });
+  for (const [headerName, headerValue] of cors.corsHeaders.entries()) {
+    response.headers.set(headerName, headerValue);
+  }
+  return response;
+}
+
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ setId: string }> }
 ) {
+  const cors = createCorsContext(req);
+  if (cors.requestOrigin && !cors.originAllowed) {
+    return jsonWithCors({ error: "Origin non autorisee." }, { status: 403 }, cors.corsHeaders);
+  }
+
+  let actorUserId = "anonymous";
+  try {
+    const actor = await requireActiveSession();
+    actorUserId = actor.userId;
+  } catch (error) {
+    return jsonWithCors(
+      { error: getAuthSessionErrorMessage(error) },
+      { status: 401 },
+      cors.corsHeaders
+    );
+  }
+
+  const rateLimit = enforceRateLimit(
+    API_BOM_STOCK_RATE_LIMIT.scope,
+    `${actorUserId}:${getRequestIpKey(req)}`,
+    API_BOM_STOCK_RATE_LIMIT.limit,
+    API_BOM_STOCK_RATE_LIMIT.windowMs
+  );
+
+  if (!rateLimit.allowed) {
+    return jsonWithCors(
+      {
+        error: `Rate limit depasse. Reessaie dans ${rateLimit.retryAfterSeconds}s.`,
+        retryAfter: rateLimit.retryAfterSeconds,
+      },
+      { status: 429 },
+      cors.corsHeaders
+    );
+  }
+
   const { setId } = await params;
 
-  if (!setId || typeof setId !== "string") {
-    return NextResponse.json({ error: "setId manquant." }, { status: 400 });
+  const normalizedSetId = typeof setId === "string" ? setId.trim() : "";
+  if (!normalizedSetId || !/^[A-Za-z0-9_-]+$/.test(normalizedSetId)) {
+    return jsonWithCors({ error: "setId manquant ou invalide." }, { status: 400 }, cors.corsHeaders);
   }
 
   // 1) BOM
   const { data: bom, error: bomError } = await supabaseServer
     .from("sets_bom")
     .select("piece_ref, piece_name, quantity")
-    .eq("set_id", setId);
+    .eq("set_id", normalizedSetId);
 
   if (bomError) {
-    return NextResponse.json({ error: bomError.message }, { status: 500 });
+    return jsonWithCors({ error: bomError.message }, { status: 500 }, cors.corsHeaders);
   }
 
   const bomRows = (bom ?? []).map((r) => ({
@@ -41,9 +153,10 @@ export async function GET(
   }));
 
   if (bomRows.length === 0) {
-    return NextResponse.json(
-      { set_id: setId, pieces: [], note: "Aucune BOM trouvée pour ce set." },
-      { status: 200 }
+    return jsonWithCors(
+      { set_id: normalizedSetId, pieces: [], note: "Aucune BOM trouvée pour ce set." },
+      { status: 200 },
+      cors.corsHeaders
     );
   }
 
@@ -56,7 +169,7 @@ export async function GET(
     .in("piece_ref", pieceRefs);
 
   if (stockError) {
-    return NextResponse.json({ error: stockError.message }, { status: 500 });
+    return jsonWithCors({ error: stockError.message }, { status: 500 }, cors.corsHeaders);
   }
 
   const stockByRef = new Map(
@@ -91,8 +204,5 @@ export async function GET(
     };
   });
 
-  return NextResponse.json(
-    { set_id: setId, pieces },
-    { status: 200 }
-  );
+  return jsonWithCors({ set_id: normalizedSetId, pieces }, { status: 200 }, cors.corsHeaders);
 }

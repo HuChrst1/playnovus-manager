@@ -1229,7 +1229,7 @@ Hypotheses et defaults explicites (auth/reglages):
 
 ## Phase 7 - Validation finale et readiness deploiement
 
-Statut global: `EN COURS`
+Statut global: `FAIT`
 
 ### F7.1 - Tests automatiques flux critiques
 
@@ -1315,20 +1315,40 @@ Definition of done:
 
 ### F7.4 - Checklist de livraison et rollback
 
-Statut: `A FAIRE`
+Statut: `FAIT`
 Objectif: livrer de facon predictable.
-Livrables:
-- plan rollback
-- checklist verification stock/coherence
-- checklist securite pre-release (rate limits, RLS, CAPTCHA, validation serveur, API keys, env vars, CORS, dependency audit)
-- monitoring minimal des erreurs critiques
+Livrables realises:
+- runbook F7.4 unifie:
+  - `docs/F7_4_CHECKLIST_LIVRAISON_ROLLBACK.md`
+- script local de collecte preuves/statuts:
+  - `scripts/f7_4_validate_local.mjs`
+- script npm dedie:
+  - `test:f7.4`
+- checklist stock/coherence formalisee (C1-C7):
+  - `healthcheck_business_anomalies_v1`
+  - `stock_balance`
+  - vues `stock_per_piece`, `stock_journal`, `piece_movements`
+  - non-regression `test`, `test:f2.0`, `test:f7.3:*`
+- checklist securite pre-release formalisee (S1-S10):
+  - rate limits
+  - RLS + policies + views invoker
+  - CAPTCHA
+  - validation serveur
+  - API keys / env vars
+  - CORS
+  - dependency audits
+- matrice de decision `GO/NO_GO` deterministe:
+  - politique `block_always_on_security_non_compliance`
+- protocole rollback local oriente retour service rapide
+- monitoring minimal erreurs critiques (M1-M5) avec action immediate
 Definition of done:
-- runbook de livraison complet et actionnable
-- checklist securite Phase 7 completee avec preuves
+- runbook de livraison complet et actionnable: `OK`
+- checklist securite Phase 7 completee avec preuves: `OK`
+- la decision release peut rester `NO_GO` tant que des controles securite sont `FAIL/BLOCKED` (traitement correctif en F7.5)
 
 ### F7.5 - Checklist securite Phase 7 (gate bloquant)
 
-Statut: `A FAIRE`
+Statut: `FAIT` (gate strict valide: `GO` en checkpoints pre-release et post-release)
 Objectif: valider la posture securite avant toute livraison pre-prod/prod.
 Portee minimale:
 - rate limits verifies sur endpoints critiques (auth + mutations metier)
@@ -1339,11 +1359,50 @@ Portee minimale:
 - variables d'environnement correctement renseignees et segmentees par environnement
 - restrictions CORS limitees aux origines autorisees
 - dependency audit execute et traite avant release
+Livrables realises:
+- socle securite partage ajoute:
+  - `src/lib/auth/require-active-session.ts`
+  - `src/lib/security/rate-limit.ts`
+  - `src/lib/security/cors.ts`
+- CAPTCHA Turnstile active cote Supabase local:
+  - `supabase/config.toml` (`[auth.captcha] enabled=true`, `provider=\"turnstile\"`, secret via env)
+- CAPTCHA branche sur flux publics auth:
+  - `src/components/security/TurnstileField.tsx`
+  - `src/app/login/LoginFormClient.tsx`
+  - `src/app/login/page.tsx`
+  - `src/app/login/actions.ts`
+  - `src/app/forgot-password/page.tsx`
+  - `src/app/forgot-password/actions.ts`
+  - verrou UX login: bouton `Se connecter` desactive tant que le token CAPTCHA est absent
+- CORS allowlist + auth session + rate-limit sur route exposee:
+  - `src/app/api/sets/[setId]/bom-stock/route.ts`
+- garde session + rate-limit + validation serveur homogenises sur mutations ciblees:
+  - `src/app/actions/update-bom.ts`
+  - `src/app/actions/update-set-info.ts`
+  - `src/app/actions/update-set.ts`
+  - `src/app/catalogue/actions.ts`
+  - `src/app/actions/stock-movements.ts`
+  - `src/app/approvisionnement/action.ts`
+  - `src/app/actions/sales.ts`
+  - `src/app/actions/report.ts`
+  - `src/app/compte/actions.ts`
+- validateur F7.5 local-first ajoute:
+  - `scripts/f7_5_validate_local.mjs`
+  - `package.json` (`test:f7.5`)
+- runbook F7.5 dedie ajoute:
+  - `docs/F7_5_CHECKLIST_SECURITE_PHASE7.md`
+- continuite F7.4 preservee:
+  - `npm run test:f7.4` => `GO`
+Validation gate F7.5 (preuves locales):
+- `npm run test:f7.5` => `GO`
+- `node scripts/f7_5_validate_local.mjs --checkpoint pre-release --enforce-go` => `GO`
+- `node scripts/f7_5_validate_local.mjs --checkpoint post-release --enforce-go` => `GO`
+- matrice securite: `S1..S10 = PASS`
 Definition of done:
-- chaque point de checklist est valide (ou bloque explicitement la livraison)
-- preuves de verification archivees dans le lot de release
+- chaque point de checklist est valide (ou bloque explicitement la livraison): `OK`
+- preuves de verification archivees dans le lot de release: `OK`
 
-## Phase 8 - Deploiement SaaS initial
+## Phase 8 - Deploiement/mise en prod SaaS initial
 
 Statut global: `A FAIRE`
 
@@ -1352,11 +1411,18 @@ Statut global: `A FAIRE`
 Statut: `A FAIRE`
 Objectif: preparer un deploiement previsible et reproductible.
 Livrables:
+- widget Turnstile production cree avec hostnames de production
+- variables securite production renseignees:
+  - `NEXT_PUBLIC_TURNSTILE_SITE_KEY`
+  - `SUPABASE_AUTH_CAPTCHA_SECRET`
+  - `APP_ALLOWED_ORIGINS`
 - runbook de deploiement production
 - checklist variables d'environnement et secrets
 - checklist go-live et smoke checks metier critiques
 Definition of done:
 - Choix des outils/Stack pour déployer/héberger le logiciel/webapp
+- widget Turnstile prod valide sur le domaine de production
+- variables securite prod appliquees et verifiees dans l'environnement heberge
 - prerequis techniques et operationnels valides avant mise en service
 
 ### F8.2 - Deploiement du logiciel (mise en service)
@@ -1469,7 +1535,8 @@ Definition of done:
 45. F7.2
 46. F7.3
 47. F7.4
-48. F8.1
-49. F8.2
-50. F8.3
-51. F9.1
+48. F7.5
+49. F8.1
+50. F8.2
+51. F8.3
+52. F9.1
