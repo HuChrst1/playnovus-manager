@@ -1286,10 +1286,32 @@ Definition of done:
 
 ### F7.3 - Healthcheck DB pre-release / post-release
 
-Statut: `A FAIRE`
+Statut: `FAIT`
 Objectif: confirmer l'integrite des donnees avant/apres livraison.
+Livrables realises:
+- script local dedie:
+  - `scripts/f7_3_validate_local.mjs`
+  - garde local-only (`npx supabase status -o env`, refus host non-local)
+  - parametre obligatoire `--checkpoint pre-release|post-release`
+- rapport healthcheck standardise:
+  - matrice pass/fail (`S1`, `S2`, `S5`, `S6`)
+  - comptage global anomalies
+  - comptage par `anomaly_family` / `anomaly_code`
+  - details actionnables complets si anomalies > 0
+  - decision explicite `PASS` / `BLOCKED`
+- scripts npm F7.3:
+  - `test:f7.3:pre`
+  - `test:f7.3:post`
+  - `test:f7.3` (`pre -> test -> test:f2.0 -> post`)
+- protocole documente:
+  - `docs/F7_3_HEALTHCHECK_DB.md`
+- non-regression preservee:
+  - `npm run test` vert
+  - `npm run test:f2.0` vert
 Definition of done:
-- healthcheck retourne 0 anomalie avant validation finale
+- checkpoint pre-release: `healthcheck_business_anomalies_v1 = 0`
+- checkpoint post-release: `healthcheck_business_anomalies_v1 = 0`
+- gate strict: toute anomalie bloque la validation finale
 
 ### F7.4 - Checklist de livraison et rollback
 

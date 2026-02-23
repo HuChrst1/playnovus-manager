@@ -2,6 +2,87 @@
 
 Ce fichier consigne les changements du projet, etapes par etapes.
 
+## 2026-02-23 - F7.3 Healthcheck DB pre-release / post-release
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Script local F7.3 ajoute:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/scripts/f7_3_validate_local.mjs`
+  - comportement:
+    - garde local-only (`npx supabase status -o env`, host `localhost/127.0.0.1` obligatoire)
+    - parametre obligatoire `--checkpoint pre-release|post-release`
+    - matrice pass/fail:
+      - lisibilite vue `healthcheck_business_anomalies_v1`
+      - anomalies globales
+      - `stock_balance.quantity < 0`
+      - lisibilite `stock_per_piece`, `stock_journal`, `piece_movements`
+    - rapport standardise:
+      - regroupement par `anomaly_family`
+      - regroupement par `anomaly_family`/`anomaly_code`/`severity`
+      - details actionnables si anomalies > 0
+    - decision explicite:
+      - `PASS` si gate vert
+      - `BLOCKED` si `anomalies_total > 0`
+    - codes de sortie:
+      - `0`: vert
+      - `2`: anomalies detectees
+      - `1`: erreur technique/prerequis
+- Scripts npm F7.3 ajoutes:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/package.json`
+  - `test:f7.3:pre`
+  - `test:f7.3:post`
+  - `test:f7.3` (`pre -> test -> test:f2.0 -> post`)
+- Documentation F7.3 ajoutee:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/F7_3_HEALTHCHECK_DB.md`
+- Documentation gouvernance mise a jour:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/ROADMAP.md` (`F7.3` passe a `FAIT`)
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/DECISIONS.md` (nouvelle decision `D-037`)
+
+### Verifications executees
+
+- Sequence locale imposee:
+  - `npx supabase --version` -> OK (`2.65.10`)
+  - `docker info --format '{{.ServerVersion}}'` -> OK (`29.2.0`)
+  - `npx supabase status` -> OK (stack locale active)
+  - `npx supabase start` -> OK
+  - `npx supabase db reset --local` -> OK
+  - `npm run test:f7.3:pre` -> OK
+    - checkpoint timestamp: `2026-02-23T17:27:08.334Z`
+    - `anomalies_total=0`
+    - `decision=PASS`
+  - `npm run test` -> OK
+  - `npm run test:f2.0` -> OK
+  - `npm run test:f7.3:post` -> OK
+    - checkpoint timestamp: `2026-02-23T17:28:21.625Z`
+    - `anomalies_total=0`
+    - `decision=PASS`
+  - `npm ci` -> OK (`0 vulnerabilities`)
+  - `npm run lint` -> OK
+  - `npm run typecheck` -> OK
+  - `npm run build` -> OK
+  - `npm run test` -> OK
+  - `npm run test:f2.0` -> OK
+  - `npm run lint:ui-contrast` -> OK
+
+### Validation fonctionnelle F7.3
+
+- S1 vue `healthcheck_business_anomalies_v1` lisible: PASS
+- S2 checkpoint pre-release `healthcheck=0`: PASS
+- S3 non-regression `npm run test` + `npm run test:f2.0`: PASS
+- S4 checkpoint post-release local `healthcheck=0`: PASS
+- S5 `stock_balance.quantity < 0` reste `0`: PASS
+- S6 vues `stock_per_piece`, `stock_journal`, `piece_movements` lisibles: PASS
+- S7 logique actionnable si anomalies > 0: PASS (code en place, non declenche car `0` anomalie)
+
+### Perimetre / limites
+
+- Scope strict F7.3 respecte.
+- Aucune migration SQL ajoutee.
+- Aucune ecriture DB distante.
+- Aucun secret sensible ajoute au repo.
+
 ## 2026-02-23 - F7.2 Scenarios manuels de validation metier
 
 Statut: `FAIT`

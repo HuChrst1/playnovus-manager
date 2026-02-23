@@ -604,6 +604,33 @@ Derniere mise a jour: 2026-02-23
   - non-regression F2.0 imposee dans la campagne integration (`npm run test:f2.0`)
   - aucun changement schema SQL requis pour la strategie de test
 
+### D-037 - Gate healthcheck DB pre-release/post-release strict (F7.3)
+
+- Statut: validee
+- Constat:
+  - le healthcheck SQL canonique F1.5 existait mais sans protocole release pre/post explicite
+  - les validations healthcheck etaient presentes de maniere indirecte (F2.0) sans matrice release dediee
+  - la validation finale Phase 7 exige une decision claire bloque/non-bloque en cas d'anomalie
+- Impact:
+  - ajout d'un script local dedie `scripts/f7_3_validate_local.mjs`:
+    - checkpoint obligatoire `--checkpoint pre-release|post-release`
+    - garde local-only obligatoire (`supabase status -o env` + host `localhost/127.0.0.1`)
+    - rapport standardise:
+      - pass/fail matrix
+      - comptage global anomalies
+      - comptage par `anomaly_family` / `anomaly_code`
+      - details actionnables complets si anomalies > 0
+  - politique de decision verrouillee:
+    - `strict_blocking`
+    - si `anomalies_total > 0` => `BLOCKED` (exit code `2`)
+    - erreur technique/prerequis => exit code `1`
+  - cadence de controle verrouillee:
+    - checkpoint pre-release + post-release sur chaque release
+  - scripts npm standardises:
+    - `test:f7.3:pre`, `test:f7.3:post`, `test:f7.3`
+  - aucun changement schema SQL
+  - aucune ecriture distante autorisee
+
 ## Hypothèses / décisions en attente
 
 ### H-002 - Politique d'authentification applicative
