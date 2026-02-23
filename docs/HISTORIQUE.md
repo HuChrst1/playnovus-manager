@@ -2,6 +2,98 @@
 
 Ce fichier consigne les changements du projet, etapes par etapes.
 
+## 2026-02-23 - F8.1 Preparation deploiement production (Vercel)
+
+Statut: `BLOQUE` / Decision release courante: `NO_GO` (DoD stricte F8.1)
+
+### Changements realises
+
+- Runbook F8.1 ajoute:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/F8_1_PREPARATION_DEPLOIEMENT_PRODUCTION.md`
+  - contenu livre:
+    - strategie stack/outillage (`Vercel + Supabase + Turnstile`)
+    - prerequis techniques et operationnels
+    - sequence preprod -> prod (preparation uniquement)
+    - checklist env/secrets `local|preprod|prod`
+    - procedure Turnstile production (widget + hostnames + mapping variables)
+    - checklist go-live + smoke checks metier critiques
+    - matrice `GO/NO_GO` F8.1
+    - rollback de deploiement (niveau preparation)
+    - format de preuves standardise
+- Script local F8.1 ajoute:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/scripts/f8_1_validate_local.mjs`
+  - comportement:
+    - `--checkpoint pre-release|post-release`
+    - `--enforce-go` (exit `2` si decision `NO_GO`)
+    - sorties:
+      - `PASS_FAIL_BLOCKED_MATRIX`
+      - `EVIDENCE_LOG`
+      - `DECISION`
+    - controles couverts:
+      - prerequis runtime local
+      - completude runbook/checklists F8.1
+      - hygiene doc (pas de secret en clair)
+      - preservation garde-fous F7.4/F7.5
+      - absence de migration SQL additionnelle
+      - preuves externes obligatoires E1/E2
+- Script npm ajoute:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/package.json`
+  - `test:f8.1`
+- Gouvernance documentaire mise a jour:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/ROADMAP.md`
+    - `Phase 8` et `F8.1` passes a `BLOQUE` tant que E1/E2 sont non valides
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/DECISIONS.md`
+    - nouvelle decision structurante `D-040` (stack Vercel + gouvernance F8.1)
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/README.md`
+    - section preparation deploiement F8.1 + commande `npm run test:f8.1`
+- Ajustement non-regression gate securite F7.5:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/scripts/f7_5_validate_local.mjs`
+  - detection CAPTCHA login alignee sur l'architecture effective (`LoginFormClient`), sans changement runtime auth.
+
+### Verifications executees
+
+- Pre-check local:
+  - `npx supabase --version` -> OK (`2.65.10`)
+  - `docker info` -> OK (`Server Version 29.2.0`)
+  - `npx supabase status` -> OK (stack locale active)
+- Reset local:
+  - `npx supabase start` -> OK
+  - `npx supabase db reset --local` -> OK
+- Campagne qualite/tests/audits (commandes executees):
+  - `npm ci` -> OK (`found 0 vulnerabilities`)
+  - `npm run lint` -> OK
+  - `npm run typecheck` -> OK
+  - `npm run build` -> OK
+  - `npm run test` -> OK
+  - `npm run test:f2.0` -> OK
+  - `npm run test:f7.3:pre` -> OK
+  - `npm run test:f7.3:post` -> OK
+  - `npm run test:f7.4` -> OK (`decision=GO`)
+  - `npm run test:f7.5` -> OK (`decision=GO`)
+  - `npm run test:f8.1` -> OK (execution), `decision=NO_GO`
+  - `npm run lint:ui-contrast` -> OK
+  - `npm run audit:prod` -> OK (`found 0 vulnerabilities`)
+  - `npm run audit:deps` -> OK (`(empty)`)
+
+### Etat gate F8.1
+
+- `P1..P3` PASS
+- `D1..D7` PASS
+- `G1..G2` PASS
+- `E1` BLOCKED (widget Turnstile prod/domaine non valide en preuve externe)
+- `E2` BLOCKED (variables securite hebergees non validees en preuve externe)
+- decision stricte: `NO_GO`
+
+### Perimetre / limites
+
+- Scope strict F8.1 respecte (preparation uniquement, sans execution F8.2).
+- Aucune migration SQL ajoutee.
+- Aucune ecriture DB distante.
+- Aucun secret sensible ajoute au repo.
+- Actions manuelles externes restantes avant passage a F8.2:
+  - validation Turnstile production (widget + hostnames)
+  - verification variables securite dans l'environnement heberge.
+
 ## 2026-02-23 - F7.5 Gate securite Phase 7 (GO strict)
 
 Statut: `FAIT` / Decision release courante: `GO`

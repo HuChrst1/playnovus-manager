@@ -21,6 +21,7 @@
     "test:f7.3": "npm run test:f7.3:pre && npm run test && npm run test:f2.0 && npm run test:f7.3:post",
     "test:f7.4": "node scripts/f7_4_validate_local.mjs --checkpoint pre-release",
     "test:f7.5": "node scripts/f7_5_validate_local.mjs --checkpoint pre-release",
+    "test:f8.1": "node scripts/f8_1_validate_local.mjs --checkpoint pre-release",
     "test": "npm run test:unit && npm run test:integration",
     "test:unit": "node --test tests/unit/fifo.test.mjs",
     "test:integration": "node scripts/f7_1_validate_local.mjs && npm run test:f2.0",

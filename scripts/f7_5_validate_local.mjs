@@ -552,6 +552,7 @@ function evaluateCaptchaSignals(configText) {
   }
 
   const loginPage = readFileIfExists("src/app/login/page.tsx") ?? "";
+  const loginFormClient = readFileIfExists("src/app/login/LoginFormClient.tsx") ?? "";
   const forgotPage = readFileIfExists("src/app/forgot-password/page.tsx") ?? "";
   const loginAction = readFileIfExists("src/app/login/actions.ts") ?? "";
   const forgotAction = readFileIfExists("src/app/forgot-password/actions.ts") ?? "";
@@ -561,8 +562,11 @@ function evaluateCaptchaSignals(configText) {
   if (!turnstileComponent.includes("NEXT_PUBLIC_TURNSTILE_SITE_KEY")) {
     wiringMissing.push("src/components/security/TurnstileField.tsx (site key non detectee)");
   }
-  if (!loginPage.includes("TurnstileField")) {
-    wiringMissing.push("src/app/login/page.tsx (TurnstileField manquant)");
+  const loginTurnstileWired =
+    loginPage.includes("TurnstileField") ||
+    (loginPage.includes("LoginFormClient") && loginFormClient.includes("TurnstileField"));
+  if (!loginTurnstileWired) {
+    wiringMissing.push("src/app/login/page.tsx|LoginFormClient.tsx (TurnstileField manquant)");
   }
   if (!forgotPage.includes("TurnstileField")) {
     wiringMissing.push("src/app/forgot-password/page.tsx (TurnstileField manquant)");

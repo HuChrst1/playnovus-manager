@@ -684,6 +684,33 @@ Derniere mise a jour: 2026-02-23
   - aucune migration SQL nouvelle imposee par F7.5
   - aucune ecriture DB distante autorisee
 
+### D-040 - Gouvernance F8.1: preparation deploiement production local-first (Vercel) + preuves externes obligatoires
+
+- Statut: validee
+- Constat:
+  - la Phase 8 necessite un cadre de preparation production explicite avant toute execution F8.2
+  - l'application est Next.js App Router et la priorite business retenue est la reduction maximale du risque
+  - la validation F8.1 doit conserver les garde-fous F7.4/F7.5 et rester sans ecriture DB distante
+- Impact:
+  - stack de deploiement retenue pour F8.1:
+    - app: `Vercel`
+    - backend/auth: `Supabase`
+    - CAPTCHA: `Cloudflare Turnstile`
+  - runbook F8.1 dedie ajoute:
+    - `docs/F8_1_PREPARATION_DEPLOIEMENT_PRODUCTION.md`
+  - gate local F8.1 ajoute:
+    - `scripts/f8_1_validate_local.mjs`
+    - script npm `test:f8.1`
+  - regles de decision F8.1 verrouillees:
+    - `GO` uniquement si tous les controles critiques sont `PASS`
+    - preuves externes obligatoires:
+      - E1: widget Turnstile prod valide sur domaine/hostnames de production
+      - E2: variables securite prod verifiees dans l'environnement heberge
+    - si E1/E2 ne sont pas `PASS`, F8.1 reste `BLOQUE`
+  - passage preprod obligatoire avant passage effectif a F8.2
+  - aucune migration SQL
+  - aucune ecriture DB distante autorisee
+
 ## Hypothèses / décisions en attente
 
 ### H-002 - Politique d'authentification applicative

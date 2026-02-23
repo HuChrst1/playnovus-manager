@@ -1404,26 +1404,39 @@ Definition of done:
 
 ## Phase 8 - Deploiement/mise en prod SaaS initial
 
-Statut global: `A FAIRE`
+Statut global: `BLOQUE`
 
 ### F8.1 - Preparation deploiement production
 
-Statut: `A FAIRE`
+Statut: `BLOQUE`
 Objectif: preparer un deploiement previsible et reproductible.
-Livrables:
-- widget Turnstile production cree avec hostnames de production
-- variables securite production renseignees:
+Livrables realises (preparation F8.1):
+- choix stack/outillage deploiement valide:
+  - app Next.js: `Vercel`
+  - backend: `Supabase`
+  - anti-bot auth: `Cloudflare Turnstile`
+- runbook F8.1 dedie:
+  - `docs/F8_1_PREPARATION_DEPLOIEMENT_PRODUCTION.md`
+- validateur local F8.1:
+  - `scripts/f8_1_validate_local.mjs`
+  - script npm `test:f8.1`
+- checklist variables d'environnement et secrets (local/preprod/prod):
   - `NEXT_PUBLIC_TURNSTILE_SITE_KEY`
   - `SUPABASE_AUTH_CAPTCHA_SECRET`
   - `APP_ALLOWED_ORIGINS`
-- runbook de deploiement production
-- checklist variables d'environnement et secrets
 - checklist go-live et smoke checks metier critiques
+- matrice de decision `GO/NO_GO` F8.1 explicite
+
+Blocages externes restants (DoD stricte F8.1):
+- E1: widget Turnstile prod valide sur domaine/hostnames de production (`BLOCKED`)
+- E2: variables securite prod appliquees et verifiees dans l'environnement heberge (`BLOCKED`)
+
 Definition of done:
 - Choix des outils/Stack pour déployer/héberger le logiciel/webapp
 - widget Turnstile prod valide sur le domaine de production
 - variables securite prod appliquees et verifiees dans l'environnement heberge
 - prerequis techniques et operationnels valides avant mise en service
+- si E1/E2 ne sont pas `PASS`, le statut F8.1 reste `BLOQUE`
 
 ### F8.2 - Deploiement du logiciel (mise en service)
 

@@ -111,6 +111,7 @@ npm run test:f7.3:pre
 npm run test:f7.3:post
 npm run test:f7.4
 npm run test:f7.5
+npm run test:f8.1
 ```
 
 ## Qualite / Verification
@@ -120,9 +121,22 @@ npm run typecheck  # verification TypeScript
 npm run lint       # verification lint (bloquant)
 npm run build      # verification build production
 npm run test       # unit + integration locale
+npm run test:f8.1  # gate preparation deploiement production (F8.1)
 npm run audit:prod # audit npm production
 npm run audit:deps # audit dependances cibles
 ```
+
+## Preparation deploiement production (F8.1)
+
+- stack retenue: Vercel (app Next.js) + Supabase + Cloudflare Turnstile
+- runbook F8.1:
+  - `docs/F8_1_PREPARATION_DEPLOIEMENT_PRODUCTION.md`
+- gate local F8.1:
+  - `npm run test:f8.1`
+
+Important:
+- F8.1 prepare la mise en service mais n'execute pas F8.2.
+- les preuves externes obligatoires (Turnstile prod + variables hebergees) doivent etre validees avant passage effectif a F8.2.
 
 ## Structure du repo
 
