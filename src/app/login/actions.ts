@@ -2,8 +2,18 @@
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { APP_HOME_PATH, LOGIN_PATH } from "@/lib/auth/constants";
-import { applyAuthSessionCookies, nowInSeconds } from "@/lib/auth/session";
+import {
+  APP_HOME_PATH,
+  LOGIN_NOTICE_LOGOUT_SUCCESS,
+  LOGIN_NOTICE_QUERY_PARAM,
+  LOGIN_PATH,
+} from "@/lib/auth/constants";
+import {
+  applyAuthSessionCookies,
+  clearAuthSessionCookies,
+  nowInSeconds,
+  readAuthSessionFromCookies,
+} from "@/lib/auth/session";
 import { createSupabaseAuthClient } from "@/lib/auth/supabase-auth";
 
 function normalizeFieldValue(value: FormDataEntryValue | null): string {
@@ -55,4 +65,31 @@ export async function loginWithPassword(formData: FormData): Promise<never> {
   );
 
   redirect(APP_HOME_PATH);
+}
+
+function buildLoginNoticeRedirect(notice: string): string {
+  const searchParams = new URLSearchParams();
+  searchParams.set(LOGIN_NOTICE_QUERY_PARAM, notice);
+  return `${LOGIN_PATH}?${searchParams.toString()}`;
+}
+
+export async function logoutCurrentSession(): Promise<never> {
+  const cookieStore = await cookies();
+  const snapshot = readAuthSessionFromCookies(cookieStore);
+  const supabase = createSupabaseAuthClient();
+
+  if (supabase && snapshot.accessToken && snapshot.refreshToken) {
+    try {
+      await supabase.auth.setSession({
+        access_token: snapshot.accessToken,
+        refresh_token: snapshot.refreshToken,
+      });
+      await supabase.auth.signOut({ scope: "local" });
+    } catch {
+      // Session cleanup must still complete even when Supabase sign-out fails.
+    }
+  }
+
+  clearAuthSessionCookies(cookieStore);
+  redirect(buildLoginNoticeRedirect(LOGIN_NOTICE_LOGOUT_SUCCESS));
 }

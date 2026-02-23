@@ -1168,16 +1168,17 @@ Definition of done:
 
 ### F6.3 - Creation et gestion des sessions
 
-Statut: `A FAIRE`
+Statut: `FAIT`
 Objectif: fournir des sessions persistantes et permettre la multi-session admin sans differenciation de permissions.
-Avancement partiel deja livre (sans cloture F6.3):
+Livrables realises:
 - memorisation de session avec politique `30j max` + `7j inactivite`
 - rotation refresh token en `proxy` si access token expire
 - garde-fou de session legacy (cookie unique) avec purge et reconnexion
-Livrables:
 - login/logout operationnels
+- logout branche depuis l'entree `Compte` en topbar (scope local a la session courante)
 - persistance de session
 - protection des routes applicatives metier
+- expiration/invalidite de session redirigee vers `/login` avec message explicite
 - support de sessions admin simultanees (compte A / compte B)
 Definition of done:
 - compte A et compte B peuvent se connecter chacun de leur cote au meme logiciel

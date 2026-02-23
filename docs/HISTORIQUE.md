@@ -2,6 +2,76 @@
 
 Ce fichier consigne les changements du projet, etapes par etapes.
 
+## 2026-02-23 - F6.3 Creation et gestion des sessions (logout + expiration explicite)
+
+Statut: `FAIT`
+
+### Changements realises
+
+- Logout de session active implemente cote serveur:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/login/actions.ts`
+  - nouvelle action `logoutCurrentSession`:
+    - tentative `signOut` Supabase scope `local` en best-effort
+    - purge systematique des cookies auth applicatifs
+    - redirection vers `/login` avec indicateur de deconnexion reussie
+- Entree logout UI minimale (hors F6.4):
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/AppSidebar.tsx`
+  - icone `Compte` transformee en menu popover avec action unique:
+    - `Se deconnecter (cette session)`
+- Expiration/invalidation de session rendue explicite:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/proxy.ts`
+  - redirection vers `/login` avec raison explicite pour:
+    - session legacy a purger
+    - fenetre de session depassee (30j max / 7j inactivite)
+    - token invalide/non rafraichissable
+- Feedback utilisateur login enrichi:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/login/page.tsx`
+  - nouveaux messages:
+    - deconnexion reussie
+    - session expiree (message non sensible)
+- Constantes auth alignees:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/lib/auth/constants.ts`
+  - ajout des codes de notice login utilises par `proxy` et `logout`
+- Documentation:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/ROADMAP.md` (`F6.3` passe a `FAIT`)
+
+### Verifications executees
+
+- Pre-check local:
+  - `npx supabase --version` -> OK (`2.65.10`)
+  - `docker info` -> OK
+  - `npx supabase status` -> OK
+- Setup local:
+  - `npx supabase start` -> OK (stack deja active)
+  - `npx supabase db reset --local` -> OK
+- Gates qualite:
+  - `npm ci` -> OK
+  - `npm run lint` -> OK
+  - `npm run typecheck` -> OK
+  - `npm run build` -> OK
+  - `npm run test:f2.0` -> OK
+  - `npm run lint:ui-contrast` -> OK
+
+### Validation fonctionnelle F6.3
+
+- Valide automatiquement/localement:
+  - garde d'acces routes metier non connecte (proxy)
+  - maintien redirection connecte sur `/login`
+  - politique session conservee (`30j max` + `7j inactivite`)
+  - non-regression globale via `npm run test:f2.0`
+- A valider manuellement (guide fourni dans le rendu final):
+  - scenarios multi-session A/B simultanees (S2 a S6)
+  - coherence UI complete des messages login/logout en contexte navigateur
+  - scenarios d'expiration temporelle simules (S9/S10)
+
+### Perimetre / limites
+
+- Aucun ajout de page `Compte/Parametres` (F6.4 non implemente).
+- Aucun changement roles/permissions ou attribution reports.
+- Aucun changement schema DB.
+- Aucune migration SQL ajoutee.
+- Aucune ecriture DB distante via SQL/linked.
+
 ## 2026-02-23 - Correctif auth (proxy Next 16 + mot de passe oublie + session memorisee)
 
 Statut: `FAIT`

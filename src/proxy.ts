@@ -1,5 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { APP_HOME_PATH, LOGIN_PATH } from "@/lib/auth/constants";
+import {
+  APP_HOME_PATH,
+  LOGIN_NOTICE_QUERY_PARAM,
+  LOGIN_NOTICE_SESSION_EXPIRED,
+  LOGIN_PATH,
+} from "@/lib/auth/constants";
 import {
   applyAuthSessionCookies,
   applyLastSeenCookie,
@@ -76,8 +81,13 @@ async function validateOrRefreshSession(snapshot: AuthSessionSnapshot): Promise<
   };
 }
 
-function redirectToLogin(request: NextRequest): NextResponse {
-  return NextResponse.redirect(new URL(LOGIN_PATH, request.url));
+function redirectToLogin(request: NextRequest, notice?: string): NextResponse {
+  const loginUrl = new URL(LOGIN_PATH, request.url);
+  if (notice) {
+    loginUrl.searchParams.set(LOGIN_NOTICE_QUERY_PARAM, notice);
+  }
+
+  return NextResponse.redirect(loginUrl);
 }
 
 function redirectToHome(request: NextRequest): NextResponse {
@@ -92,7 +102,7 @@ export async function proxy(request: NextRequest) {
   const cookieOptions = { secure: process.env.NODE_ENV === "production" };
 
   if (hasLegacySessionToken(snapshot)) {
-    const response = isLoginPath ? NextResponse.next() : redirectToLogin(request);
+    const response = redirectToLogin(request, LOGIN_NOTICE_SESSION_EXPIRED);
     clearAuthSessionCookies(response.cookies);
     return response;
   }
@@ -102,14 +112,14 @@ export async function proxy(request: NextRequest) {
   }
 
   if (isSessionWindowExpired(snapshot, currentSeconds)) {
-    const response = isLoginPath ? NextResponse.next() : redirectToLogin(request);
+    const response = redirectToLogin(request, LOGIN_NOTICE_SESSION_EXPIRED);
     clearAuthSessionCookies(response.cookies);
     return response;
   }
 
   const sessionValidation = await validateOrRefreshSession(snapshot);
   if (!sessionValidation.valid || !sessionValidation.accessToken || !sessionValidation.refreshToken) {
-    const response = isLoginPath ? NextResponse.next() : redirectToLogin(request);
+    const response = redirectToLogin(request, LOGIN_NOTICE_SESSION_EXPIRED);
     clearAuthSessionCookies(response.cookies);
     return response;
   }

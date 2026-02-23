@@ -4,7 +4,12 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { loginWithPassword } from "@/app/login/actions";
 import Link from "next/link";
-import { FORGOT_PASSWORD_PATH } from "@/lib/auth/constants";
+import {
+  FORGOT_PASSWORD_PATH,
+  LOGIN_NOTICE_LOGOUT_SUCCESS,
+  LOGIN_NOTICE_QUERY_PARAM,
+  LOGIN_NOTICE_SESSION_EXPIRED,
+} from "@/lib/auth/constants";
 
 type RawLoginSearchParams = Record<string, string | string[] | undefined>;
 
@@ -30,10 +35,32 @@ function getLoginErrorMessage(errorCode: string | undefined): string | null {
   }
 }
 
+function getLoginNoticeMessage(noticeCode: string | undefined): {
+  tone: "success" | "warning";
+  message: string;
+} | null {
+  switch (noticeCode) {
+    case LOGIN_NOTICE_LOGOUT_SUCCESS:
+      return {
+        tone: "success",
+        message: "Tu as ete deconnecte de cette session.",
+      };
+    case LOGIN_NOTICE_SESSION_EXPIRED:
+      return {
+        tone: "warning",
+        message: "Ta session a expire. Reconnecte-toi pour continuer.",
+      };
+    default:
+      return null;
+  }
+}
+
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const errorCode = getFirstParamValue(resolvedSearchParams.error);
   const errorMessage = getLoginErrorMessage(errorCode);
+  const noticeCode = getFirstParamValue(resolvedSearchParams[LOGIN_NOTICE_QUERY_PARAM]);
+  const notice = getLoginNoticeMessage(noticeCode);
   const resetSuccess = getFirstParamValue(resolvedSearchParams.reset) === "success";
 
   return (
@@ -53,6 +80,19 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
               className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700"
             >
               Mot de passe mis a jour. Connecte-toi avec ton nouveau mot de passe.
+            </p>
+          ) : null}
+
+          {notice ? (
+            <p
+              role="status"
+              className={
+                notice.tone === "success"
+                  ? "rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700"
+                  : "rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"
+              }
+            >
+              {notice.message}
             </p>
           ) : null}
 
