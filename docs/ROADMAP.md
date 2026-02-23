@@ -1404,11 +1404,11 @@ Definition of done:
 
 ## Phase 8 - Deploiement/mise en prod SaaS initial
 
-Statut global: `BLOQUE`
+Statut global: `EN COURS`
 
 ### F8.1 - Preparation deploiement production
 
-Statut: `BLOQUE`
+Statut: `FAIT`
 Objectif: preparer un deploiement previsible et reproductible.
 Livrables realises (preparation F8.1):
 - choix stack/outillage deploiement valide:
@@ -1427,16 +1427,22 @@ Livrables realises (preparation F8.1):
 - checklist go-live et smoke checks metier critiques
 - matrice de decision `GO/NO_GO` F8.1 explicite
 
-Blocages externes restants (DoD stricte F8.1):
-- E1: widget Turnstile prod valide sur domaine/hostnames de production (`BLOCKED`)
-- E2: variables securite prod appliquees et verifiees dans l'environnement heberge (`BLOCKED`)
+Validation externe (DoD stricte F8.1):
+- E1: widget Turnstile prod valide sur domaine/hostnames de production (`PASS`)
+- E2: variables securite prod appliquees et verifiees dans l'environnement heberge (`PASS`)
+- gate local strict:
+  - `npm run test:f8.1` => `GO`
+  - `node scripts/f8_1_validate_local.mjs --checkpoint pre-release --enforce-go` => `GO`
+- verification CORS production:
+  - origin non autorisee => `403`
+  - origin autorisee sans session => `401`
 
 Definition of done:
 - Choix des outils/Stack pour déployer/héberger le logiciel/webapp
 - widget Turnstile prod valide sur le domaine de production
 - variables securite prod appliquees et verifiees dans l'environnement heberge
 - prerequis techniques et operationnels valides avant mise en service
-- si E1/E2 ne sont pas `PASS`, le statut F8.1 reste `BLOQUE`
+- E1/E2 a `PASS` et gate F8.1 a `GO`
 
 ### F8.2 - Deploiement du logiciel (mise en service)
 

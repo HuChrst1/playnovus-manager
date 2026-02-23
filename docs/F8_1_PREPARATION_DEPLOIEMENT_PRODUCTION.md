@@ -246,8 +246,8 @@ Script B (optionnel, remote read-only, sur demande):
 
 ## 12) Etat preuves externes obligatoires (DoD stricte)
 
-E1_turnstile_prod_domain_validated: BLOCKED  
-E2_hosted_env_security_vars_verified: BLOCKED
+E1_turnstile_prod_domain_validated: PASS 
+E2_hosted_env_security_vars_verified: PASS
 
 Interpretation:
 - tant que E1/E2 ne sont pas `PASS`, le lot F8.1 est `BLOQUE` et F8.2 ne doit pas demarrer.

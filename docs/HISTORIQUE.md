@@ -2,6 +2,33 @@
 
 Ce fichier consigne les changements du projet, etapes par etapes.
 
+## 2026-02-23 - F8.1 Cloture GO apres preuves externes (Vercel + Supabase + Turnstile)
+
+Statut: `FAIT` / Decision release courante: `GO` (DoD stricte F8.1 atteinte)
+
+### Preuves externes validees
+
+- Turnstile production valide sur domaine heberge:
+  - `E1_turnstile_prod_domain_validated: PASS`
+- Variables securite hebergees verifiees:
+  - `E2_hosted_env_security_vars_verified: PASS`
+- Verification CORS production:
+  - origin non autorisee -> `403` (`{"error":"Origin non autorisee."}`)
+  - origin autorisee sans session -> `401` (`{"error":"Aucune session active detectee."}`)
+
+### Verifications executees
+
+- `npm run test:f8.1` -> `decision=GO`
+- `node scripts/f8_1_validate_local.mjs --checkpoint pre-release --enforce-go` -> `decision=GO` (exit `0`)
+
+### Mise a jour documentaire
+
+- `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/F8_1_PREPARATION_DEPLOIEMENT_PRODUCTION.md`
+  - E1/E2 passes de `BLOCKED` a `PASS`
+- `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/ROADMAP.md`
+  - `Phase 8` passe a `EN COURS`
+  - `F8.1` passe a `FAIT`
+
 ## 2026-02-23 - F8.1 Preparation deploiement production (Vercel)
 
 Statut: `BLOQUE` / Decision release courante: `NO_GO` (DoD stricte F8.1)
