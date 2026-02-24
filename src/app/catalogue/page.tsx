@@ -217,9 +217,7 @@ export default async function CataloguePage({
     );
 
   if (searchQuery) {
-  query = query.or(
-    `display_ref.ilike.%${searchQuery}%,name.ilike.%${searchQuery}%`
-  );
+    query = query.ilike("display_ref", `%${searchQuery}%`);
   }
 
   if (selectedVersions.length > 0) {
@@ -497,10 +495,28 @@ const setsForDisplay: SetRow[] = setsWithCompletion;
           <input type="hidden" name="sort" value={activeSortKey} />
           <input type="hidden" name="dir" value={dir} />
           <input type="hidden" name="theme_mode" value="multi" />
-          {searchQuery ? <input type="hidden" name="q" value={searchQuery} /> : null}
 
           <div className="catalogue-filter-frame">
             <div className="catalogue-filter-cluster">
+              <details className="catalogue-filter-dropdown" name="catalogue-filter-group">
+                <summary className="catalogue-filter-pill">
+                  N° set{searchQuery ? " (1)" : ""}
+                </summary>
+                <div className="catalogue-filter-drawer catalogue-filter-drawer--search">
+                  <label className="catalogue-filter-field-label" htmlFor="catalogue-setid-filter">
+                    Numéro de set
+                  </label>
+                  <input
+                    id="catalogue-setid-filter"
+                    type="text"
+                    name="q"
+                    defaultValue={searchQuery}
+                    placeholder="Ex: 70067"
+                    className="app-control h-9 w-full px-3 text-[11px]"
+                  />
+                </div>
+              </details>
+
               <details className="catalogue-filter-dropdown" name="catalogue-filter-group">
                 <summary className="catalogue-filter-pill">
                   Version{selectedVersions.length > 0 ? ` (${selectedVersions.length})` : ""}
