@@ -2,6 +2,28 @@
 
 Ce fichier consigne les changements du projet, etapes par etapes.
 
+## 2026-02-24 - Catalogue: recherche par numero de set dans le panneau filtres
+
+Statut: `FAIT` / Decision operationnelle: `GO`
+
+### Changements realises
+
+- Ajout d'un filtre dedie `N° set` dans le panneau de filtres catalogue:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/catalogue/page.tsx`
+  - champ `q` expose en dropdown (placeholder `Ex: 70067`)
+  - suppression de l'ancien `input hidden` `q` pour eviter les doublons de parametre.
+- Recherche catalogue verrouillee sur `display_ref` uniquement:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/catalogue/page.tsx`
+  - remplacement du filtre SQL `display_ref|name` par `display_ref ilike %q%`.
+- Ajustement de style du drawer de recherche:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/globals.css`
+  - ajout de `.catalogue-filter-drawer--search` pour conserver une largeur coherente responsive.
+
+### Verifications executees
+
+- `GET /catalogue?q=...` conserve tri/pagination/filtres existants (`sort`, `dir`, `page`, `theme`, `prod`, etc.).
+- `Réinitialiser` (`/catalogue`) vide bien `q` et l'ensemble des filtres.
+
 ## 2026-02-24 - Favicon PlayNovus (setup complet + anti-cache)
 
 Statut: `FAIT` / Decision operationnelle: `GO`

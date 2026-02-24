@@ -476,6 +476,10 @@
     min-width: min(320px, 86vw);
   }
 
+  .catalogue-filter-drawer--search {
+    min-width: min(250px, 86vw);
+  }
+
   .catalogue-filter-check-grid {
     @apply grid grid-cols-1 gap-2 sm:grid-cols-2;
   }
