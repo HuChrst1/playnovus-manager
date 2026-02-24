@@ -32,6 +32,7 @@ interface EditPieceDialogProps {
 export function EditPieceDialog({ setId, piece, triggerClassName }: EditPieceDialogProps) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [formError, setFormError] = useState<string | null>(null);
   const isEditing = !!piece;
 
   const [formData, setFormData] = useState({
@@ -42,10 +43,11 @@ export function EditPieceDialog({ setId, piece, triggerClassName }: EditPieceDia
 
   const handleSave = () => {
     if (!formData.ref || !formData.qty) {
-      alert("Merci de remplir la référence et la quantité.");
+      setFormError("Merci de remplir la référence et la quantité.");
       return;
     }
 
+    setFormError(null);
     startTransition(async () => {
       try {
         let result;
@@ -66,18 +68,27 @@ export function EditPieceDialog({ setId, piece, triggerClassName }: EditPieceDia
 
         if (result.success) {
           setOpen(false);
+          setFormError(null);
           window.location.reload();
         } else {
-          alert(`Erreur : ${result.error}`);
+          setFormError(`Erreur : ${result.error}`);
         }
       } catch {
-        alert("Une erreur est survenue");
+        setFormError("Une erreur est survenue");
       }
     });
   };
 
   return (
-    <DialogPrimitive.Root open={open} onOpenChange={setOpen}>
+    <DialogPrimitive.Root
+      open={open}
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen);
+        if (!nextOpen) {
+          setFormError(null);
+        }
+      }}
+    >
       <DialogPrimitive.Trigger asChild>
         {isEditing ? (
           <Button
@@ -161,6 +172,12 @@ export function EditPieceDialog({ setId, piece, triggerClassName }: EditPieceDia
               />
             </div>
           </div>
+
+          {formError ? (
+            <p className="rounded-2xl border border-rose-200/80 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+              {formError}
+            </p>
+          ) : null}
 
           <DialogFooter className="app-modal-footer">
             <DialogClose asChild>
