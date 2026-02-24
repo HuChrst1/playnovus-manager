@@ -2,6 +2,105 @@
 
 Ce fichier consigne les changements du projet, etapes par etapes.
 
+## 2026-02-24 - Favicon PlayNovus (setup complet + anti-cache)
+
+Statut: `FAIT` / Decision operationnelle: `GO`
+
+### Changements realises
+
+- Metadata globale mise a jour:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/layout.tsx`
+  - ajout `manifest: "/site.webmanifest"`
+  - remplacement des icones `/favicon.ico` par assets versionnes:
+    - `shortcut`: `/favicon-playnovus-v1.ico`
+    - `icon`: `/favicon-playnovus-v1.ico`, `/icon-192-v1.png`, `/icon-512-v1.png`
+    - `apple`: `/apple-touch-icon-v1.png`
+- Nouveau manifest web:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/public/site.webmanifest`
+  - `icons` Android/PWA: `icon-192-v1.png`, `icon-512-v1.png`
+- Pack d'icones de marque ajoute:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/public/favicon-playnovus-v1.ico`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/public/icon-192-v1.png`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/public/icon-512-v1.png`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/public/apple-touch-icon-v1.png`
+- Fallback compatibilite conserve:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/public/favicon.ico`
+  - remplace par le logo PlayNovus (plus l'icone Vercel).
+
+### Verifications executees
+
+- `npm run build` -> `PASS`
+- verification du `<head>` rendu local (`/login`):
+  - presence de `rel="manifest"` vers `/site.webmanifest`
+  - presence de `rel="shortcut icon"` vers `/favicon-playnovus-v1.ico`
+  - presence des liens `icon` PNG 192/512 et `apple-touch-icon` 180.
+- verification HTTP locale des assets:
+  - `/favicon-playnovus-v1.ico` -> `200`
+  - `/apple-touch-icon-v1.png` -> `200`
+  - `/site.webmanifest` -> `200`.
+
+## 2026-02-24 - F2.5 LOT_0 provisoire en brouillon + recalcul final synchrone
+
+Statut: `FAIT` / Decision operationnelle: `GO`
+
+### Changements realises
+
+- Mode provisoire LOT_0 ajoute (backend):
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/lib/lot0-provisional.ts`
+  - helper central `isLot0DraftProvisional(lot_code, status)` + constantes `LOT_0`.
+- Gestion approvisionnements LOT_0 draft:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/approvisionnement/action.ts`
+  - `unit_cost` force a `0` pour LOT_0 en `draft`
+  - sync stock provisoire LOT_0 (inventory <-> PURCHASE/IN)
+  - protection du code `LOT_0` (pas de renommage manuel)
+  - blocages post-vente sur LOT_0 draft:
+    - suppression de ligne inventaire interdite
+    - baisse de quantite interdite
+    - changement de `piece_ref` interdit
+  - ajouts / augmentations / import CSV maintenus autorises.
+- Pre-sync LOT_0 avant FIFO ventes:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/actions/sales.ts`
+  - sync LOT_0 provisoire executee avant allocation FIFO sur creation/edition de vente.
+- Confirmation finale LOT_0 + recalcul retroactif synchrone:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/supabase/migrations/20260224160000_f2_5_lot0_draft_provisional_reprice.sql`
+  - RPC ajoute: `public.finalize_lot0_confirmation_reprice(p_lot_id bigint)`
+  - recalcul des couts sur `inventory`, `stock_movements`, `sale_item_pieces`, `sale_items`, `sales`
+  - index ajoute: `sale_item_pieces(lot_id)`.
+- Typage Supabase mis a jour:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/types/supabase.ts`
+  - ajout de la fonction `finalize_lot0_confirmation_reprice`.
+- Signaletique "donnees provisoires":
+  - Ventes liste/detail/set-detail:
+    - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/lib/sales.ts`
+    - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/ventes/page.tsx`
+    - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/sales/SalesTable.tsx`
+    - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/ventes/[id]/page.tsx`
+    - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/ventes/[id]/[saleItemId]/page.tsx`
+  - Stock:
+    - correction demandee ensuite: badge retire de la vue agregee `/stock`
+    - badge deplace dans le detail FIFO par piece (par ligne lot) sur:
+      - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/stock/[piece_ref]/page.tsx`
+    - vue agregee conservee sans badge:
+      - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/stock/page.tsx`.
+- Scenarios de validation etendus:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/scripts/f2_0_validate_local.mjs`
+  - ajout scenarios S13-S16 pour LOT_0 provisoire + recalcul final.
+
+### Verifications executees
+
+- `npm run build` -> `PASS`
+- `npm run test:unit` -> `PASS`
+- `npm run test:f2.0` -> `PASS` (incluant S13/S14/S15/S16)
+- migration locale appliquee pour la nouvelle RPC:
+  - `npx supabase migration up --local` -> `PASS`
+
+### Decision F2.5
+
+- mode LOT_0 provisoire actif et coherent avec la contrainte metier:
+  - ventes possibles avant inventaire final
+  - couts/marges marques provisoires
+  - recalcul historique complet au passage final `draft -> confirmed` de LOT_0.
+
 ## 2026-02-24 - F9.1 Cadrage documentaire du module Tools (processus vente)
 
 Statut: `FAIT` / Decision operationnelle: `GO` (cadrage phase 9 verrouille)
