@@ -8,6 +8,7 @@ import type {
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Tables } from "@/types/supabase";
 import { formatBusinessSaleNumberDisplay } from "@/lib/sale-number";
+import { getDraftLot0Id } from "@/lib/lot0-provisional";
 
 // Helper: nettoie/valide overrides (attendu: { [piece_ref]: number })
 function normalizeOverrides(v: unknown): Record<string, number> | null {
@@ -203,6 +204,7 @@ export type SalesListRow = {
   sets_count: number;
   pieces_lines_count: number;
   pieces_qty_total: number;
+  has_provisional_lot0_cost: boolean;
 };
 
 type SalesDbRow = Pick<
@@ -232,6 +234,81 @@ const toNumber = (v: unknown, fallback = 0) => {
   const n = typeof v === "number" ? v : Number(v);
   return Number.isFinite(n) ? n : fallback;
 };
+
+async function getProvisionalLot0SaleIdsForPage(
+  client: SupabaseClient<Database>,
+  lot0Id: number,
+  saleIds: number[]
+): Promise<Set<number>> {
+  if (saleIds.length === 0) {
+    return new Set<number>();
+  }
+
+  const { data, error } = await client
+    .from("sale_item_pieces")
+    .select("sale_id")
+    .eq("lot_id", lot0Id)
+    .in("sale_id", saleIds);
+
+  if (error) {
+    console.error(
+      "getProvisionalLot0SaleIdsForPage - erreur chargement sale_item_pieces:",
+      error
+    );
+    return new Set<number>();
+  }
+
+  const out = new Set<number>();
+  for (const row of data ?? []) {
+    const saleId = Number(row.sale_id ?? 0);
+    if (Number.isFinite(saleId) && saleId > 0) {
+      out.add(saleId);
+    }
+  }
+  return out;
+}
+
+async function countProvisionalLot0SalesForFilters(
+  client: SupabaseClient<Database>,
+  lot0Id: number,
+  filters: {
+    statusFilter?: string;
+    channel?: string | null;
+    saleType?: SalesPageSaleType | null;
+    fromIso?: string;
+    toIso?: string;
+  }
+): Promise<number> {
+  let query = client
+    .from("sale_item_pieces")
+    .select("sale_id, sales!inner(id, status, sales_channel, sale_type, paid_at)")
+    .eq("lot_id", lot0Id);
+
+  if (filters.statusFilter) query = query.eq("sales.status", filters.statusFilter);
+  if (filters.channel) query = query.eq("sales.sales_channel", filters.channel);
+  if (filters.saleType) query = query.eq("sales.sale_type", filters.saleType);
+  if (filters.fromIso) query = query.gte("sales.paid_at", filters.fromIso);
+  if (filters.toIso) query = query.lte("sales.paid_at", filters.toIso);
+
+  const { data, error } = await query;
+  if (error) {
+    console.error(
+      "countProvisionalLot0SalesForFilters - erreur chargement des ventes provisoires:",
+      error
+    );
+    return 0;
+  }
+
+  const saleIds = new Set<number>();
+  for (const row of data ?? []) {
+    const saleId = Number((row as { sale_id?: unknown }).sale_id ?? 0);
+    if (Number.isFinite(saleId) && saleId > 0) {
+      saleIds.add(saleId);
+    }
+  }
+
+  return saleIds.size;
+}
 
 /**
  * Liste paginée des ventes pour la table "commandes".
@@ -315,7 +392,7 @@ export async function listSalesForTable(
 
   if (error) throw error;
 
-  const rows: SalesListRow[] = (data ?? []).map((s) => {
+  const baseRows: SalesListRow[] = (data ?? []).map((s) => {
     const items = Array.isArray(s.sale_items) ? s.sale_items : [];
 
     const sets_count = items.filter((i) => i.item_kind === "SET").length;
@@ -372,8 +449,31 @@ export async function listSalesForTable(
       sets_count,
       pieces_lines_count,
       pieces_qty_total,
+      has_provisional_lot0_cost: false,
     };
   });
+
+  const { lotId: draftLot0Id, error: lot0LookupError } = await getDraftLot0Id(
+    client
+  );
+  if (lot0LookupError) {
+    console.error("listSalesForTable - lot0 lookup error:", lot0LookupError);
+  }
+
+  if (draftLot0Id === null || baseRows.length === 0) {
+    return { rows: baseRows, total: count ?? null };
+  }
+
+  const provisionalSaleIds = await getProvisionalLot0SaleIdsForPage(
+    client,
+    draftLot0Id,
+    baseRows.map((row) => row.sale_id)
+  );
+
+  const rows = baseRows.map((row) => ({
+    ...row,
+    has_provisional_lot0_cost: provisionalSaleIds.has(row.sale_id),
+  }));
 
   return { rows, total: count ?? null };
 }
@@ -445,6 +545,7 @@ export type SalesPageData = {
   kpis: SalesPageKpis;
   deltas: SalesPageDeltas;
   headerCounts: SalesPageHeaderCounts;
+  provisionalSalesCount: number;
 };
 
 type SaleForStats = {
@@ -685,6 +786,24 @@ export async function getSalesPageData(
       ])
     : [totalCount, 0];
 
+  let provisionalSalesCount = 0;
+  const lot0Lookup = await getDraftLot0Id(client);
+  if (lot0Lookup.error) {
+    console.error("getSalesPageData - lot0 lookup error:", lot0Lookup.error);
+  } else if (lot0Lookup.lotId !== null) {
+    provisionalSalesCount = await countProvisionalLot0SalesForFilters(
+      client,
+      lot0Lookup.lotId,
+      {
+        statusFilter,
+        channel,
+        saleType,
+        fromIso,
+        toIso,
+      }
+    );
+  }
+
   return {
     table: {
       rows,
@@ -715,5 +834,6 @@ export async function getSalesPageData(
       confirmedCount,
       cancelledCount,
     },
+    provisionalSalesCount,
   };
 }

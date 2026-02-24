@@ -14,6 +14,7 @@ import type {
 import type { Tables, TablesInsert } from "@/types/supabase";
 import type { PostgrestError } from "@supabase/supabase-js";
 import { parseBusinessSaleNumber } from "@/lib/sale-number";
+import { syncLot0DraftProvisionalStock } from "@/app/approvisionnement/action";
 import {
   getAuthSessionErrorMessage,
   requireActiveSession,
@@ -415,6 +416,16 @@ export async function createSaleAction(
         success: false,
         error: "Données de vente invalides. Merci de corriger les champs.",
         debug: { validationErrors },
+      };
+    }
+
+    const provisionalSync = await syncLot0DraftProvisionalStock();
+    if (!provisionalSync.success) {
+      return {
+        success: false,
+        error:
+          provisionalSync.error ??
+          "Impossible de synchroniser LOT_0 provisoire avant allocation FIFO.",
       };
     }
 
@@ -1410,6 +1421,16 @@ export async function updateSaleAction(
         success: false,
         error: "Données de vente invalides. Merci de corriger les champs.",
         debug: { validationErrors },
+      };
+    }
+
+    const provisionalSync = await syncLot0DraftProvisionalStock();
+    if (!provisionalSync.success) {
+      return {
+        success: false,
+        error:
+          provisionalSync.error ??
+          "Impossible de synchroniser LOT_0 provisoire avant allocation FIFO.",
       };
     }
 

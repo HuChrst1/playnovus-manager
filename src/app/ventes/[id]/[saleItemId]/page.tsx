@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase-server";
 import { cn } from "@/lib/utils";
 import { formatSetReferenceDisplay } from "@/lib/sale-number";
+import { Badge } from "@/components/ui/badge";
+import { getDraftLot0Id } from "@/lib/lot0-provisional";
 
 export const dynamic = "force-dynamic";
 
@@ -67,6 +69,7 @@ export default async function SaleSetPiecesPage({ params }: Props) {
     quantity: number;
     unit_cost: number | null;
     lot_id: string | null; // bigint-safe
+    is_provisional_lot0: boolean;
   };
 
   const { data: rowsRaw, error: rowsError } = await supabaseServer
@@ -76,9 +79,22 @@ export default async function SaleSetPiecesPage({ params }: Props) {
     .eq("sale_item_id", itemId)
     .order("piece_ref", { ascending: true });
 
+  const lot0Lookup = await getDraftLot0Id(supabaseServer);
+  if (lot0Lookup.error) {
+    console.error("SaleSetPiecesPage - lot0 lookup error:", lot0Lookup.error);
+  }
+  const draftLot0Id = lot0Lookup.lotId;
+
   const pieces = (rowsRaw ?? []).map((r) => {
     const unitCost = r.unit_cost;
     const lotId = r.lot_id;
+    const lotIdNumber =
+      lotId === null || lotId === undefined ? null : Number(lotId);
+    const isProvisionalLot0 =
+      draftLot0Id !== null &&
+      lotIdNumber !== null &&
+      Number.isFinite(lotIdNumber) &&
+      lotIdNumber === draftLot0Id;
 
     return {
       piece_ref: String(r.piece_ref ?? ""),
@@ -86,8 +102,10 @@ export default async function SaleSetPiecesPage({ params }: Props) {
       unit_cost:
         unitCost === null || unitCost === undefined ? null : Number(unitCost),
       lot_id: lotId === null || lotId === undefined ? null : String(lotId),
+      is_provisional_lot0: isProvisionalLot0,
     } satisfies SaleItemPieceSnapshotRow;
   });
+  const hasProvisionalPieces = pieces.some((piece) => piece.is_provisional_lot0);
 
   if (rowsError) {
     return (
@@ -136,6 +154,14 @@ export default async function SaleSetPiecesPage({ params }: Props) {
         </div>
       </section>
 
+      {hasProvisionalPieces ? (
+        <section className="app-surface-muted border border-sky-100 bg-sky-50/60 px-4 py-3 text-sm text-sky-900">
+          Cette ligne de set contient des pièces issues de LOT_0 provisoire
+          (brouillon). Les coûts FIFO affichés restent indicatifs jusqu&apos;à la
+          confirmation finale de LOT_0.
+        </section>
+      ) : null}
+
       <section className="appro-table-shell">
         <div className="appro-table-scroll overflow-x-auto">
           <table className="appro-table min-w-full text-sm">
@@ -164,10 +190,19 @@ export default async function SaleSetPiecesPage({ params }: Props) {
               ) : (
                 pieces.map((p) => (
                   <tr key={`${p.piece_ref}`} className="appro-table-row">
-                    <td className="px-4 py-3">{p.piece_ref}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span>{p.piece_ref}</span>
+                        {p.is_provisional_lot0 ? (
+                          <Badge variant="warning">Coût provisoire LOT_0</Badge>
+                        ) : null}
+                      </div>
+                    </td>
                     <td className="px-4 py-3 text-right tabular-nums">{p.quantity}</td>
                     <td className="px-4 py-3 text-right tabular-nums">
-                      {typeof p.unit_cost === "number" ? euro.format(p.unit_cost) : "—"}
+                      {typeof p.unit_cost === "number" || p.is_provisional_lot0
+                        ? euro.format(Number(p.unit_cost ?? 0))
+                        : "—"}
                     </td>
                     <td className="px-4 py-3 text-right tabular-nums">{p.lot_id ?? "—"}</td>
                   </tr>

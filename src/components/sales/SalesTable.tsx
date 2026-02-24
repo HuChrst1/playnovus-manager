@@ -3,6 +3,7 @@
 import Link from "next/link";
 import type { SalesListRow } from "@/lib/sales";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DeleteSaleDialog } from "@/components/sales/DeleteSaleDialog";
@@ -195,7 +196,14 @@ export function SalesTable({
                     }
                   >
                     <td className="px-4 py-3">
-                      <div className="font-mono text-xs font-semibold">{r.sale_number_display}</div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="font-mono text-xs font-semibold">
+                          {r.sale_number_display}
+                        </div>
+                        {r.has_provisional_lot0_cost ? (
+                          <Badge variant="warning">Coût provisoire LOT_0</Badge>
+                        ) : null}
+                      </div>
                     </td>
 
                     <td className="px-4 py-3">{formatDate(r.paid_at)}</td>

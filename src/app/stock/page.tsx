@@ -169,7 +169,7 @@ export default async function StockPage({ searchParams }: StockPageProps) {
             Stock de pièces
           </h1>
           <p className="mt-1 text-sm text-slate-500">
-            Vue agrégée par numéro de pièce à partir des lots confirmés.
+            Vue agrégée par numéro de pièce.
           </p>
         </div>
       </header>

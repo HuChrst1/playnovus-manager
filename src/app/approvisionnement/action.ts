@@ -6,6 +6,12 @@ import { parse } from "csv-parse/sync";
 import { revalidatePath } from "next/cache";
 import type { Database, TablesUpdate } from "@/types/supabase";
 import {
+  LOT_0_CODE,
+  LOT_0_PROVISIONAL_UNIT_COST,
+  isLot0Code,
+  isLot0DraftProvisional,
+} from "@/lib/lot0-provisional";
+import {
   getAuthSessionErrorMessage,
   requireActiveSession,
 } from "@/lib/auth/require-active-session";
@@ -84,6 +90,9 @@ type LotActionReason =
   | "LOT_NOT_FOUND"
   | "LOT_INITIAL_PROTECTED"
   | "LOT_USED_BY_SALES"
+  | "LOT0_PROVISIONAL_RESTRICTED"
+  | "LOT0_PROVISIONAL_SYNC_FAILED"
+  | "LOT0_FINAL_REPRICE_FAILED"
   | "LOT_CONFIRMATION_CONFLICT"
   | "LOT_CONFIRMATION_INCONSISTENT"
   | "LOT_CONFIRMATION_ROLLBACK_FAILED"
@@ -445,6 +454,295 @@ const parseCsvLinesForLotImport = (csvContent: string): ParsedCsvLine[] => {
 
   return parsedLines;
 };
+
+type PurchaseInMovementRow = {
+  id: number;
+  piece_ref: string;
+  quantity: number;
+  unit_cost: number | null;
+};
+
+const toInventoryQuantityMap = (lines: LotInventoryMovementLine[]) => {
+  const map = new Map<string, number>();
+  for (const line of lines) {
+    const pieceRef = line.pieceRef.trim();
+    const quantity = Number(line.quantity ?? 0);
+    if (!pieceRef || !Number.isFinite(quantity) || quantity <= 0) continue;
+    map.set(pieceRef, quantity);
+  }
+  return map;
+};
+
+const toPurchaseQuantityMap = (rows: PurchaseInMovementRow[]) => {
+  const map = new Map<string, PurchaseInMovementRow>();
+  for (const row of rows) {
+    const pieceRef = (row.piece_ref ?? "").trim();
+    const quantity = Number(row.quantity ?? 0);
+    if (!pieceRef || !Number.isFinite(quantity) || quantity <= 0) continue;
+    map.set(pieceRef, row);
+  }
+  return map;
+};
+
+async function setInventoryUnitCostForLot(
+  lotId: number,
+  unitCost: number
+): Promise<LotMovementResult> {
+  const { error } = await supabase
+    .from("inventory")
+    .update({ unit_cost: unitCost })
+    .eq("lot_id", lotId);
+
+  if (error) {
+    console.error("setInventoryUnitCostForLot - error:", error);
+    return {
+      success: false,
+      error:
+        "Impossible de mettre a jour le cout unitaire des pieces de LOT_0 provisoire.",
+    };
+  }
+
+  return { success: true };
+}
+
+async function readPurchaseInRowsForLot(
+  lotId: number
+): Promise<
+  | { success: true; rows: PurchaseInMovementRow[] }
+  | { success: false; error: string }
+> {
+  const { data, error } = await supabase
+    .from("stock_movements")
+    .select("id, piece_ref, quantity, unit_cost")
+    .eq("source_type", "PURCHASE")
+    .eq("direction", "IN")
+    .eq("lot_id", lotId);
+
+  if (error) {
+    console.error("readPurchaseInRowsForLot - error:", error);
+    return {
+      success: false,
+      error:
+        "Impossible de lire les mouvements d'achat de LOT_0 provisoire.",
+    };
+  }
+
+  return {
+    success: true,
+    rows: (data ?? []) as PurchaseInMovementRow[],
+  };
+}
+
+async function syncLot0DraftProvisionalStockForLot(
+  lotId: number
+): Promise<LotMovementResult> {
+  const { data: lotRow, error: lotError } = await supabase
+    .from("lots")
+    .select("id, lot_code, status")
+    .eq("id", lotId)
+    .maybeSingle();
+
+  if (lotError) {
+    console.error("syncLot0DraftProvisionalStockForLot - lot lookup error:", lotError);
+    return {
+      success: false,
+      error: "Impossible de verifier le statut du lot LOT_0 provisoire.",
+    };
+  }
+
+  if (!lotRow || !isLot0DraftProvisional(lotRow.lot_code, lotRow.status)) {
+    return { success: true };
+  }
+
+  const snapshotResult = await readInventorySnapshotForLot(lotId);
+  if (!snapshotResult.success) {
+    return {
+      success: false,
+      error: snapshotResult.error,
+    };
+  }
+
+  const lotPiecesSync = await supabase
+    .from("lots")
+    .update({ total_pieces: snapshotResult.totalQuantity })
+    .eq("id", lotId);
+  if (lotPiecesSync.error) {
+    console.error(
+      "syncLot0DraftProvisionalStockForLot - total_pieces sync error:",
+      lotPiecesSync.error
+    );
+    return {
+      success: false,
+      error: "Impossible de synchroniser le total des pieces de LOT_0.",
+    };
+  }
+
+  const setZeroCost = await setInventoryUnitCostForLot(
+    lotId,
+    LOT_0_PROVISIONAL_UNIT_COST
+  );
+  if (!setZeroCost.success) {
+    return setZeroCost;
+  }
+
+  const salesUsage = await getLotSalesUsage(lotId);
+  if (salesUsage.error) {
+    return {
+      success: false,
+      error: salesUsage.error,
+    };
+  }
+
+  const purchaseRowsResult = await readPurchaseInRowsForLot(lotId);
+  if (!purchaseRowsResult.success) {
+    return purchaseRowsResult;
+  }
+
+  const inventoryByPiece = toInventoryQuantityMap(snapshotResult.lines);
+  const purchaseByPiece = toPurchaseQuantityMap(purchaseRowsResult.rows);
+
+  const danglingPurchaseRows: PurchaseInMovementRow[] = [];
+  for (const row of purchaseRowsResult.rows) {
+    const pieceRef = (row.piece_ref ?? "").trim();
+    if (!pieceRef) continue;
+    if (!inventoryByPiece.has(pieceRef)) {
+      danglingPurchaseRows.push(row);
+    }
+  }
+
+  if (salesUsage.usedBySales && danglingPurchaseRows.length > 0) {
+    return {
+      success: false,
+      error:
+        "LOT_0 provisoire deja utilise en ventes: suppression d'une reference deja consommee interdite tant que le lot reste en brouillon.",
+    };
+  }
+
+  for (const [pieceRef, inventoryQty] of inventoryByPiece.entries()) {
+    const existingPurchase = purchaseByPiece.get(pieceRef);
+    if (existingPurchase) {
+      const purchaseQty = Number(existingPurchase.quantity ?? 0);
+      if (salesUsage.usedBySales && inventoryQty < purchaseQty) {
+        return {
+          success: false,
+          error:
+            "LOT_0 provisoire deja utilise en ventes: reduction de quantite interdite tant que le lot reste en brouillon.",
+        };
+      }
+
+      if (
+        inventoryQty === purchaseQty &&
+        Number(existingPurchase.unit_cost ?? 0) === LOT_0_PROVISIONAL_UNIT_COST
+      ) {
+        continue;
+      }
+
+      const { error: updatePurchaseError } = await supabase
+        .from("stock_movements")
+        .update({
+          quantity: inventoryQty,
+          unit_cost: LOT_0_PROVISIONAL_UNIT_COST,
+        })
+        .eq("id", existingPurchase.id);
+
+      if (updatePurchaseError) {
+        console.error(
+          "syncLot0DraftProvisionalStockForLot - update PURCHASE error:",
+          updatePurchaseError
+        );
+        return {
+          success: false,
+          error:
+            "Impossible de synchroniser les mouvements PURCHASE de LOT_0 provisoire.",
+        };
+      }
+
+      continue;
+    }
+
+    const { error: insertPurchaseError } = await supabase
+      .from("stock_movements")
+      .insert({
+        piece_ref: pieceRef,
+        lot_id: lotId,
+        direction: "IN",
+        quantity: inventoryQty,
+        unit_cost: LOT_0_PROVISIONAL_UNIT_COST,
+        source_type: "PURCHASE",
+        source_id: String(lotId),
+        comment: "LOT_0 provisoire (draft)",
+      });
+
+    if (insertPurchaseError) {
+      console.error(
+        "syncLot0DraftProvisionalStockForLot - insert PURCHASE error:",
+        insertPurchaseError
+      );
+      return {
+        success: false,
+        error:
+          "Impossible de creer un mouvement PURCHASE pour LOT_0 provisoire.",
+      };
+    }
+  }
+
+  if (!salesUsage.usedBySales && danglingPurchaseRows.length > 0) {
+    const danglingIds = danglingPurchaseRows.map((row) => row.id);
+    const { error: cleanupError } = await supabase
+      .from("stock_movements")
+      .delete()
+      .in("id", danglingIds);
+
+    if (cleanupError) {
+      console.error(
+        "syncLot0DraftProvisionalStockForLot - cleanup PURCHASE error:",
+        cleanupError
+      );
+      return {
+        success: false,
+        error:
+          "Impossible de nettoyer les mouvements PURCHASE obsoletes de LOT_0 provisoire.",
+      };
+    }
+  }
+
+  const purchaseQuantityCheck = await sumPurchaseInQuantityForLot(lotId);
+  if (!purchaseQuantityCheck.success) {
+    return purchaseQuantityCheck;
+  }
+
+  if (purchaseQuantityCheck.quantity !== snapshotResult.totalQuantity) {
+    return {
+      success: false,
+      error:
+        "Incoherence detectee sur LOT_0 provisoire: les mouvements PURCHASE ne correspondent pas a l'inventaire.",
+    };
+  }
+
+  return { success: true };
+}
+
+export async function syncLot0DraftProvisionalStock(): Promise<LotMovementResult> {
+  const { data: lot0Row, error: lot0Error } = await supabase
+    .from("lots")
+    .select("id, lot_code, status")
+    .eq("lot_code", LOT_0_CODE)
+    .maybeSingle();
+
+  if (lot0Error) {
+    console.error("syncLot0DraftProvisionalStock - LOT_0 lookup error:", lot0Error);
+    return {
+      success: false,
+      error: "Impossible de verifier LOT_0 provisoire avant la vente.",
+    };
+  }
+
+  if (!lot0Row || !isLot0DraftProvisional(lot0Row.lot_code, lot0Row.status)) {
+    return { success: true };
+  }
+
+  return syncLot0DraftProvisionalStockForLot(lot0Row.id);
+}
 
 const getLotInvoiceFolderPath = (lotId: number): string => {
   return `lot-${lotId}`;
@@ -1404,6 +1702,29 @@ export async function updateLotFromDialog(
     };
   }
 
+  const previousLotCode = (existingLot.lot_code ?? "").trim();
+  const requestedLotCode = (args.lotCode ?? "").trim();
+  const nextLotCode = requestedLotCode.length > 0 ? requestedLotCode : null;
+  const effectiveNextLotCode = nextLotCode ?? existingLot.lot_code ?? null;
+
+  if (isLot0Code(previousLotCode) && !isLot0Code(effectiveNextLotCode)) {
+    return {
+      success: false,
+      error:
+        "Le code LOT_0 est reserve au lot initial et ne peut pas etre modifie.",
+      reason: "LOT0_PROVISIONAL_RESTRICTED",
+    };
+  }
+
+  if (!isLot0Code(previousLotCode) && isLot0Code(effectiveNextLotCode)) {
+    return {
+      success: false,
+      error:
+        "Le code LOT_0 est reserve au lot initial et ne peut pas etre assigne manuellement.",
+      reason: "LOT0_PROVISIONAL_RESTRICTED",
+    };
+  }
+
   const previousStatus = (existingLot.status as LotStatus) ?? "draft";
   const currentTotalPieces = Number(existingLot.total_pieces ?? 0);
   const previousTotalCostRaw = Number(existingLot.total_cost ?? 0);
@@ -1427,7 +1748,7 @@ export async function updateLotFromDialog(
     purchase_date: args.purchaseDate,
     label: args.label ?? null,
     supplier: args.supplier ?? null,
-    lot_code: args.lotCode ?? null,
+    lot_code: nextLotCode,
     total_cost: args.totalCost,
     status: nextStatus,
     notes: args.notes ?? null,
@@ -1449,6 +1770,19 @@ export async function updateLotFromDialog(
           updateError.message,
         reason: "UPDATE_FAILED",
       };
+    }
+
+    if (isLot0DraftProvisional(effectiveNextLotCode, nextStatus)) {
+      const syncResult = await syncLot0DraftProvisionalStockForLot(lotId);
+      if (!syncResult.success) {
+        return {
+          success: false,
+          error:
+            syncResult.error ??
+            "Impossible de synchroniser le stock provisoire de LOT_0.",
+          reason: "LOT0_PROVISIONAL_SYNC_FAILED",
+        };
+      }
     }
 
     revalidatePath("/approvisionnement");
@@ -1490,6 +1824,188 @@ export async function updateLotFromDialog(
           "Impossible de confirmer ce lot car aucune ligne d'inventaire valide n'a été trouvée. Recharge la page, ajoute au moins une pièce puis réessaie.",
         reason: "LOT_CONFIRMATION_INCONSISTENT",
       };
+    }
+    const isLot0Confirmation = isLot0Code(previousLotCode);
+
+    if (isLot0Confirmation) {
+      const restoreLot0DraftState = async () => {
+        const rollbackLot = await supabase
+          .from("lots")
+          .update(rollbackLotPayload)
+          .eq("id", lotId);
+        const restoreInventory = await setInventoryUnitCostForLot(
+          lotId,
+          LOT_0_PROVISIONAL_UNIT_COST
+        );
+        const restoreStock = await syncLot0DraftProvisionalStockForLot(lotId);
+
+        return (
+          !rollbackLot.error &&
+          restoreInventory.success &&
+          restoreStock.success
+        );
+      };
+
+      const finalUnitCost = Number(args.totalCost) / inventorySnapshot.totalQuantity;
+      if (!Number.isFinite(finalUnitCost) || finalUnitCost < 0) {
+        return {
+          success: false,
+          error:
+            "Impossible de confirmer LOT_0: cout unitaire final invalide.",
+          reason: "UPDATE_FAILED",
+        };
+      }
+
+      const finalSnapshot = inventorySnapshot.lines.map((line) => ({
+        pieceRef: line.pieceRef,
+        quantity: line.quantity,
+        unitCost: finalUnitCost,
+      }));
+
+      const movementResult = await createPurchaseMovementsForLot(
+        lotId,
+        finalSnapshot
+      );
+      if (!movementResult.success) {
+        await restoreLot0DraftState();
+        return {
+          success: false,
+          error:
+            movementResult.error ??
+            "Impossible de preparer les mouvements d'achat de LOT_0 pour confirmation.",
+          reason: "UPDATE_FAILED",
+        };
+      }
+
+      const setFinalCost = await setInventoryUnitCostForLot(lotId, finalUnitCost);
+      if (!setFinalCost.success) {
+        const restored = await restoreLot0DraftState();
+        return {
+          success: false,
+          error:
+            restored
+              ? setFinalCost.error
+              : "La confirmation a echoue et LOT_0 n'a pas pu etre restaure automatiquement.",
+          reason: restored
+            ? "LOT0_FINAL_REPRICE_FAILED"
+            : "LOT_CONFIRMATION_ROLLBACK_FAILED",
+        };
+      }
+
+      const purchaseCheckBeforeUpdate = await sumPurchaseInQuantityForLot(lotId);
+      if (
+        !purchaseCheckBeforeUpdate.success ||
+        purchaseCheckBeforeUpdate.quantity !== inventorySnapshot.totalQuantity
+      ) {
+        const restored = await restoreLot0DraftState();
+        return {
+          success: false,
+          error:
+            restored
+              ? "Impossible de confirmer LOT_0: incoherence detectee entre inventaire et mouvements d'achat."
+              : "La confirmation de LOT_0 a echoue et la restauration automatique n'a pas pu etre verifiee.",
+          reason: restored
+            ? "LOT_CONFIRMATION_INCONSISTENT"
+            : "LOT_CONFIRMATION_ROLLBACK_FAILED",
+        };
+      }
+
+      const { data: updatedLot, error: updateError } = await supabase
+        .from("lots")
+        .update({
+          ...updatePayload,
+          total_pieces: inventorySnapshot.totalQuantity,
+        })
+        .eq("id", lotId)
+        .eq("status", "draft")
+        .select("id, status")
+        .maybeSingle();
+
+      if (updateError) {
+        console.error(
+          "updateLotFromDialog - LOT_0 confirmation update error:",
+          updateError
+        );
+        const restored = await restoreLot0DraftState();
+        return {
+          success: false,
+          error:
+            restored
+              ? "Impossible de confirmer LOT_0 apres preparation des mouvements de stock."
+              : "La confirmation de LOT_0 a echoue et la restauration automatique n'a pas abouti.",
+          reason: restored
+            ? "LOT_CONFIRMATION_INCONSISTENT"
+            : "LOT_CONFIRMATION_ROLLBACK_FAILED",
+        };
+      }
+
+      if (!updatedLot) {
+        const restored = await restoreLot0DraftState();
+        return {
+          success: false,
+          error:
+            restored
+              ? "LOT_0 a ete modifie en parallele pendant la confirmation. Recharge la page puis reessaie."
+              : "LOT_0 a ete modifie en parallele et la restauration automatique a echoue.",
+          reason: restored
+            ? "LOT_CONFIRMATION_CONFLICT"
+            : "LOT_CONFIRMATION_ROLLBACK_FAILED",
+        };
+      }
+
+      const { error: repriceError } = await supabase.rpc(
+        "finalize_lot0_confirmation_reprice",
+        {
+          p_lot_id: lotId,
+        }
+      );
+      if (repriceError) {
+        console.error(
+          "updateLotFromDialog - finalize_lot0_confirmation_reprice error:",
+          repriceError
+        );
+        const restored = await restoreLot0DraftState();
+        return {
+          success: false,
+          error:
+            restored
+              ? "LOT_0 a ete confirme mais le recalcul retroactif des couts/marges a echoue. Le lot a ete repasse en brouillon."
+              : "Le recalcul retroactif de LOT_0 a echoue et la restauration automatique n'a pas abouti.",
+          reason: restored
+            ? "LOT0_FINAL_REPRICE_FAILED"
+            : "LOT_CONFIRMATION_ROLLBACK_FAILED",
+        };
+      }
+
+      const inventoryAfterConfirm = await readInventorySnapshotForLot(lotId);
+      const purchaseAfterConfirm = await sumPurchaseInQuantityForLot(lotId);
+      const postConditionOk =
+        inventoryAfterConfirm.success &&
+        purchaseAfterConfirm.success &&
+        inventoryAfterConfirm.totalQuantity > 0 &&
+        purchaseAfterConfirm.quantity === inventoryAfterConfirm.totalQuantity;
+
+      if (!postConditionOk) {
+        const restored = await restoreLot0DraftState();
+        return {
+          success: false,
+          error:
+            restored
+              ? "La confirmation de LOT_0 a ete annulee suite a une incoherence post-recalcul."
+              : "La confirmation de LOT_0 a echoue et la restauration automatique n'a pas pu etre verifiee.",
+          reason: restored
+            ? "LOT_CONFIRMATION_INCONSISTENT"
+            : "LOT_CONFIRMATION_ROLLBACK_FAILED",
+        };
+      }
+
+      revalidatePath("/approvisionnement");
+      revalidatePath(`/approvisionnement/${lotId}`);
+      revalidatePath("/stock");
+      revalidatePath("/historique-stock");
+      revalidatePath("/ventes");
+
+      return { success: true };
     }
 
     const movementResult = await createPurchaseMovementsForLot(
@@ -1766,7 +2282,7 @@ export async function deleteLot(lotId: number): Promise<DeleteLotResult> {
     };
   }
 
-  if ((lotRow.lot_code ?? "").trim() === "LOT_0") {
+  if (isLot0Code(lotRow.lot_code)) {
     return {
       success: false,
       error:
@@ -1865,6 +2381,9 @@ export async function addPieceToLot(
   input: {
     pieceRef: string;
     quantity: number;
+  },
+  options?: {
+    skipLot0Sync?: boolean;
   }
 ) {
   const guard = await enforceApproMutationGuard();
@@ -1897,7 +2416,7 @@ export async function addPieceToLot(
   // 1) On récupère le lot avec son statut + coût total
   const { data: lotRow, error: lotError } = await supabase
     .from("lots")
-    .select("status, total_cost")
+    .select("status, total_cost, lot_code")
     .eq("id", lotId)
     .single();
 
@@ -1916,6 +2435,11 @@ export async function addPieceToLot(
         "Ce lot est confirmé. Tu ne peux plus ajouter de pièces (repasse-le en brouillon si besoin).",
     };
   }
+
+  const isLot0Provisional = isLot0DraftProvisional(
+    lotRow.lot_code,
+    lotRow.status
+  );
 
   const totalCostNumber = Number(lotRow.total_cost ?? 0);
   if (!Number.isFinite(totalCostNumber) || totalCostNumber < 0) {
@@ -2017,6 +2541,38 @@ export async function addPieceToLot(
     // On continue quand même pour tenter de mettre à jour unit_cost
   }
 
+  if (isLot0Provisional) {
+    const setZeroCost = await setInventoryUnitCostForLot(
+      lotId,
+      LOT_0_PROVISIONAL_UNIT_COST
+    );
+    if (!setZeroCost.success) {
+      return {
+        success: false,
+        error:
+          setZeroCost.error ??
+          "Impossible de maintenir LOT_0 en mode provisoire.",
+      };
+    }
+
+    if (!options?.skipLot0Sync) {
+      const syncResult = await syncLot0DraftProvisionalStockForLot(lotId);
+      if (!syncResult.success) {
+        return {
+          success: false,
+          error:
+            syncResult.error ??
+            "Impossible de synchroniser le stock provisoire de LOT_0.",
+        };
+      }
+    }
+
+    revalidatePath(`/approvisionnement/${lotId}`);
+    revalidatePath("/stock");
+    revalidatePath("/historique-stock");
+    return { success: true as const };
+  }
+
   // 3.b) Si on a un coût total > 0 et des pièces, on met à jour unit_cost pour toutes les lignes du lot
   if (totalQuantityForLot > 0 && totalCostNumber > 0) {
     const unitCostForLot = totalCostNumber / totalQuantityForLot;
@@ -2083,7 +2639,7 @@ export async function importLotPiecesFromCsv(
 
   const { data: lotRow, error: lotError } = await supabase
     .from("lots")
-    .select("status")
+    .select("status, lot_code")
     .eq("id", lotId)
     .maybeSingle();
 
@@ -2112,6 +2668,11 @@ export async function importLotPiecesFromCsv(
       reason: "LOT_NOT_DRAFT",
     };
   }
+
+  const isLot0Provisional = isLot0DraftProvisional(
+    lotRow.lot_code,
+    lotRow.status
+  );
 
   let parsedLines: ParsedCsvLine[];
   try {
@@ -2262,6 +2823,8 @@ export async function importLotPiecesFromCsv(
     const addResult = await addPieceToLot(lotId, {
       pieceRef: row.pieceRef,
       quantity: row.quantity,
+    }, {
+      skipLot0Sync: isLot0Provisional,
     });
 
     if (!addResult.success) {
@@ -2296,6 +2859,32 @@ export async function importLotPiecesFromCsv(
     }
 
     totalImportedQuantity += row.quantity;
+  }
+
+  if (isLot0Provisional && appliedRows.length > 0) {
+    const syncResult = await syncLot0DraftProvisionalStockForLot(lotId);
+    if (!syncResult.success) {
+      const summary: CsvImportSummary = {
+        totalRows,
+        validRows,
+        rejectedRows: rejectedRows.length,
+        aggregatedRows: aggregatedRows.length,
+        importedRows,
+        mergedRows,
+        appliedRows: appliedRows.length,
+        totalImportedQuantity,
+      };
+
+      return {
+        success: false,
+        error:
+          syncResult.error ??
+          "Import applique, mais impossible de synchroniser LOT_0 provisoire.",
+        reason: "IMPORT_FAILED",
+        summary,
+        rejectedRows,
+      };
+    }
   }
 
   const summary: CsvImportSummary = {
@@ -2568,7 +3157,7 @@ export async function deleteInventoryLine(lotId: number, lineId: number) {
   // Vérifie que la ligne appartient bien à ce lot
   const { data: line, error: lineError } = await supabase
     .from("inventory")
-    .select("id, lot_id")
+    .select("id, lot_id, piece_ref, quantity")
     .eq("id", lineId)
     .single();
 
@@ -2583,7 +3172,7 @@ export async function deleteInventoryLine(lotId: number, lineId: number) {
   // Vérifie que le lot est toujours en brouillon + récupère total_cost
   const { data: lotRow, error: lotError } = await supabase
     .from("lots")
-    .select("status, total_cost")
+    .select("status, total_cost, lot_code")
     .eq("id", lotId)
     .single();
 
@@ -2599,6 +3188,29 @@ export async function deleteInventoryLine(lotId: number, lineId: number) {
       success: false,
       error: "Ce lot est confirmé : tu ne peux plus modifier les lignes.",
     };
+  }
+
+  const isLot0Provisional = isLot0DraftProvisional(
+    lotRow.lot_code,
+    lotRow.status
+  );
+
+  if (isLot0Provisional) {
+    const salesUsage = await getLotSalesUsage(lotId);
+    if (salesUsage.error) {
+      return {
+        success: false,
+        error: salesUsage.error,
+      };
+    }
+
+    if (salesUsage.usedBySales) {
+      return {
+        success: false,
+        error:
+          "LOT_0 provisoire deja utilise en ventes: suppression de ligne interdite tant que le lot reste en brouillon.",
+      };
+    }
   }
 
   const totalCostNumber = Number(lotRow.total_cost ?? 0);
@@ -2658,6 +3270,37 @@ export async function deleteInventoryLine(lotId: number, lineId: number) {
       "deleteInventoryLine - erreur lors de la mise à jour de total_pieces:",
       lotUpdateError
     );
+  }
+
+  if (isLot0Provisional) {
+    const setZeroCost = await setInventoryUnitCostForLot(
+      lotId,
+      LOT_0_PROVISIONAL_UNIT_COST
+    );
+    if (!setZeroCost.success) {
+      return {
+        success: false,
+        error:
+          setZeroCost.error ??
+          "Impossible de maintenir LOT_0 en mode provisoire apres suppression.",
+      };
+    }
+
+    const syncResult = await syncLot0DraftProvisionalStockForLot(lotId);
+    if (!syncResult.success) {
+      return {
+        success: false,
+        error:
+          syncResult.error ??
+          "Impossible de synchroniser LOT_0 provisoire apres suppression.",
+      };
+    }
+
+    revalidatePath("/approvisionnement");
+    revalidatePath(`/approvisionnement/${lotId}`);
+    revalidatePath("/stock");
+    revalidatePath("/historique-stock");
+    return { success: true as const };
   }
 
   if (totalQuantityForLot > 0 && totalCostNumber > 0) {
@@ -2732,7 +3375,7 @@ export async function updateInventoryLine(
   // Vérifie que la ligne appartient bien à ce lot
   const { data: line, error: lineError } = await supabase
     .from("inventory")
-    .select("id, lot_id")
+    .select("id, lot_id, piece_ref, quantity")
     .eq("id", lineId)
     .single();
 
@@ -2747,7 +3390,7 @@ export async function updateInventoryLine(
   // Vérifie que le lot est toujours en brouillon + récupère total_cost
   const { data: lotRow, error: lotError } = await supabase
     .from("lots")
-    .select("status, total_cost")
+    .select("status, total_cost, lot_code")
     .eq("id", lotId)
     .single();
 
@@ -2763,6 +3406,42 @@ export async function updateInventoryLine(
       success: false,
       error: "Ce lot est confirmé : tu ne peux plus modifier les lignes.",
     };
+  }
+
+  const isLot0Provisional = isLot0DraftProvisional(
+    lotRow.lot_code,
+    lotRow.status
+  );
+
+  if (isLot0Provisional) {
+    const salesUsage = await getLotSalesUsage(lotId);
+    if (salesUsage.error) {
+      return {
+        success: false,
+        error: salesUsage.error,
+      };
+    }
+
+    if (salesUsage.usedBySales) {
+      const currentPieceRef = String(line.piece_ref ?? "").trim();
+      const currentQty = Number(line.quantity ?? 0);
+
+      if (pieceRef !== currentPieceRef) {
+        return {
+          success: false,
+          error:
+            "LOT_0 provisoire deja utilise en ventes: modification de reference interdite tant que le lot reste en brouillon.",
+        };
+      }
+
+      if (Number.isFinite(currentQty) && quantity < currentQty) {
+        return {
+          success: false,
+          error:
+            "LOT_0 provisoire deja utilise en ventes: reduction de quantite interdite tant que le lot reste en brouillon.",
+        };
+      }
+    }
   }
 
   const totalCostNumber = Number(lotRow.total_cost ?? 0);
@@ -2827,6 +3506,36 @@ export async function updateInventoryLine(
       lotUpdateError
     );
     // On continue quand même pour tenter de mettre à jour unit_cost
+  }
+
+  if (isLot0Provisional) {
+    const setZeroCost = await setInventoryUnitCostForLot(
+      lotId,
+      LOT_0_PROVISIONAL_UNIT_COST
+    );
+    if (!setZeroCost.success) {
+      return {
+        success: false,
+        error:
+          setZeroCost.error ??
+          "Impossible de maintenir LOT_0 en mode provisoire apres mise a jour.",
+      };
+    }
+
+    const syncResult = await syncLot0DraftProvisionalStockForLot(lotId);
+    if (!syncResult.success) {
+      return {
+        success: false,
+        error:
+          syncResult.error ??
+          "Impossible de synchroniser LOT_0 provisoire apres mise a jour.",
+      };
+    }
+
+    revalidatePath(`/approvisionnement/${lotId}`);
+    revalidatePath("/stock");
+    revalidatePath("/historique-stock");
+    return { success: true as const };
   }
 
   // 2.b) Recalcul du coût unitaire pour toutes les lignes du lot

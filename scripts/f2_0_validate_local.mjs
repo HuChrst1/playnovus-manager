@@ -105,43 +105,7 @@ function assertBuildIsLocalOnly(chunkPaths, localApiUrl) {
   );
 }
 
-function loadActionFunctions() {
-  const pagePath = path.join(ROOT, ".next", "server", "app", "approvisionnement", "page.js");
-  const manifestPath = path.join(
-    ROOT,
-    ".next",
-    "server",
-    "app",
-    "approvisionnement",
-    "page",
-    "server-reference-manifest.json"
-  );
-
-  assert(fs.existsSync(pagePath), "Build artifact manquant: .next/server/app/approvisionnement/page.js");
-  assert(
-    fs.existsSync(manifestPath),
-    "Build artifact manquant: server-reference-manifest.json"
-  );
-
-  const pageJs = fs.readFileSync(pagePath, "utf8");
-  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
-
-  const runtimeFactory = require(path.join(
-    ROOT,
-    ".next",
-    "server",
-    "chunks",
-    "ssr",
-    "[turbopack]_runtime.js"
-  ));
-  const runtime = runtimeFactory("server/app/approvisionnement/page.js");
-
-  const chunkRegex = /R\.c\("([^"]+)"\)/g;
-  let match;
-  while ((match = chunkRegex.exec(pageJs)) !== null) {
-    runtime.c(match[1]);
-  }
-
+function patchRevalidatePathForRuntime(runtime) {
   try {
     const cacheExports = runtime.m(18558).exports;
     if (cacheExports && typeof cacheExports.revalidatePath === "function") {
@@ -159,30 +123,87 @@ function loadActionFunctions() {
   } catch {
     // Pas bloquant: on patch au mieux pour l'execution hors requete HTTP.
   }
+}
+
+function loadActionFunctionsForRoute(routePath) {
+  const pagePath = path.join(
+    ROOT,
+    ".next",
+    "server",
+    "app",
+    routePath,
+    "page.js"
+  );
+  const manifestPath = path.join(
+    ROOT,
+    ".next",
+    "server",
+    "app",
+    routePath,
+    "page",
+    "server-reference-manifest.json"
+  );
+
+  assert(fs.existsSync(pagePath), `Build artifact manquant: ${pagePath}`);
+  assert(fs.existsSync(manifestPath), `Build artifact manquant: ${manifestPath}`);
+
+  const pageJs = fs.readFileSync(pagePath, "utf8");
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+
+  const runtimeFactory = require(path.join(
+    ROOT,
+    ".next",
+    "server",
+    "chunks",
+    "ssr",
+    "[turbopack]_runtime.js"
+  ));
+  const runtime = runtimeFactory(`server/app/${routePath}/page.js`);
+
+  const chunkRegex = /R\.c\("([^"]+)"\)/g;
+  let match;
+  while ((match = chunkRegex.exec(pageJs)) !== null) {
+    runtime.c(match[1]);
+  }
+
+  patchRevalidatePathForRuntime(runtime);
 
   const actionEntries = Object.entries(manifest.node ?? {});
-  assert(actionEntries.length > 0, "Aucune server action detectee dans le manifest approvisionnement.");
+  assert(
+    actionEntries.length > 0,
+    `Aucune server action detectee dans le manifest ${routePath}.`
+  );
 
-  const worker = actionEntries[0][1]?.workers?.["app/approvisionnement/page"];
+  const workerKey = `app/${routePath}/page`;
+  const worker = actionEntries[0][1]?.workers?.[workerKey];
   const moduleId = worker?.moduleId;
-  assert(Number.isInteger(moduleId), "moduleId action introuvable dans server-reference-manifest.");
+  assert(
+    Number.isInteger(moduleId),
+    `moduleId action introuvable pour ${routePath}.`
+  );
 
   const moduleExports = runtime.m(moduleId).exports;
+  const out = {};
 
-  const getAction = (exportedName) => {
-    const entry = actionEntries.find(([, value]) => value?.exportedName === exportedName);
-    assert(entry, `Action \`${exportedName}\` absente du manifest.`);
-
-    const actionId = entry[0];
+  for (const [actionId, value] of actionEntries) {
+    const exportedName = value?.exportedName;
+    if (!exportedName) continue;
     const fn = moduleExports[actionId];
-    assert(typeof fn === "function", `Action \`${exportedName}\` non resolvable dans le chunk serveur.`);
-    return fn;
-  };
+    if (typeof fn === "function") {
+      out[exportedName] = fn;
+    }
+  }
+
+  return out;
+}
+
+function loadActionFunctions() {
+  const rootActions = loadActionFunctionsForRoute("approvisionnement");
+  const lotDetailActions = loadActionFunctionsForRoute("approvisionnement/[id]");
 
   return {
-    createLotFromDialog: getAction("createLotFromDialog"),
-    updateLotFromDialog: getAction("updateLotFromDialog"),
-    deleteLot: getAction("deleteLot"),
+    ...rootActions,
+    ...lotDetailActions,
   };
 }
 
@@ -339,6 +360,224 @@ async function createDraftLotWithoutInventory(admin, tag, options = {}) {
   }
 
   return lot;
+}
+
+async function ensureDraftLot0ForValidation(admin) {
+  const existingLot0 = await querySingle(
+    admin,
+    "lots",
+    "id, purchase_date, label, supplier, lot_code, total_cost, status, notes",
+    [["eq", "lot_code", "LOT_0"]]
+  );
+
+  if (!existingLot0) {
+    const created = await createDraftLotWithoutInventory(admin, "F25_LOT0", {
+      lotCode: "LOT_0",
+      label: "LOT_0 validation provisoire",
+      totalPieces: 0,
+      totalCost: 0,
+    });
+    return {
+      lot: created,
+      createdForValidation: true,
+      skipReason: null,
+    };
+  }
+
+  if (existingLot0.status !== "draft") {
+    return {
+      lot: existingLot0,
+      createdForValidation: false,
+      skipReason: `LOT_0 existant non brouillon (status=${existingLot0.status})`,
+    };
+  }
+
+  return {
+    lot: existingLot0,
+    createdForValidation: false,
+    skipReason: null,
+  };
+}
+
+async function getInventoryLineForLotPiece(admin, lotId, pieceRef) {
+  const { data, error } = await admin
+    .from("inventory")
+    .select("id, lot_id, piece_ref, quantity, unit_cost")
+    .eq("lot_id", lotId)
+    .eq("piece_ref", pieceRef)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(
+      `inventory lookup failed for lot=${lotId} piece=${pieceRef}: ${error.message}`
+    );
+  }
+
+  return data;
+}
+
+async function getPurchaseMovementForLotPiece(admin, lotId, pieceRef) {
+  const { data, error } = await admin
+    .from("stock_movements")
+    .select("id, quantity, unit_cost, source_type, direction")
+    .eq("lot_id", lotId)
+    .eq("piece_ref", pieceRef)
+    .eq("source_type", "PURCHASE")
+    .eq("direction", "IN")
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(
+      `stock_movements lookup failed for lot=${lotId} piece=${pieceRef}: ${error.message}`
+    );
+  }
+
+  return data;
+}
+
+async function createSyntheticSaleUsingLotPiece(
+  admin,
+  {
+    lotId,
+    pieceRef,
+    quantity = 1,
+    unitCost = 0,
+    netAmount = 10,
+    tag = "F25",
+  }
+) {
+  const paidAt = "2026-02-20T10:00:00.000Z";
+  const saleNumber = `F25_SIM_${tag}_${Date.now()}_${Math.floor(Math.random() * 100000)}`;
+  const totalCost = quantity * unitCost;
+  const margin = netAmount - totalCost;
+  const marginRate = netAmount > 0 ? margin / netAmount : null;
+
+  const { data: sale, error: saleError } = await admin
+    .from("sales")
+    .insert({
+      sale_number: saleNumber,
+      sale_type: "PIECE",
+      sales_channel: "OTHER",
+      paid_at: paidAt,
+      net_seller_amount: netAmount,
+      status: "CONFIRMED",
+      currency: "EUR",
+      total_cost_amount: totalCost,
+      total_margin_amount: margin,
+      margin_rate: marginRate,
+      comment: `F2.5 synthetic sale ${tag}`,
+    })
+    .select("id")
+    .single();
+
+  if (saleError || !sale) {
+    throw new Error(`synthetic sale insert failed: ${saleError?.message ?? "no sale"}`);
+  }
+
+  const { data: saleItem, error: saleItemError } = await admin
+    .from("sale_items")
+    .insert({
+      sale_id: sale.id,
+      line_index: 0,
+      item_kind: "PIECE",
+      quantity,
+      piece_ref: pieceRef,
+      set_id: null,
+      is_partial_set: false,
+      net_amount: netAmount,
+      cost_amount: totalCost,
+      margin_amount: margin,
+      comment: `F2.5 synthetic item ${tag}`,
+    })
+    .select("id")
+    .single();
+
+  if (saleItemError || !saleItem) {
+    await admin.from("sales").delete().eq("id", sale.id);
+    throw new Error(
+      `synthetic sale_item insert failed: ${saleItemError?.message ?? "no sale_item"}`
+    );
+  }
+
+  const { error: saleItemPiecesError } = await admin.from("sale_item_pieces").insert({
+    sale_id: sale.id,
+    sale_item_id: saleItem.id,
+    piece_ref: pieceRef,
+    quantity,
+    unit_cost: unitCost,
+    lot_id: lotId,
+  });
+
+  if (saleItemPiecesError) {
+    await admin.from("sale_items").delete().eq("sale_id", sale.id);
+    await admin.from("sales").delete().eq("id", sale.id);
+    throw new Error(
+      `synthetic sale_item_pieces insert failed: ${saleItemPiecesError.message}`
+    );
+  }
+
+  return {
+    saleId: sale.id,
+    saleItemId: saleItem.id,
+  };
+}
+
+async function cleanupSyntheticSale(admin, saleId) {
+  if (!Number.isFinite(Number(saleId)) || Number(saleId) <= 0) {
+    return;
+  }
+
+  const { data: saleItems, error: saleItemsError } = await admin
+    .from("sale_items")
+    .select("id")
+    .eq("sale_id", saleId);
+
+  if (saleItemsError) {
+    throw new Error(`cleanup sale_items load failed (${saleId}): ${saleItemsError.message}`);
+  }
+
+  const saleItemIds = (saleItems ?? []).map((row) => String(row.id));
+
+  await admin.from("sale_item_pieces").delete().eq("sale_id", saleId);
+
+  if (saleItemIds.length > 0) {
+    await admin
+      .from("stock_movements")
+      .delete()
+      .in("source_type", ["SALE", "SALE_CANCEL", "SALE_EDIT"])
+      .in("source_id", saleItemIds);
+  }
+
+  await admin.from("sale_items").delete().eq("sale_id", saleId);
+  await admin.from("sales").delete().eq("id", saleId);
+}
+
+async function cleanupLot0TestArtifacts(admin, lotId, pieceRefs) {
+  if (!Array.isArray(pieceRefs) || pieceRefs.length === 0) {
+    return;
+  }
+
+  await admin
+    .from("sale_item_pieces")
+    .delete()
+    .eq("lot_id", lotId)
+    .in("piece_ref", pieceRefs);
+
+  await admin
+    .from("stock_movements")
+    .delete()
+    .eq("lot_id", lotId)
+    .eq("source_type", "PURCHASE")
+    .in("piece_ref", pieceRefs);
+
+  await admin
+    .from("inventory")
+    .delete()
+    .eq("lot_id", lotId)
+    .in("piece_ref", pieceRefs);
+
+  const totalPieces = await sumInventoryQty(admin, lotId);
+  await admin.from("lots").update({ total_pieces: totalPieces }).eq("id", lotId);
 }
 
 async function cleanupLotHard(admin, lotId) {
@@ -505,6 +744,22 @@ async function run() {
   process.env.PLAYNOVUS_LOCAL_VALIDATION_BYPASS = "1";
 
   const actions = loadActionFunctions();
+  const requiredActions = [
+    "createLotFromDialog",
+    "updateLotFromDialog",
+    "deleteLot",
+    "addPieceToLot",
+    "updateInventoryLine",
+    "deleteInventoryLine",
+    "importLotPiecesFromCsv",
+  ];
+  for (const actionName of requiredActions) {
+    assert(
+      typeof actions[actionName] === "function",
+      `Action requise absente du bundle: ${actionName}`
+    );
+  }
+
   const admin = createClient(localEnv.API_URL, localEnv.SERVICE_ROLE_KEY, {
     auth: { persistSession: false },
   });
@@ -833,6 +1088,300 @@ async function run() {
     const deleteB = await actions.deleteLot(lotB.id);
     assert(deleteB?.success === true, `S12 cleanup echec lot B: ${JSON.stringify(deleteB)}`);
     record("S12 non-regression F2.4 renumerotation LOT_n");
+  }
+
+  // S13-S16 - F2.5 LOT_0 provisoire (draft) + restrictions post-vente + recalcul final
+  {
+    const lot0Context = await ensureDraftLot0ForValidation(admin);
+
+    if (lot0Context.skipReason) {
+      record(`S13-S16 F2.5 ignores (${lot0Context.skipReason})`);
+    } else {
+      const lot0Id = lot0Context.lot.id;
+      const suffix = `${Date.now()}_${Math.floor(Math.random() * 100000)}`;
+      const pieceAdd = `F25_ADD_${suffix}`;
+      const pieceCsvA = `F25_CSVA_${suffix}`;
+      const pieceCsvB = `F25_CSVB_${suffix}`;
+      const pieceLock = `F25_LOCK_${suffix}`;
+      const pieceReprice = `F25_RPRC_${suffix}`;
+      const trackedPieceRefs = [pieceAdd, pieceCsvA, pieceCsvB, pieceLock, pieceReprice];
+      const trackedSaleIds = [];
+
+      try {
+        // S13 - LOT_0 draft: ajout piece => stock vendable immediatement + cout unitaire 0
+        const addResult = await actions.addPieceToLot(lot0Id, {
+          pieceRef: pieceAdd,
+          quantity: 4,
+        });
+        assert(addResult?.success === true, `S13 echec addPieceToLot: ${JSON.stringify(addResult)}`);
+
+        const invAdd = await getInventoryLineForLotPiece(admin, lot0Id, pieceAdd);
+        assert(invAdd, "S13 echec: ligne inventory LOT_0 absente apres ajout.");
+        assert(
+          Number(invAdd.quantity ?? 0) >= 4,
+          `S13 echec: quantite inventory inattendue pour ${pieceAdd} (${invAdd.quantity}).`
+        );
+        assert(
+          Number(invAdd.unit_cost ?? -1) === 0,
+          `S13 echec: unit_cost inventory attendu a 0 pour LOT_0 provisoire (recu ${invAdd.unit_cost}).`
+        );
+
+        const purchaseAdd = await getPurchaseMovementForLotPiece(admin, lot0Id, pieceAdd);
+        assert(purchaseAdd, "S13 echec: mouvement PURCHASE/IN absent apres ajout LOT_0 draft.");
+        assert(
+          Number(purchaseAdd.quantity ?? 0) === Number(invAdd.quantity ?? 0),
+          `S13 echec: quantite PURCHASE (${purchaseAdd.quantity}) != inventory (${invAdd.quantity}).`
+        );
+        assert(
+          Number(purchaseAdd.unit_cost ?? -1) === 0,
+          `S13 echec: unit_cost PURCHASE attendu a 0 (recu ${purchaseAdd.unit_cost}).`
+        );
+        record("S13 LOT_0 draft: ajout piece -> stock vendable + cout FIFO 0");
+
+        // S14 - import CSV LOT_0 draft: merge positif + sync stock provisoire
+        const csvContent = [
+          "Numero de piece;Quantite de piece",
+          `${pieceCsvA};2`,
+          `${pieceCsvA};3`,
+          `${pieceCsvB};1`,
+        ].join("\n");
+
+        const importResult = await actions.importLotPiecesFromCsv(lot0Id, { csvContent });
+        assert(
+          importResult?.success === true,
+          `S14 echec import CSV LOT_0 draft: ${JSON.stringify(importResult)}`
+        );
+
+        const invCsvA = await getInventoryLineForLotPiece(admin, lot0Id, pieceCsvA);
+        const invCsvB = await getInventoryLineForLotPiece(admin, lot0Id, pieceCsvB);
+        assert(invCsvA, "S14 echec: piece CSV A absente apres import.");
+        assert(invCsvB, "S14 echec: piece CSV B absente apres import.");
+        assert(
+          Number(invCsvA.quantity ?? 0) === 5,
+          `S14 echec: quantite CSV A attendue = 5 (recu ${invCsvA.quantity}).`
+        );
+        assert(
+          Number(invCsvB.quantity ?? 0) === 1,
+          `S14 echec: quantite CSV B attendue = 1 (recu ${invCsvB.quantity}).`
+        );
+
+        const purchaseCsvA = await getPurchaseMovementForLotPiece(admin, lot0Id, pieceCsvA);
+        assert(purchaseCsvA, "S14 echec: PURCHASE CSV A introuvable.");
+        assert(
+          Number(purchaseCsvA.quantity ?? 0) === 5 &&
+            Number(purchaseCsvA.unit_cost ?? -1) === 0,
+          `S14 echec: PURCHASE CSV A attendu q=5, unit_cost=0 (recu q=${purchaseCsvA.quantity}, uc=${purchaseCsvA.unit_cost}).`
+        );
+        record("S14 import CSV LOT_0 draft: merge positif + sync provisoire");
+
+        // S15 - apres usage ventes: suppression/baisse/changement ref interdits
+        const addLockResult = await actions.addPieceToLot(lot0Id, {
+          pieceRef: pieceLock,
+          quantity: 5,
+        });
+        assert(
+          addLockResult?.success === true,
+          `S15 precondition add piece lock echec: ${JSON.stringify(addLockResult)}`
+        );
+
+        const syntheticLockSale = await createSyntheticSaleUsingLotPiece(admin, {
+          lotId: lot0Id,
+          pieceRef: pieceLock,
+          quantity: 1,
+          unitCost: 0,
+          netAmount: 7,
+          tag: "S15",
+        });
+        trackedSaleIds.push(syntheticLockSale.saleId);
+
+        const lockLine = await getInventoryLineForLotPiece(admin, lot0Id, pieceLock);
+        assert(lockLine?.id, "S15 precondition invalide: ligne lock introuvable.");
+
+        const reduceResult = await actions.updateInventoryLine(lot0Id, lockLine.id, {
+          pieceRef: pieceLock,
+          quantity: 4,
+        });
+        assert(
+          reduceResult?.success === false,
+          "S15 echec: reduction de quantite LOT_0 apres vente devrait etre refusee."
+        );
+        assert(
+          String(reduceResult?.error ?? "").toLowerCase().includes("reduction"),
+          `S15 echec: message attendu sur reduction, recu ${reduceResult?.error}`
+        );
+
+        const renameResult = await actions.updateInventoryLine(lot0Id, lockLine.id, {
+          pieceRef: `${pieceLock}_RENAMED`,
+          quantity: 5,
+        });
+        assert(
+          renameResult?.success === false,
+          "S15 echec: changement de reference LOT_0 apres vente devrait etre refuse."
+        );
+        assert(
+          String(renameResult?.error ?? "").toLowerCase().includes("reference"),
+          `S15 echec: message attendu sur reference, recu ${renameResult?.error}`
+        );
+
+        const deleteResult = await actions.deleteInventoryLine(lot0Id, lockLine.id);
+        assert(
+          deleteResult?.success === false,
+          "S15 echec: suppression de ligne LOT_0 apres vente devrait etre refusee."
+        );
+        assert(
+          String(deleteResult?.error ?? "").toLowerCase().includes("suppression"),
+          `S15 echec: message attendu sur suppression, recu ${deleteResult?.error}`
+        );
+
+        const addAfterUsage = await actions.addPieceToLot(lot0Id, {
+          pieceRef: pieceLock,
+          quantity: 2,
+        });
+        assert(
+          addAfterUsage?.success === true,
+          `S15 echec: ajout post-vente LOT_0 devrait rester autorise (${JSON.stringify(addAfterUsage)})`
+        );
+        record("S15 LOT_0 draft apres ventes: baisse/suppression/changement ref bloques, ajout autorise");
+
+        await cleanupSyntheticSale(admin, syntheticLockSale.saleId);
+        trackedSaleIds.pop();
+
+        // S16 - confirmation finale LOT_0 (uniquement si LOT_0 cree pour la validation)
+        if (lot0Context.createdForValidation) {
+          const addReprice = await actions.addPieceToLot(lot0Id, {
+            pieceRef: pieceReprice,
+            quantity: 2,
+          });
+          assert(
+            addReprice?.success === true,
+            `S16 precondition add piece reprice echec: ${JSON.stringify(addReprice)}`
+          );
+
+          const syntheticRepriceSale = await createSyntheticSaleUsingLotPiece(admin, {
+            lotId: lot0Id,
+            pieceRef: pieceReprice,
+            quantity: 1,
+            unitCost: 0,
+            netAmount: 10,
+            tag: "S16",
+          });
+          trackedSaleIds.push(syntheticRepriceSale.saleId);
+
+          const lotBeforeConfirm = await loadLotForUpdate(admin, lot0Id);
+          const lot0InventoryQty = await sumInventoryQty(admin, lot0Id);
+          assert(
+            lot0InventoryQty > 0,
+            "S16 precondition invalide: LOT_0 inventaire vide avant confirmation."
+          );
+
+          const finalTotalCost = 40;
+          const confirmResult = await actions.updateLotFromDialog(lot0Id, {
+            ...toUpdateArgs(lotBeforeConfirm, "confirmed"),
+            totalCost: finalTotalCost,
+          });
+          assert(
+            confirmResult?.success === true,
+            `S16 echec confirmation LOT_0: ${JSON.stringify(confirmResult)}`
+          );
+
+          const expectedUnitCost =
+            Math.round((finalTotalCost / lot0InventoryQty) * 10000) / 10000;
+
+          const sipAfter = await querySingle(
+            admin,
+            "sale_item_pieces",
+            "unit_cost",
+            [
+              ["eq", "sale_id", syntheticRepriceSale.saleId],
+              ["eq", "sale_item_id", syntheticRepriceSale.saleItemId],
+            ]
+          );
+          assert(sipAfter, "S16 echec: sale_item_pieces introuvable apres confirmation LOT_0.");
+          assert(
+            Math.abs(Number(sipAfter.unit_cost ?? 0) - expectedUnitCost) <= 0.0001,
+            `S16 echec: unit_cost snapshot attendu ${expectedUnitCost}, recu ${sipAfter.unit_cost}`
+          );
+
+          const saleItemAfter = await querySingle(
+            admin,
+            "sale_items",
+            "cost_amount, margin_amount",
+            [["eq", "id", syntheticRepriceSale.saleItemId]]
+          );
+          assert(saleItemAfter, "S16 echec: sale_item introuvable apres recalcul.");
+          assert(
+            Math.abs(Number(saleItemAfter.cost_amount ?? 0) - expectedUnitCost) <= 0.0001,
+            `S16 echec: cost_amount ligne attendu ${expectedUnitCost}, recu ${saleItemAfter.cost_amount}`
+          );
+          assert(
+            Math.abs(Number(saleItemAfter.margin_amount ?? 0) - (10 - expectedUnitCost)) <=
+              0.0001,
+            `S16 echec: margin_amount ligne inattendu (${saleItemAfter.margin_amount}).`
+          );
+
+          const saleAfter = await querySingle(
+            admin,
+            "sales",
+            "status, total_cost_amount, total_margin_amount",
+            [["eq", "id", syntheticRepriceSale.saleId]]
+          );
+          assert(saleAfter, "S16 echec: sale introuvable apres recalcul.");
+          assert(
+            saleAfter.status === "CONFIRMED",
+            `S16 echec: statut vente attendu CONFIRMED, recu ${saleAfter.status}`
+          );
+          assert(
+            Math.abs(Number(saleAfter.total_cost_amount ?? 0) - expectedUnitCost) <= 0.0001,
+            `S16 echec: total_cost_amount vente attendu ${expectedUnitCost}, recu ${saleAfter.total_cost_amount}`
+          );
+          assert(
+            Math.abs(Number(saleAfter.total_margin_amount ?? 0) - (10 - expectedUnitCost)) <=
+              0.0001,
+            `S16 echec: total_margin_amount vente inattendu (${saleAfter.total_margin_amount}).`
+          );
+
+          const lotAfterConfirm = await loadLotForUpdate(admin, lot0Id);
+          assert(
+            lotAfterConfirm.status === "confirmed",
+            `S16 echec: LOT_0 devrait etre confirme (recu ${lotAfterConfirm.status}).`
+          );
+          record("S16 confirmation finale LOT_0: recalcul synchrone retroactif OK");
+        } else {
+          record("S16 confirmation finale LOT_0 ignoree (LOT_0 preexistant)");
+        }
+      } finally {
+        for (const saleId of trackedSaleIds) {
+          try {
+            await cleanupSyntheticSale(admin, saleId);
+          } catch (cleanupError) {
+            console.warn(
+              `[F2.0] cleanup synthetic sale failed (${saleId}):`,
+              cleanupError instanceof Error ? cleanupError.message : String(cleanupError)
+            );
+          }
+        }
+
+        try {
+          await cleanupLot0TestArtifacts(admin, lot0Id, trackedPieceRefs);
+        } catch (cleanupError) {
+          console.warn(
+            `[F2.0] cleanup LOT_0 test artifacts failed (lot=${lot0Id}):`,
+            cleanupError instanceof Error ? cleanupError.message : String(cleanupError)
+          );
+        }
+
+        if (lot0Context.createdForValidation) {
+          try {
+            await cleanupLotHard(admin, lot0Id);
+          } catch (cleanupError) {
+            console.warn(
+              `[F2.0] cleanup LOT_0 hard failed (lot=${lot0Id}):`,
+              cleanupError instanceof Error ? cleanupError.message : String(cleanupError)
+            );
+          }
+        }
+      }
+    }
   }
 
   await assertNegativeStockBlocked(admin);

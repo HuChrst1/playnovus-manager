@@ -3,9 +3,11 @@ import { notFound } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase-server";
 import { cn } from "@/lib/utils";
 import { SalesStatCard } from "@/components/sales/SalesStatCard";
+import { Badge } from "@/components/ui/badge";
 import { Banknote, Calculator, ChartColumnIncreasing, Wallet } from "lucide-react";
 import type { SaleRow, SaleItemRow } from "@/lib/sales-types";
 import type { ReactNode } from "react";
+import { getDraftLot0Id } from "@/lib/lot0-provisional";
 import {
   formatBusinessSaleNumberDisplay,
   formatSetReferenceDisplay,
@@ -58,6 +60,35 @@ export default async function VenteDetailPage({ params }: VentesDetailPageProps)
 
   const saleRow = sale as SaleRow;
   const saleItems = (items ?? []) as SaleItemRow[];
+  const provisionalSaleItemIds = new Set<number>();
+  const lot0Lookup = await getDraftLot0Id(supabaseServer);
+
+  if (lot0Lookup.error) {
+    console.error("VenteDetailPage - lot0 lookup error:", lot0Lookup.error);
+  } else if (lot0Lookup.lotId !== null) {
+    const { data: provisionalRows, error: provisionalRowsError } =
+      await supabaseServer
+        .from("sale_item_pieces")
+        .select("sale_item_id")
+        .eq("sale_id", saleId)
+        .eq("lot_id", lot0Lookup.lotId);
+
+    if (provisionalRowsError) {
+      console.error(
+        "VenteDetailPage - erreur chargement badges provisoires:",
+        provisionalRowsError
+      );
+    } else {
+      for (const row of provisionalRows ?? []) {
+        const saleItemId = Number(row.sale_item_id ?? 0);
+        if (Number.isFinite(saleItemId) && saleItemId > 0) {
+          provisionalSaleItemIds.add(saleItemId);
+        }
+      }
+    }
+  }
+  const saleHasProvisionalLot0 = provisionalSaleItemIds.size > 0;
+
   const setIds = Array.from(
     new Set(
       saleItems
@@ -152,6 +183,14 @@ export default async function VenteDetailPage({ params }: VentesDetailPageProps)
         </div>
       </header>
 
+      {saleHasProvisionalLot0 ? (
+        <section className="app-surface-muted border border-sky-100 bg-sky-50/60 px-4 py-3 text-sm text-sky-900">
+          Cette vente contient des pièces issues de LOT_0 provisoire (brouillon).
+          Les coûts FIFO et marges restent indicatifs jusqu&apos;à la confirmation
+          finale de LOT_0.
+        </section>
+      ) : null}
+
       {/* STATS DE LA VENTE */}
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 items-start">
         <SalesStatCard
@@ -232,6 +271,7 @@ export default async function VenteDetailPage({ params }: VentesDetailPageProps)
                 </tr>
               ) : (
                 saleItems.map((item) => {
+                  const isLineProvisional = provisionalSaleItemIds.has(item.id);
                   const netLine = Number(item.net_amount ?? 0);
                   const costLine = Number(item.cost_amount ?? 0);
                   const marginLine =
@@ -280,12 +320,17 @@ export default async function VenteDetailPage({ params }: VentesDetailPageProps)
                   return (
                     <tr key={item.id} className={cn("appro-table-row", href && "cursor-pointer")}>
                       <Cell title={href ? "Voir les pièces réellement vendues pour ce set" : undefined}>
-                        {labelType}
-                        {item.item_kind === "SET" && item.is_partial_set && (
-                          <span className="ml-1 text-[11px] rounded-full bg-sky-50 px-2 py-0.5 text-sky-700">
-                            Set partiel
-                          </span>
-                        )}
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span>{labelType}</span>
+                          {item.item_kind === "SET" && item.is_partial_set && (
+                            <span className="text-[11px] rounded-full bg-sky-50 px-2 py-0.5 text-sky-700">
+                              Set partiel
+                            </span>
+                          )}
+                          {isLineProvisional ? (
+                            <Badge variant="warning">Coût provisoire LOT_0</Badge>
+                          ) : null}
+                        </div>
                       </Cell>
 
                       <Cell
@@ -300,7 +345,9 @@ export default async function VenteDetailPage({ params }: VentesDetailPageProps)
                         {netLine > 0 ? euro.format(netLine) : "—"}
                       </Cell>
                       <Cell className="text-right tabular-nums">
-                        {costLine > 0 ? euro.format(costLine) : "—"}
+                        {costLine > 0 || isLineProvisional
+                          ? euro.format(costLine)
+                          : "—"}
                       </Cell>
                       <Cell className="text-right tabular-nums">
                         {marginLine !== 0 ? euro.format(marginLine) : "—"}

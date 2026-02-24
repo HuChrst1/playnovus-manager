@@ -215,7 +215,7 @@ export default async function VentesPage({ searchParams }: SalesPageProps) {
     supabase
   );
 
-  const { table, kpis } = salesPageData;
+  const { table, kpis, provisionalSalesCount } = salesPageData;
 
   const resetDateParams = new URLSearchParams();
   resetDateParams.set(
@@ -398,6 +398,15 @@ export default async function VentesPage({ searchParams }: SalesPageProps) {
           triggerClassName="h-9 gap-2 px-4 text-xs font-medium"
         />
       </div>
+
+      {provisionalSalesCount > 0 ? (
+        <section className="app-surface-muted border border-sky-100 bg-sky-50/60 px-4 py-3 text-sm text-sky-900">
+          {provisionalSalesCount.toLocaleString("fr-FR")} vente
+          {provisionalSalesCount > 1 ? "s" : ""} inclut/incluent des pièces de
+          LOT_0 provisoire (brouillon). Les coûts FIFO et marges associés
+          restent indicatifs jusqu&apos;à la confirmation finale de LOT_0.
+        </section>
+      ) : null}
 
       <SalesTable
         rows={table.rows}

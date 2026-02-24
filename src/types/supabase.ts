@@ -638,6 +638,12 @@ export type Database = {
       }
     }
     Functions: {
+      finalize_lot0_confirmation_reprice: {
+        Args: {
+          p_lot_id: number
+        }
+        Returns: Json
+      }
       reset_sales_id_sequence: { Args: never; Returns: undefined }
     }
     Enums: {

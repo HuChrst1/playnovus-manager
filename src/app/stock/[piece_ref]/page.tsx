@@ -3,6 +3,8 @@
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { isLot0DraftProvisional } from "@/lib/lot0-provisional";
 
 export const dynamic = "force-dynamic";
 
@@ -154,10 +156,17 @@ export default async function PieceHistoryPage({
   };
 
   const renderSource = (m: MovementRow) => {
+    const isProvisionalLot0Row = isLot0DraftProvisional(
+      m.lot_code,
+      m.lot_status
+    );
+
+    let sourceNode = <span className="text-xs text-slate-400">—</span>;
+
     if (m.source_type === "PURCHASE" && m.lot_id) {
       const label =
         m.lot_code || `LOT_${m.lot_id}`;
-      return (
+      sourceNode = (
         <Link
           href={`/approvisionnement/${m.lot_id}`}
           className="underline-offset-2 hover:underline text-slate-900"
@@ -165,25 +174,28 @@ export default async function PieceHistoryPage({
           Lot {label}
         </Link>
       );
-    }
-
-    if (m.source_type === "SALE" && m.source_id) {
-      return (
+    } else if (m.source_type === "SALE" && m.source_id) {
+      sourceNode = (
         <span className="text-xs font-medium text-slate-700">
           Vente #{m.source_id}
         </span>
       );
-    }
-
-    if (m.source_type === "ADJUSTMENT") {
-      return (
+    } else if (m.source_type === "ADJUSTMENT") {
+      sourceNode = (
         <span className="text-xs text-slate-500">
           Ajustement manuel
         </span>
       );
     }
 
-    return <span className="text-xs text-slate-400">—</span>;
+    return (
+      <div className="flex flex-wrap items-center gap-2">
+        {sourceNode}
+        {isProvisionalLot0Row ? (
+          <Badge variant="warning">Données provisoires LOT_0</Badge>
+        ) : null}
+      </div>
+    );
   };
 
   return (
