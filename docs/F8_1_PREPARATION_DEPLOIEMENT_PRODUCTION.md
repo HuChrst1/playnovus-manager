@@ -133,6 +133,27 @@ Regles:
 - n'utiliser que des placeholders (`<value>`, `<secret>`)
 - verifier la coherence preprod/prod avant GO F8.1
 
+### 5.1 Verification topologie Supabase (preview vs production)
+
+Objectif:
+- confirmer si `preview/preprod` pointe vers un projet Supabase dedie ou vers le meme projet que `production`.
+
+Sortie attendue:
+- `TOPOLOGY_OK_SEPARATED`:
+  - preview/preprod utilise un Supabase non-prod
+  - secret Turnstile preprod distinct du secret prod
+- `TOPOLOGY_BLOCKED_SHARED`:
+  - preview/preprod et prod partagent le meme Supabase
+  - action obligatoire: separer preview/preprod sur un Supabase non-prod avant validation finale de la strategie "cles dediees par environnement".
+
+### 5.2 Matrice cible Turnstile par environnement
+
+| Environnement | Site key (`NEXT_PUBLIC_TURNSTILE_SITE_KEY`) | Secret Supabase Auth CAPTCHA (`SUPABASE_AUTH_CAPTCHA_SECRET`) | Hostnames widget Turnstile |
+|---|---|---|---|
+| Local | cle locale dediee | secret local dedie | `localhost`, `127.0.0.1` |
+| Preview / Preprod | cle preview dediee | secret preview dedie (Supabase non-prod) | domaine preprod + URLs preview Vercel attendues |
+| Production | cle prod dediee | secret prod dedie | domaine(s) de production uniquement |
+
 ## 6) Procedure Turnstile production (widget + hostnames + mapping)
 
 ### 6.1 Creation/verification widget production

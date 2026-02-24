@@ -30,6 +30,7 @@ type LotCsvImportDialogProps = {
 
 const DEFAULT_IMPORT_ERROR =
   "Impossible d'importer ce CSV pour le moment. Merci de réessayer.";
+const APPLIED_ROWS_AUTO_COLLAPSE_THRESHOLD = 20;
 
 export function LotCsvImportDialog({ lotId, isDraft }: LotCsvImportDialogProps) {
   const [open, setOpen] = useState(false);
@@ -40,6 +41,9 @@ export function LotCsvImportDialog({ lotId, isDraft }: LotCsvImportDialogProps) 
   const [result, setResult] = useState<ImportLotPiecesFromCsvResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [isSummarySectionOpen, setIsSummarySectionOpen] = useState(true);
+  const [isAppliedSectionOpen, setIsAppliedSectionOpen] = useState(true);
+  const [isRejectedSectionOpen, setIsRejectedSectionOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
 
@@ -55,6 +59,9 @@ export function LotCsvImportDialog({ lotId, isDraft }: LotCsvImportDialogProps) 
     setResult(null);
     setError(null);
     setNotice(null);
+    setIsSummarySectionOpen(true);
+    setIsAppliedSectionOpen(true);
+    setIsRejectedSectionOpen(false);
   };
 
   const handleOpenChange = (nextOpen: boolean) => {
@@ -72,6 +79,17 @@ export function LotCsvImportDialog({ lotId, isDraft }: LotCsvImportDialogProps) 
     startTransition(async () => {
       const importResult = await importLotPiecesFromCsv(lotId, { csvContent });
       setResult(importResult);
+      setIsSummarySectionOpen(true);
+
+      const appliedRowsCount = importResult.success
+        ? importResult.appliedRows.length
+        : 0;
+      setIsAppliedSectionOpen(
+        appliedRowsCount <= APPLIED_ROWS_AUTO_COLLAPSE_THRESHOLD
+      );
+
+      const rejectedRowsCount = importResult.rejectedRows?.length ?? 0;
+      setIsRejectedSectionOpen(rejectedRowsCount > 0);
 
       if (!importResult.success) {
         setError(importResult.error || DEFAULT_IMPORT_ERROR);
@@ -143,7 +161,7 @@ export function LotCsvImportDialog({ lotId, isDraft }: LotCsvImportDialogProps) 
         </Button>
       </DialogTrigger>
 
-      <DialogContent className="max-w-4xl p-8">
+      <DialogContent className="app-modal-wide app-modal-scroll overflow-x-hidden">
         <DialogHeader className="mb-4">
           <DialogTitle className="text-xl font-semibold tracking-tight">
             Import CSV des pièces du lot
@@ -253,92 +271,118 @@ export function LotCsvImportDialog({ lotId, isDraft }: LotCsvImportDialogProps) 
         {error && <p className="mt-2 text-sm text-red-500">{error}</p>}
         {notice && <p className="mt-2 text-sm text-sky-700">{notice}</p>}
 
-        {summary && (
-          <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <h3 className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-              Rapport d'import
-            </h3>
-            <div className="grid gap-2 text-xs text-slate-700 sm:grid-cols-2 lg:grid-cols-4">
-              <p>Lignes CSV: {summary.totalRows}</p>
-              <p>Lignes valides: {summary.validRows}</p>
-              <p>Lignes rejetées: {summary.rejectedRows}</p>
-              <p>Références agrégées: {summary.aggregatedRows}</p>
-              <p>Références ajoutées: {summary.importedRows}</p>
-              <p>Références fusionnées: {summary.mergedRows}</p>
-              <p>Références appliquées: {summary.appliedRows}</p>
-              <p>Quantité totale importée: {summary.totalImportedQuantity}</p>
-            </div>
-          </div>
-        )}
+        <div className="mt-4 space-y-3">
+          {summary && (
+            <details
+              className="csv-import-section"
+              open={isSummarySectionOpen}
+              onToggle={(event) =>
+                setIsSummarySectionOpen(event.currentTarget.open)
+              }
+            >
+              <summary className="csv-import-section-summary">
+                Rapport d&apos;import
+              </summary>
+              <div className="csv-import-section-body rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="grid gap-2 text-xs text-slate-700 sm:grid-cols-2 lg:grid-cols-4">
+                  <p>Lignes CSV: {summary.totalRows}</p>
+                  <p>Lignes valides: {summary.validRows}</p>
+                  <p>Lignes rejetées: {summary.rejectedRows}</p>
+                  <p>Références agrégées: {summary.aggregatedRows}</p>
+                  <p>Références ajoutées: {summary.importedRows}</p>
+                  <p>Références fusionnées: {summary.mergedRows}</p>
+                  <p>Références appliquées: {summary.appliedRows}</p>
+                  <p>Quantité totale importée: {summary.totalImportedQuantity}</p>
+                </div>
+              </div>
+            </details>
+          )}
 
-        {appliedRows.length > 0 && (
-          <div className="mt-4">
-            <h3 className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-              Lignes appliquées
-            </h3>
-            <div className="max-h-44 overflow-y-auto rounded-xl border border-slate-200">
-              <table className="min-w-full text-xs">
-                <thead className="bg-slate-100 text-slate-600">
-                  <tr>
-                    <th className="px-3 py-2 text-left font-medium">Référence</th>
-                    <th className="px-3 py-2 text-left font-medium">Quantité</th>
-                    <th className="px-3 py-2 text-left font-medium">Action</th>
-                    <th className="px-3 py-2 text-left font-medium">Lignes CSV</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {appliedRows.map((row) => (
-                    <tr key={row.pieceRef} className="border-t border-slate-100">
-                      <td className="px-3 py-2 font-mono">{row.pieceRef}</td>
-                      <td className="px-3 py-2 tabular-nums">{row.quantity}</td>
-                      <td className="px-3 py-2">
-                        {row.action === "merged" ? "Fusionnée" : "Ajoutée"}
-                      </td>
-                      <td className="px-3 py-2">
-                        {row.lineNumbers.map((line) => `#${line}`).join(", ")}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
+          {appliedRows.length > 0 && (
+            <details
+              className="csv-import-section"
+              open={isAppliedSectionOpen}
+              onToggle={(event) =>
+                setIsAppliedSectionOpen(event.currentTarget.open)
+              }
+            >
+              <summary className="csv-import-section-summary">
+                Lignes appliquées ({appliedRows.length})
+              </summary>
+              <div className="csv-import-section-body">
+                <div className="max-h-52 overflow-y-auto overflow-x-auto rounded-xl border border-slate-200">
+                  <table className="min-w-[680px] w-full text-xs">
+                    <thead className="bg-slate-100 text-slate-600">
+                      <tr>
+                        <th className="px-3 py-2 text-left font-medium">Référence</th>
+                        <th className="px-3 py-2 text-left font-medium">Quantité</th>
+                        <th className="px-3 py-2 text-left font-medium">Action</th>
+                        <th className="px-3 py-2 text-left font-medium">Lignes CSV</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {appliedRows.map((row) => (
+                        <tr key={row.pieceRef} className="border-t border-slate-100">
+                          <td className="px-3 py-2 font-mono">{row.pieceRef}</td>
+                          <td className="px-3 py-2 tabular-nums">{row.quantity}</td>
+                          <td className="px-3 py-2">
+                            {row.action === "merged" ? "Fusionnée" : "Ajoutée"}
+                          </td>
+                          <td className="px-3 py-2">
+                            {row.lineNumbers.map((line) => `#${line}`).join(", ")}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </details>
+          )}
 
-        {rejectedRows.length > 0 && (
-          <div className="mt-4">
-            <h3 className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-              Lignes rejetées
-            </h3>
-            <div className="max-h-44 overflow-y-auto rounded-xl border border-red-200">
-              <table className="min-w-full text-xs">
-                <thead className="bg-red-50 text-red-700">
-                  <tr>
-                    <th className="px-3 py-2 text-left font-medium">Ligne</th>
-                    <th className="px-3 py-2 text-left font-medium">Référence</th>
-                    <th className="px-3 py-2 text-left font-medium">Quantité</th>
-                    <th className="px-3 py-2 text-left font-medium">Motif</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rejectedRows.map((row, index) => (
-                    <tr
-                      key={`${row.lineNumber}-${row.pieceRef}-${index}`}
-                      className="border-t border-red-100"
-                    >
-                      <td className="px-3 py-2">#{row.lineNumber}</td>
-                      <td className="px-3 py-2 font-mono">
-                        {row.pieceRef || "—"}
-                      </td>
-                      <td className="px-3 py-2">{row.quantity || "—"}</td>
-                      <td className="px-3 py-2">{row.reason}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
+          {rejectedRows.length > 0 && (
+            <details
+              className="csv-import-section"
+              open={isRejectedSectionOpen}
+              onToggle={(event) =>
+                setIsRejectedSectionOpen(event.currentTarget.open)
+              }
+            >
+              <summary className="csv-import-section-summary">
+                Lignes rejetées ({rejectedRows.length})
+              </summary>
+              <div className="csv-import-section-body">
+                <div className="max-h-52 overflow-y-auto overflow-x-auto rounded-xl border border-red-200">
+                  <table className="min-w-[720px] w-full text-xs">
+                    <thead className="bg-red-50 text-red-700">
+                      <tr>
+                        <th className="px-3 py-2 text-left font-medium">Ligne</th>
+                        <th className="px-3 py-2 text-left font-medium">Référence</th>
+                        <th className="px-3 py-2 text-left font-medium">Quantité</th>
+                        <th className="px-3 py-2 text-left font-medium">Motif</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rejectedRows.map((row, index) => (
+                        <tr
+                          key={`${row.lineNumber}-${row.pieceRef}-${index}`}
+                          className="border-t border-red-100"
+                        >
+                          <td className="px-3 py-2">#{row.lineNumber}</td>
+                          <td className="px-3 py-2 font-mono">
+                            {row.pieceRef || "—"}
+                          </td>
+                          <td className="px-3 py-2">{row.quantity || "—"}</td>
+                          <td className="px-3 py-2">{row.reason}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </details>
+          )}
+        </div>
       </DialogContent>
     </Dialog>
   );
