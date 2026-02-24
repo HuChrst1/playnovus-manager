@@ -3,6 +3,17 @@
 import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { Trash2 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 type DeleteSetButtonProps = {
   setId: string;
@@ -16,35 +27,73 @@ export function DeleteSetButton({
   setName,
   deleteSetAction,
 }: DeleteSetButtonProps) {
-  const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
-    const label = setName || setId;
-    const ok = window.confirm(
-      `Supprimer le set "${label}" ?\nCette action est irréversible.`
-    );
+  const [open, setOpen] = React.useState(false);
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const formRef = React.useRef<HTMLFormElement | null>(null);
+  const label = setName || setId;
 
-    if (!ok) {
-      // On annule la soumission du formulaire => pas d’appel à la Server Action
-      e.preventDefault();
-    }
+  const handleConfirmDelete = () => {
+    if (!formRef.current || isSubmitting) return;
+    setIsSubmitting(true);
+    formRef.current.requestSubmit();
   };
 
   return (
-    <form action={deleteSetAction} className="inline-block">
+    <form
+      ref={formRef}
+      action={deleteSetAction}
+      className="inline-block"
+      onSubmit={() => setIsSubmitting(true)}
+    >
       {/* id du set à supprimer, lu par la Server Action */}
       <input type="hidden" name="id" value={setId} />
 
-      <Button
-        type="submit"
-        variant="ghost"
-        size="icon"
-        className="app-icon-action"
-        onClick={handleClick}
-        data-row-action="true" // évite de déclencher le clic sur la ligne
-        aria-label="Supprimer le set"
-        title="Supprimer le set"
+      <AlertDialog
+        open={open}
+        onOpenChange={(nextOpen) => {
+          setOpen(nextOpen);
+          if (!nextOpen) {
+            setIsSubmitting(false);
+          }
+        }}
       >
-        <Trash2 className="h-4 w-4" />
-      </Button>
+        <AlertDialogTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="app-icon-action"
+            data-row-action="true"
+            aria-label="Supprimer le set"
+            title="Supprimer le set"
+            disabled={isSubmitting}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </AlertDialogTrigger>
+
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Supprimer le set "{label}" ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Cette action est irréversible.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isSubmitting}>Annuler</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={isSubmitting}
+              onClick={(event) => {
+                event.preventDefault();
+                handleConfirmDelete();
+              }}
+            >
+              Supprimer le set
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </form>
   );
 }

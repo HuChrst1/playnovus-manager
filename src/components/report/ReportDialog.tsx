@@ -14,6 +14,16 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   createReportTicketAction,
   deleteReportTicketAction,
   listReportTicketsAction,
@@ -113,6 +123,10 @@ export function ReportDialog({ triggerClassName }: ReportDialogProps) {
   const [ticketsLoading, setTicketsLoading] = React.useState(false);
   const [ticketsError, setTicketsError] = React.useState<string | null>(null);
   const [pendingTicketId, setPendingTicketId] = React.useState<number | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
+  const [ticketIdToDelete, setTicketIdToDelete] = React.useState<number | null>(
+    null
+  );
   const [statusDraftByTicketId, setStatusDraftByTicketId] = React.useState<
     Record<number, ReportStatus>
   >({});
@@ -242,16 +256,19 @@ export function ReportDialog({ triggerClassName }: ReportDialogProps) {
     void updateTicket(ticket.id, nextStatus, true);
   };
 
-  const handleDelete = async (ticketId: number) => {
-    const confirmed = window.confirm(
-      `Supprimer le ticket #${ticketId} ?\n\nCette action est irreversible.`
-    );
-    if (!confirmed) return;
+  const openDeleteDialog = (ticketId: number) => {
+    setTicketsError(null);
+    setTicketIdToDelete(ticketId);
+    setDeleteDialogOpen(true);
+  };
 
-    setPendingTicketId(ticketId);
+  const handleDeleteConfirm = async () => {
+    if (ticketIdToDelete === null) return;
+
+    setPendingTicketId(ticketIdToDelete);
     setTicketsError(null);
 
-    const result = await deleteReportTicketAction(ticketId);
+    const result = await deleteReportTicketAction(ticketIdToDelete);
     if (!result.success) {
       setTicketsError(result.error ?? "Impossible de supprimer le ticket.");
       setPendingTicketId(null);
@@ -260,7 +277,11 @@ export function ReportDialog({ triggerClassName }: ReportDialogProps) {
 
     await loadTickets();
     setPendingTicketId(null);
+    setDeleteDialogOpen(false);
+    setTicketIdToDelete(null);
   };
+
+  const isDeletePending = pendingTicketId !== null;
 
   const triggerClass = triggerClassName
     ? cn(triggerClassName, "text-[10px] font-semibold")
@@ -276,6 +297,8 @@ export function ReportDialog({ triggerClassName }: ReportDialogProps) {
           setFormError(null);
           setFormMessage(null);
           setTicketsError(null);
+          setDeleteDialogOpen(false);
+          setTicketIdToDelete(null);
         }
       }}
     >
@@ -543,7 +566,7 @@ export function ReportDialog({ triggerClassName }: ReportDialogProps) {
                                   aria-label={`Supprimer le ticket #${ticket.id}`}
                                   title={`Supprimer le ticket #${ticket.id}`}
                                   disabled={rowPending}
-                                  onClick={() => void handleDelete(ticket.id)}
+                                  onClick={() => openDeleteDialog(ticket.id)}
                                 >
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
@@ -591,7 +614,7 @@ export function ReportDialog({ triggerClassName }: ReportDialogProps) {
                             aria-label={`Supprimer le ticket #${ticket.id}`}
                             title={`Supprimer le ticket #${ticket.id}`}
                             disabled={rowPending}
-                            onClick={() => void handleDelete(ticket.id)}
+                            onClick={() => openDeleteDialog(ticket.id)}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -673,6 +696,43 @@ export function ReportDialog({ triggerClassName }: ReportDialogProps) {
           </div>
         )}
       </DialogContent>
+
+      <AlertDialog
+        open={deleteDialogOpen}
+        onOpenChange={(nextOpen) => {
+          setDeleteDialogOpen(nextOpen);
+          if (!nextOpen) {
+            setTicketIdToDelete(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Supprimer le ticket
+              {ticketIdToDelete !== null ? ` #${ticketIdToDelete}` : ""} ?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Cette action est irreversible.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeletePending}>Annuler</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={isDeletePending || ticketIdToDelete === null}
+              onClick={(event) => {
+                event.preventDefault();
+                if (!isDeletePending) {
+                  void handleDeleteConfirm();
+                }
+              }}
+            >
+              {isDeletePending ? "Suppression..." : "Supprimer"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }

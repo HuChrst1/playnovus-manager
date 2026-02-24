@@ -2,6 +2,33 @@
 
 Ce fichier consigne les changements du projet, etapes par etapes.
 
+## 2026-02-24 - F5.x Suppressions: remplacement global des dialogs natifs navigateur
+
+Statut: `FAIT` / Decision operationnelle: `GO`
+
+### Changements realises
+
+- Remplacement des confirmations/suppressions natives (`window.confirm` / `window.alert`) par des dialogs applicatifs `AlertDialog`:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/approvisionnement/DeleteLotButton.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/catalogue/DeleteSetButton.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/catalogue/delete-piece-button.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/sales/DeleteSaleDialog.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/approvisionnement/[id]/LotInvoiceAttachmentPanel.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/report/ReportDialog.tsx`
+- Retrait des `alert()` de validation hors suppression:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/catalogue/edit-piece-dialog.tsx`
+  - remplacement par messages inline dans le dialog.
+- Ajout d'un guard anti-regression lint:
+  - nouveau script `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/scripts/check_no_native_dialogs.mjs`
+  - integration dans `npm run lint` via:
+    - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/package.json`
+    - script `lint:native-dialog-guard`.
+
+### Verifications executees
+
+- verification statique:
+  - `rg -n "window\\.confirm|\\bconfirm\\(|window\\.alert|\\balert\\(" src` -> aucune occurrence.
+
 ## 2026-02-24 - Appro detail lot: suppression multi-lignes + dialogs applicatifs
 
 Statut: `FAIT` / Decision operationnelle: `GO`

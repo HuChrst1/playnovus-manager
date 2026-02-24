@@ -18,6 +18,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -112,6 +122,7 @@ export function LotInvoiceAttachmentPanel({
 }: LotInvoiceAttachmentPanelProps) {
   const [isPending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [modalMode, setModalMode] = useState<"upload" | "preview">("upload");
   const [attachment, setAttachment] = useState<LotInvoiceAttachment | null>(
     initialAttachment
@@ -202,18 +213,22 @@ export function LotInvoiceAttachmentPanel({
     });
   };
 
-  const handleDelete = () => {
+  const openDeleteDialog = () => {
     if (!attachment) {
       setError("Aucune pièce jointe facture à supprimer.");
       setNotice(null);
       return;
     }
+    setDeleteDialogOpen(true);
+  };
 
-    const confirmed = window.confirm(
-      "Supprimer définitivement la pièce jointe facture de ce lot ?"
-    );
-    if (!confirmed) return;
-
+  const handleConfirmDelete = () => {
+    if (!attachment) {
+      setError("Aucune pièce jointe facture à supprimer.");
+      setNotice(null);
+      setDeleteDialogOpen(false);
+      return;
+    }
     setError(null);
     setNotice(null);
 
@@ -222,6 +237,7 @@ export function LotInvoiceAttachmentPanel({
       if (!result.success && result.reason !== "ATTACHMENT_NOT_FOUND") {
         setError(result.error);
         setNotice(null);
+        setDeleteDialogOpen(false);
         return;
       }
 
@@ -230,6 +246,7 @@ export function LotInvoiceAttachmentPanel({
       setNotice("Pièce jointe facture supprimée.");
       clearFileSelection();
       setModalMode("upload");
+      setDeleteDialogOpen(false);
       router.refresh();
     });
   };
@@ -276,6 +293,7 @@ export function LotInvoiceAttachmentPanel({
             clearFileSelection();
             setError(null);
             setNotice(null);
+            setDeleteDialogOpen(false);
           }
         }}
       >
@@ -401,7 +419,7 @@ export function LotInvoiceAttachmentPanel({
                 size="sm"
                 variant="outline"
                 disabled={isPending}
-                onClick={handleDelete}
+                onClick={openDeleteDialog}
                 className="h-9 rounded-full border-slate-200 px-4 text-xs text-slate-700 hover:bg-slate-100 hover:text-slate-900"
               >
                 {isPending ? (
@@ -437,6 +455,46 @@ export function LotInvoiceAttachmentPanel({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={deleteDialogOpen}
+        onOpenChange={(nextOpen) => {
+          setDeleteDialogOpen(nextOpen);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Supprimer la pièce jointe facture ?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Cette action est irréversible.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isPending}>Annuler</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={isPending}
+              onClick={(event) => {
+                event.preventDefault();
+                if (!isPending) {
+                  handleConfirmDelete();
+                }
+              }}
+            >
+              {isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Suppression...
+                </>
+              ) : (
+                "Supprimer"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
