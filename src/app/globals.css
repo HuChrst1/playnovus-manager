@@ -850,6 +850,31 @@
     @apply mt-6 flex flex-row items-center justify-end gap-3;
   }
 
+  .csv-import-section {
+    @apply rounded-2xl border border-slate-200/80 bg-white/85 px-3 py-2;
+  }
+
+  .csv-import-section-summary {
+    @apply cursor-pointer list-none select-none text-xs font-semibold uppercase tracking-[0.16em] text-slate-600;
+  }
+
+  .csv-import-section-summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .csv-import-section-summary::before {
+    content: "▸";
+    @apply mr-2 inline-block text-slate-500 transition-transform;
+  }
+
+  .csv-import-section[open] > .csv-import-section-summary::before {
+    transform: rotate(90deg);
+  }
+
+  .csv-import-section-body {
+    @apply mt-3;
+  }
+
   .app-report-tabs {
     @apply mb-4 inline-flex items-center gap-1 rounded-full border border-slate-200/90 bg-slate-100/85 p-1;
   }

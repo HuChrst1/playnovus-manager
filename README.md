@@ -100,6 +100,21 @@ npm run dev:turbo
   - liste CSV des origines autorisées pour CORS sur les routes API exposées
   - fallback local côté code si variable absente: `http://127.0.0.1:3000,http://localhost:3000`
 
+### Matrice Turnstile par environnement
+
+Politique retenue: CAPTCHA actif en `local`, `preview/preprod` et `prod` (aucun bypass hors prod).
+
+| Environnement | Site key (`NEXT_PUBLIC_TURNSTILE_SITE_KEY`) | Secret CAPTCHA Supabase (`SUPABASE_AUTH_CAPTCHA_SECRET`) | Hostnames autorisés (widget Turnstile) |
+|---|---|---|---|
+| Local | clé locale dédiée | secret local dédié | `localhost`, `127.0.0.1` |
+| Preview / Preprod | clé preview dédiée | secret preview dédié (Supabase non-prod) | domaine preprod + URLs preview Vercel attendues |
+| Production | clé prod dédiée | secret prod dédié | domaine(s) de production uniquement |
+
+Notes d'exploitation:
+- Ne jamais partager un secret CAPTCHA entre `preview` et `production`.
+- Si `preview` pointe encore vers le même projet Supabase que `prod`, il faut séparer les environnements Supabase avant de pouvoir appliquer cette matrice proprement.
+- En cas d'erreur CAPTCHA hors prod, vérifier en priorité: `site key`, `hostname` courant et mapping `site key <-> secret` sur le même environnement.
+
 ## Commandes utiles
 
 ```bash

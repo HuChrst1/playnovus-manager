@@ -31,6 +31,29 @@ type TurnstileFieldProps = {
 const TURNSTILE_SCRIPT_ID = "playnovus-turnstile-script";
 const TURNSTILE_SCRIPT_URL = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
 
+function getRuntimeHostLabel(): string {
+  if (typeof window === "undefined") return "host_inconnu";
+  return window.location.hostname || "host_inconnu";
+}
+
+function getRuntimeEnvLabel(): string {
+  const vercelEnv = process.env.NEXT_PUBLIC_VERCEL_ENV;
+  if (vercelEnv && vercelEnv.trim().length > 0) {
+    return vercelEnv.trim().toLowerCase();
+  }
+  return process.env.NODE_ENV === "production" ? "production" : "development";
+}
+
+function buildNonProdDiagnosticHint(): string {
+  const envLabel = getRuntimeEnvLabel();
+  if (envLabel === "production") {
+    return "";
+  }
+
+  const hostLabel = getRuntimeHostLabel();
+  return ` (env=${envLabel}, hostname=${hostLabel})`;
+}
+
 function ensureTurnstileScript(): Promise<void> {
   if (typeof window === "undefined") {
     return Promise.resolve();
@@ -83,7 +106,8 @@ export function TurnstileField({
 
     if (!siteKey) {
       setClientError(
-        "Verification anti-bot indisponible (NEXT_PUBLIC_TURNSTILE_SITE_KEY manquante)."
+        "Verification anti-bot indisponible: NEXT_PUBLIC_TURNSTILE_SITE_KEY manquante." +
+          buildNonProdDiagnosticHint()
       );
       setCaptchaToken("");
       return;
@@ -106,17 +130,36 @@ export function TurnstileField({
           },
           "expired-callback": () => {
             setCaptchaToken("");
+            setClientError(
+              "Verification anti-bot expiree. Complete a nouveau le CAPTCHA." +
+                buildNonProdDiagnosticHint()
+            );
           },
           "error-callback": () => {
             setCaptchaToken("");
-            setClientError("Verification anti-bot echouee. Recharge la page puis reessaie.");
+            setClientError(
+              "Verification anti-bot echouee. Recharge la page puis reessaie. " +
+                "Si le probleme persiste, verifie la configuration des hostnames Turnstile." +
+                buildNonProdDiagnosticHint()
+            );
           },
         });
 
         widgetIdRef.current = widgetId;
-      } catch {
+      } catch (error) {
         if (!cancelled) {
-          setClientError("Impossible de charger le CAPTCHA. Recharge la page puis reessaie.");
+          const isScriptLoadError =
+            error instanceof Error &&
+            error.message === "turnstile_script_load_failed";
+          setClientError(
+            isScriptLoadError
+              ? "Impossible de charger le script Turnstile. " +
+                "Verifie le reseau, les bloqueurs de scripts et les politiques de contenu." +
+                buildNonProdDiagnosticHint()
+              : "Impossible d'initialiser le CAPTCHA Turnstile. " +
+                "Verifie la cle publique et les hostnames autorises." +
+                buildNonProdDiagnosticHint()
+          );
         }
       }
     }

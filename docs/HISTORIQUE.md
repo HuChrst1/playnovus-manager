@@ -2,6 +2,40 @@
 
 Ce fichier consigne les changements du projet, etapes par etapes.
 
+## 2026-02-24 - F5.x UX import CSV + diagnostic Turnstile dev/preview
+
+Statut: `FAIT` / Decision operationnelle: `GO`
+
+### Changements realises
+
+- Modale import CSV lot rendue scrollable et exploitable sur grands resultats:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/approvisionnement/[id]/LotCsvImportDialog.tsx`
+  - `DialogContent` migre vers `app-modal-wide app-modal-scroll overflow-x-hidden`
+  - sections repliables ajoutees (`details/summary`):
+    - rapport d'import
+    - lignes appliquees
+    - lignes rejetees
+  - regles d'ouverture:
+    - rapport ouvert par defaut
+    - rejetees ouvertes par defaut si presentes
+    - appliquees auto-compactees si volume > 20
+  - tableaux securises avec `overflow-x-auto` + limites verticales.
+- Harmonisation visuelle sections collapsibles CSV:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/globals.css`
+  - ajout des classes `.csv-import-section*`.
+- Turnstile: messages client plus actionnables en dev/preview (sans fuite de secret):
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/security/TurnstileField.tsx`
+  - diagnostics distincts:
+    - site key manquante
+    - script Turnstile non charge
+    - widget expire/error
+  - ajout contexte non sensible en non-prod (`env`, `hostname`) pour debug rapide.
+- Documentation d'exploitation renforcee (strategie cles dediees par environnement):
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/README.md`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/F8_1_PREPARATION_DEPLOIEMENT_PRODUCTION.md`
+  - ajout matrice `Local / Preview / Prod` (site key, secret, hostnames)
+  - ajout pre-check de topologie Supabase preview/prod et critere bloquant si partage du meme projet.
+
 ## 2026-02-24 - F5.x Suppressions: remplacement global des dialogs natifs navigateur
 
 Statut: `FAIT` / Decision operationnelle: `GO`
