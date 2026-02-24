@@ -6,6 +6,11 @@ import { AppBackButton } from "@/components/AppBackButton";
 export const metadata: Metadata = {
   title: "PlayNovus Manager",
   description: "Gestion de stock Playmobil",
+  icons: {
+    icon: "/playnovus-logo.svg",
+    shortcut: "/playnovus-logo.svg",
+    apple: "/playnovus-logo.svg",
+  },
 };
 
 export default function RootLayout({

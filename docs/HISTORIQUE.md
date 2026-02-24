@@ -2,6 +2,45 @@
 
 Ce fichier consigne les changements du projet, etapes par etapes.
 
+## 2026-02-24 - F9.1 Cadrage documentaire du module Tools (processus vente)
+
+Statut: `FAIT` / Decision operationnelle: `GO` (cadrage phase 9 verrouille)
+
+### Changements realises
+
+- Creation du dossier de cadrage phase 9:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/F9_1_CADRAGE_TOOLS_PROCESSUS_VENTE.md`
+  - contenu formalise:
+    - vision et non-objectifs du module `Tools`
+    - decomposition phase 9 `F9.1 -> F9.7`
+    - specification fonctionnelle verrouillee des outils 1..6
+    - pipeline kanban fixe (16 etapes)
+    - architecture cible (routes, APIs, schema DB dedie, securite, tests)
+    - hypotheses/defaults retenus
+- Mise a jour roadmap:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/ROADMAP.md`
+  - phase 9 detaillee en sous-features:
+    - `F9.1` passe a `FAIT`
+    - ajout `F9.2` a `F9.7` (statut `A FAIRE`, objectifs/livrables/DoD)
+  - ordre recommande des features etendu jusqu'a `F9.7`
+- Mise a jour decisions:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/DECISIONS.md`
+  - ajout des decisions structurantes phase 9:
+    - `D-041` module `Tools` dedie
+    - `D-042` schema DB dedie `Tools`
+    - `D-043` kanban set-physique + handoff ventes manuel
+    - `D-044` pricing scraping on-demand + fallback manuel
+    - `D-045` scope principal outils 1..6 (outil 7 reporte)
+- Refresh coherence documentaire:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/AS_IS.md`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/README.md`
+  - alignement sur l'etat reel pre-phase9 (auth active, migrations versionnees, dashboard data-driven, tools non implemente)
+
+### Decision F9.1
+
+- cadrage phase 9 considere decision-complete pour demarrer implementation par features
+- aucun changement applicatif/DB execute dans ce lot (documentation uniquement)
+
 ## 2026-02-24 - Purge donnees metier production V1 (approvisionnement/ventes/stock/historique)
 
 Statut: `FAIT` / Decision operationnelle: `GO`

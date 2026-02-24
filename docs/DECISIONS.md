@@ -1,7 +1,7 @@
 # Journal des décisions
 
 Date de mise à jour initiale: 2026-02-12
-Derniere mise a jour: 2026-02-23
+Derniere mise a jour: 2026-02-24
 
 ## Décisions prises
 
@@ -711,6 +711,78 @@ Derniere mise a jour: 2026-02-23
   - aucune migration SQL
   - aucune ecriture DB distante autorisee
 
+### D-041 - Phase 9: creation d'un module `Tools` dedie au processus de mise en vente
+
+- Statut: validee
+- Constat:
+  - la V1 production couvre correctement les flux coeur achats/stock/ventes
+  - le besoin prioritaire post-lancement est l'acceleration du processus operationnel de mise en vente
+  - une entree fonctionnelle explicite est requise dans la topbar pour centraliser ces outils
+- Impact:
+  - ajout d'un onglet topbar `Tools`
+  - ajout d'un hub `/tools` et de routes filles dediees
+  - maintien explicite des invariants metier coeur (aucune mutation stock automatique hors flux existants)
+
+### D-042 - Phase 9: schema DB dedie `Tools` (decouplage des tables coeur)
+
+- Statut: validee
+- Constat:
+  - les besoins kanban/inventaire/pricing/docs ne doivent pas surcharger la logique `sales/stock`
+  - coupler directement le workflow Tools aux tables coeur augmenterait le risque de regression
+- Impact:
+  - adoption d'un modele DB dedie:
+    - `tool_kanban_cards`
+    - `tool_kanban_stage_events`
+    - `tool_inventory_checks`
+    - `tool_price_estimation_runs`
+    - `tool_price_estimation_platform_rows`
+    - `tool_listing_descriptions`
+    - `tool_thank_you_cards`
+  - references metier autorisees en lecture (ex: `sets_catalog`) sans mutation implicite du coeur
+
+### D-043 - Phase 9: kanban set-physique, pipeline fixe, handoff ventes manuel
+
+- Statut: validee
+- Constat:
+  - le pilotage souhaite est centré sur des exemplaires physiques de sets
+  - un pipeline fixe est prioritaire en V1 pour limiter la complexite
+  - le passage kanban vers vente ne doit pas creer de commande automatiquement
+- Impact:
+  - 1 carte kanban = 1 set physique
+  - creation de carte manuelle
+  - colonnes kanban fixees en V1 (pas de configurateur)
+  - libelle colonne etape vente renomme en `Vendu (commande recue)`
+  - historisation complete des transitions (horodatage + auteur)
+  - handoff manuel conserve vers le module `Ventes`
+
+### D-044 - Phase 9: pricing multi-plateformes par scraping on-demand + fallback manuel
+
+- Statut: validee
+- Constat:
+  - l'estimation de prix doit couvrir `VINTED`, `LEBONCOIN`, `EBAY` et un repere prix neuf
+  - le scraping marketplace est expose a des blocages (captcha/anti-bot/evolution DOM)
+  - une sortie exploitable reste requise meme en cas d'echec partiel
+- Impact:
+  - architecture connecteurs internes par plateforme, declenchee a la demande
+  - fallback manuel obligatoire si scraping partiel/non disponible
+  - source prix neuf prioritaire: Amazon ou site officiel Playmobil
+  - calcul global verrouille:
+    - nettoyage outliers
+    - mediane par plateforme
+    - score confiance
+    - aggregation par mediane robuste ponderee
+
+### D-045 - Phase 9: scope principal `outils 1..6`, outil photo reporte hors phase
+
+- Statut: validee
+- Constat:
+  - le lot principal doit rester executable rapidement sans R&D image lourde
+  - l'outil photo (retrait fond/retouche auto) introduit une complexite technique et cout d'exploitation superieurs
+- Impact:
+  - scope principal phase 9 verrouille sur les outils 1..6
+  - outil 7 explicitement reporte hors phase 9
+  - generation IA de descriptions non activee en V1 (phase 2 cible)
+
 ## Hypothèses / décisions en attente
 
 ### H-002 - Politique d'authentification applicative
@@ -742,7 +814,7 @@ Derniere mise a jour: 2026-02-23
 - Statut: ouverte
 - Observation:
   - certaines décisions validées ne sont pas encore appliquées partout dans le code
-  - exemples observés: filtre par défaut ventes, standard KPI, garde-fou lot vide
+  - exemples observés: filtre par défaut ventes, standard KPI
 - A décider:
   - ordre de priorité d'implémentation des décisions `D-008` et `D-009`
   - niveau de blocage attendu (UI seule vs contrôle serveur obligatoire)

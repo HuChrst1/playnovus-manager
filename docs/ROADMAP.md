@@ -1486,18 +1486,141 @@ Definition of done:
 
 ## Phase 9 - Mise a jour fonctionnelle post-deploiement
 
-Statut global: `A FAIRE`
+Statut global: `EN COURS`
 
-### F9.1 - Mise a jour fonctionnelle post-lancement
+### F9.1 - Cadrage documentaire Tools (processus vente)
+
+Statut: `FAIT`
+Objectif: verrouiller la vision produit+technique du module `Tools` avant implementation.
+Livrables:
+- dossier de cadrage dedie:
+  - `docs/F9_1_CADRAGE_TOOLS_PROCESSUS_VENTE.md`
+- specification decision-complete:
+  - navigation `Tools`
+  - scope principal `outils 1..6`
+  - outil 7 explicitement hors phase 9
+- architecture cible:
+  - routes UI
+  - APIs `api/tools/*`
+  - schema DB dedie Tools
+  - garde-fous securite/rate-limit
+- criteres d'acceptation et invariants non-regression explicitement traces
+Definition of done:
+- cadrage phase 9 complet, sans ambiguite, pret pour implementation feature par feature
+
+### F9.2 - Socle Tools (navigation, routes, auth, schema, securite)
 
 Statut: `A FAIRE`
-Objectif: livrer un premier lot de fonctionnalites supplementaires apres usage reel du SaaS.
+Objectif: mettre en place les fondations techniques du module `Tools` sans livrer encore les outils metier complets.
 Livrables:
-- priorisation des retours utilisateurs post-lancement
-- specification du lot fonctionnel additionnel
-- livraison du lot sans regression metier
+- onglet topbar `Tools`
+- route hub `/tools` + routes filles:
+  - `/tools/inventaire`
+  - `/tools/kanban`
+  - `/tools/pieces-manquantes`
+  - `/tools/descriptions`
+  - `/tools/remerciement`
+  - `/tools/pricing`
+- extension auth matcher proxy:
+  - `/tools/:path*`
+- migrations schema dedie Tools:
+  - `tool_kanban_cards`
+  - `tool_kanban_stage_events`
+  - `tool_inventory_checks`
+  - `tool_price_estimation_runs`
+  - `tool_price_estimation_platform_rows`
+  - `tool_listing_descriptions`
+  - `tool_thank_you_cards`
+- regeneration types Supabase
+- scopes rate-limit Tools:
+  - `tools_mutations`
+  - `tools_pricing`
+  - `tools_doc_generation`
 Definition of done:
-- release post-lancement livree sans regression sur les flux coeur
+- socle technique `Tools` operationnel et protege par auth/rate-limit, sans regression des flux coeur
+
+### F9.3 - Outil inventaire set
+
+Statut: `A FAIRE`
+Objectif: verifier rapidement la completion d'un set physique via BOM+stock.
+Livrables:
+- page `/tools/inventaire`
+- recherche set + chargement BOM/stock
+- visualisation complet/incomplet + manque par piece
+- historique leger persiste:
+  - set/date/resultat global/% completion/nb pieces manquantes
+Definition of done:
+- inventaire exact pour un set donne, usage fluide, historique leger consultable
+
+### F9.4 - Outil kanban processus vente
+
+Statut: `A FAIRE`
+Objectif: piloter le cycle de mise en vente par carte set physique.
+Livrables:
+- page `/tools/kanban`
+- creation manuelle de carte (1 carte = 1 set physique)
+- 16 colonnes fixes du pipeline valide
+- colonne 13 nommee `Vendu (commande recue)` (remplacement du libelle `Achete`)
+- interactions:
+  - drag-and-drop
+  - fallback boutons (suivant/precedent)
+- journal complet des transitions (horodatage + auteur)
+- archivage carte en fin de pipeline
+Definition of done:
+- kanban stable avec transitions tracees, sans creation automatique de vente
+
+### F9.5 - Outil pieces manquantes globales
+
+Statut: `A FAIRE`
+Objectif: prioriser les achats de pieces pour sets presque complets.
+Livrables:
+- page `/tools/pieces-manquantes`
+- filtre population:
+  - `completion_percent >= 90` et `< 100` (metrique `set_with_completion`)
+- agregat des pieces manquantes:
+  - quantite manquante totale
+  - sets concernes
+- export CSV
+Definition of done:
+- tableau exploitable achat + export CSV conforme, calcule uniquement depuis stock/BOM
+
+### F9.6 - Outils annonce et post-vente
+
+Statut: `A FAIRE`
+Objectif: accelerer publication et expedition via generation assistee.
+Livrables:
+- page `/tools/descriptions`:
+  - templates deterministes par plateforme (`VINTED`, `LEBONCOIN`, `EBAY`)
+  - sortie copiable prete a publier
+- page `/tools/remerciement`:
+  - generation PDF A5 2 formats (notice physique / notice numerique)
+  - QR dynamique uniquement pour notice numerique
+  - URL notice saisie manuellement
+- integration avec etape kanban `Generer fiche de remerciement A5`
+Definition of done:
+- generation description + PDF A5 fiable, sans IA en V1
+
+### F9.7 - Outil estimation prix multi-plateformes
+
+Statut: `A FAIRE`
+Objectif: proposer une estimation par plateforme puis globale pour un set.
+Livrables:
+- page `/tools/pricing`
+- execution on-demand par set
+- connecteurs scraping internes:
+  - `VINTED`
+  - `LEBONCOIN`
+  - `EBAY`
+- source prix neuf prioritaire:
+  - Amazon ou site officiel Playmobil
+- fallback manuel obligatoire en cas de blocage scraping
+- calcul global:
+  - nettoyage outliers
+  - mediane par plateforme
+  - score confiance
+  - mediane robuste ponderee globale
+Definition of done:
+- estimation actionnable par plateforme + globale, avec gestion propre des echecs partiels
 
 ## Scenarios d'acceptation globaux (gate final)
 
@@ -1577,3 +1700,9 @@ Definition of done:
 50. F8.2
 51. F8.3
 52. F9.1
+53. F9.2
+54. F9.3
+55. F9.4
+56. F9.5
+57. F9.6
+58. F9.7

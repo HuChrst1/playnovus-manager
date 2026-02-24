@@ -27,7 +27,10 @@ Application Next.js de gestion PlayNovus pour piloter:
   - détail de l'historique par pièce
   - historique global filtrable
 - `Dashboard`
-  - page d'accueil UI (principalement placeholder aujourd'hui)
+  - page d'accueil data-driven (filtres periode + blocs KPI + modales detail)
+  - bloc opportunites catalogue base sur la completion des sets
+- `Tools` (phase 9)
+  - module en cours de cadrage documentaire (pas encore implemente en runtime)
 
 ## Stack technique
 
@@ -171,6 +174,7 @@ supabase/config.toml      # config Supabase CLI locale
 - `docs/AGENTS.md`
 - `docs/DECISIONS.md`
 - `docs/00_START_HERE.md`
+- `docs/F9_1_CADRAGE_TOOLS_PROCESSUS_VENTE.md`
 
 Documents archivés (historique / référence secondaire):
 - `docs/_archive/PRD.md`
