@@ -1446,12 +1446,30 @@ Definition of done:
 
 ### F8.2 - Deploiement du logiciel (mise en service)
 
-Statut: `A FAIRE`
+Statut: `FAIT`
 Objectif: mettre le SaaS en service dans un environnement utilisable en conditions reelles.
 Livrables:
 - execution du deploiement production
 - verification post-deploiement immediate (smoke checks)
 - confirmation de disponibilite des parcours metier critiques
+- dossier d'execution F8.2:
+  - `docs/F8_2_DEPLOIEMENT_MISE_EN_SERVICE.md`
+- etat d'execution constate:
+  - pre-release local complet: `PASS` (qualite/tests/gates F2.0/F7.3/F7.4/F7.5/F8.1)
+  - deploiement production Vercel:
+    - source `main`
+    - statut `Ready` (Production)
+  - smoke hosted:
+    - `/login` et `/forgot-password` repondent `200`
+    - routes metier critiques sans session repondent `307` vers `/login`
+    - API CORS/auth: origin interdite `403`, origin autorisee sans session `401`
+  - controles heberges valides:
+    - variables critiques production presentes (sans exposition de valeurs)
+    - Turnstile prod actif
+    - smoke auth complet valide
+    - rollback operationnel valide
+Decision release:
+- `GO`
 Definition of done:
 - application accessible et utilisable en production sans blocage critique
 

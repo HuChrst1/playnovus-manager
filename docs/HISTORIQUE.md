@@ -2,6 +2,215 @@
 
 Ce fichier consigne les changements du projet, etapes par etapes.
 
+## 2026-02-24 - Purge donnees metier production V1 (approvisionnement/ventes/stock/historique)
+
+Statut: `FAIT` / Decision operationnelle: `GO`
+
+### Perimetre execute
+
+- Environnement cible: `production` uniquement.
+- Tables purges:
+  - `public.sale_item_pieces`
+  - `public.sale_items`
+  - `public.sales`
+  - `public.stock_movements`
+  - `public.inventory`
+  - `public.stock_balance`
+  - `public.transactions`
+  - `public.lots`
+- Tables protegees (non modifiees):
+  - `public.sets_catalog`
+  - `public.sets_bom`
+- Storage purge:
+  - bucket `lot-invoice-attachments`
+  - prefixe cible `lot-*`
+
+### Preuves pre-purge
+
+- Snapshot tables:
+  - `sets_catalog=5618`
+  - `sets_bom=99162`
+  - `lots=3`
+  - `inventory=162`
+  - `stock_movements=165`
+  - `stock_balance=159`
+  - `sales=1`
+  - `sale_items=1`
+  - `sale_item_pieces=3`
+  - `transactions=0`
+- Storage lot invoices:
+  - objets `lot-*` detectes: `0`
+
+### Operations executees
+
+- Purge operationnelle via API Supabase `service_role` (REST + Storage API):
+  - suppression `sales` (cascade `sale_items` / `sale_item_pieces`)
+  - nettoyage residuel `sale_items` / `sale_item_pieces`
+  - suppression `stock_movements`, `inventory`, `stock_balance`, `transactions`, `lots`
+  - recreation baseline:
+    - insertion de `LOT_0` (`id=27`, `lot_code=LOT_0`)
+  - purge storage bucket `lot-invoice-attachments` sur `lot-*`:
+    - `removed=0`, `remaining=0`
+
+### Preuves post-purge
+
+- Snapshot tables:
+  - `sets_catalog=5618` (inchange)
+  - `sets_bom=99162` (inchange)
+  - `lots=1` (`LOT_0` uniquement)
+  - `inventory=0`
+  - `stock_movements=0`
+  - `stock_balance=0`
+  - `sales=0`
+  - `sale_items=0`
+  - `sale_item_pieces=0`
+  - `transactions=0`
+- Verification `LOT_0`:
+  - `lot0Count=1`
+- Smoke HTTP post-op (sans session):
+  - `/login` -> `200`
+  - `/forgot-password` -> `200`
+  - `/catalogue` -> `307 /login`
+  - `/approvisionnement` -> `307 /login`
+  - `/ventes` -> `307 /login`
+  - `/stock` -> `307 /login`
+  - `/historique-stock` -> `307 /login`
+
+### Notes de numerotation
+
+- Numerotation metier ventes:
+  - table `sales` vide => prochain `sale_number` attendu a `1`.
+- Numerotation metier lots:
+  - `LOT_0` present => prochain `lot_code` attendu `LOT_1`.
+- Limite technique constatee sur reset sequence SQL natif:
+  - `rpc/reset_sales_id_sequence` retourne `22003` sur table `sales` vide (`setval ... out of bounds`).
+  - endpoint SQL HTTP (`/pg/v1`, `/pg-meta`) indisponible (`404`) et connexion SQL directe distante indisponible depuis cet environnement (resolution/route IPv6).
+  - impact: IDs techniques auto-increment ne sont pas reutilises a `1`, mais la numerotation metier visible utilisateur repart bien de `1`.
+
+## 2026-02-24 - F8.2 Cloture GO apres validations hebergees
+
+Statut: `FAIT` / Decision release courante: `GO`
+
+### Changements realises
+
+- Mise a jour du dossier F8.2:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/F8_2_DEPLOIEMENT_MISE_EN_SERVICE.md`
+  - changement de statut:
+    - `BLOQUE` -> `FAIT`
+    - `NO_GO` -> `GO`
+  - matrice des controles critiques F8.2 completee a `PASS` avec validations hebergees.
+- Mise a jour roadmap:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/ROADMAP.md`
+  - `F8.2` passe de `BLOQUE` a `FAIT`.
+
+### Preuves complementaires integrees (utilisateur)
+
+- Vercel production:
+  - deployment rattache a la branche `main`
+  - statut deployment `Ready` (environnement `Production`)
+- Variables critiques hebergees:
+  - presence confirmee pour les 6 variables F8.2 (sans exposition des valeurs)
+- Securite et parcours critiques:
+  - Turnstile prod actif
+  - smoke auth complet valide
+  - re-smoke parcours critiques valide
+  - rollback operationnel valide
+
+### Verifications techniques reexecutees (2026-02-24)
+
+- `npm ci` -> `PASS`
+- `npm run lint` -> `PASS`
+- `npm run typecheck` -> `PASS`
+- `npm run build` -> `PASS`
+- `npm run test` -> `PASS`
+- `npm run test:f2.0` -> `PASS`
+- `npm run test:f7.3:pre` -> `PASS`
+- `npm run test:f7.3:post` -> `PASS`
+- `npm run test:f7.4` -> `PASS` (`decision=GO`)
+- `npm run test:f7.5` -> `PASS` (`decision=GO`)
+- `npm run test:f8.1` -> `PASS` (`decision=GO`)
+- `npm run lint:ui-contrast` -> `PASS`
+- `npm run audit:prod` -> `PASS` (`found 0 vulnerabilities`)
+- `npm run audit:deps` -> `PASS` (`(empty)`)
+- `npx supabase db reset --local` -> `PASS`
+
+### Decision F8.2
+
+- tous les controles critiques F8.2 sont `PASS`
+- decision finale: `GO`
+- cloture roadmap: `F8.2 = FAIT`
+
+## 2026-02-23 - F8.2 Mise en service production (execution + decision NO_GO)
+
+Statut: `BLOQUE` / Decision release courante: `NO_GO`
+
+### Changements realises
+
+- Ajout du dossier d'execution F8.2:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/F8_2_DEPLOIEMENT_MISE_EN_SERVICE.md`
+  - contenu livre:
+    - resultats pre-release locaux F8.2 (runtime + qualite + gates)
+    - preuves hosted post-deploy (routes critiques + CORS/auth)
+    - matrice controles F8.2 `PASS/FAIL/BLOCKED`
+    - scripts manuels:
+      - Script A local (format de preuve canonique)
+      - Script B remote (deploy/verif/rollback)
+    - decision explicite `GO/NO_GO` et blocants
+- Mise a jour roadmap:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/docs/ROADMAP.md`
+  - `F8.2` passe de `A FAIRE` a `BLOQUE` avec blocants explicites
+
+### Verifications executees (F8.2)
+
+- Pre-check local:
+  - `npx supabase --version` -> OK (`2.65.10`)
+  - `docker info --format '{{.ServerVersion}}'` -> OK (`29.2.0`)
+  - `npx supabase status` -> OK (stack locale active)
+  - `npx supabase start` -> OK
+  - `npx supabase db reset --local` -> OK
+- Campagne qualite/tests/audits:
+  - `npm ci` -> OK (`found 0 vulnerabilities`)
+  - `npm run lint` -> OK
+  - `npm run typecheck` -> OK
+  - `npm run build` -> OK
+  - `npm run test` -> OK
+  - `npm run test:f2.0` -> OK
+  - `npm run test:f7.3:pre` -> OK
+  - `npm run test:f7.3:post` -> OK
+  - `npm run test:f7.4` -> OK (`decision=GO`)
+  - `npm run test:f7.5` -> OK (`decision=GO`)
+  - `npm run test:f8.1` -> OK (`decision=GO`)
+  - `npm run lint:ui-contrast` -> OK
+  - `npm run audit:prod` -> OK (`found 0 vulnerabilities`)
+  - `npm run audit:deps` -> OK (`(empty)`)
+- Verification hosted (lecture seule):
+  - `https://playnovus-manager.vercel.app/login` -> `200`
+  - `https://playnovus-manager.vercel.app/forgot-password` -> `200`
+  - routes metier sans session -> `307` vers `/login` (`/catalogue`, `/approvisionnement`, `/ventes`, `/stock`, `/historique-stock`)
+  - CORS/auth API:
+    - origin non autorisee -> `403` (`{"error":"Origin non autorisee."}`)
+    - origin autorisee sans session -> `401` (`{"error":"Aucune session active detectee."}`)
+  - signal login CAPTCHA:
+    - `captchaToken` present
+    - bouton submit desactive tant que CAPTCHA non valide
+
+### Decision F8.2
+
+- `NO_GO` (politique `strict_go_only_if_all_critical_pass`)
+- raisons bloquantes:
+  - deployment production non declenchable/non traçable depuis cet environnement (acces Vercel control-plane absent)
+  - verification hosted env vars critiques non executable sans acces Vercel dashboard/API
+  - verification hostnames Turnstile production non executable sans acces Cloudflare
+  - validation login nominal prod non executable (credentials de test prod indisponibles)
+  - test de promotion rollback Vercel non executable sans acces control-plane
+
+### Perimetre / limites
+
+- Scope strict F8.2 respecte.
+- Aucune migration SQL ajoutee.
+- Aucune ecriture DB distante DDL/DML.
+- Aucun secret sensible ajoute au repo.
+
 ## 2026-02-23 - F8.1 Cloture GO apres preuves externes (Vercel + Supabase + Turnstile)
 
 Statut: `FAIT` / Decision release courante: `GO` (DoD stricte F8.1 atteinte)
