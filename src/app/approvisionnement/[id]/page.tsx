@@ -2,10 +2,9 @@ import { supabase } from "@/lib/supabase";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { EditLotDialog, LotForEdit } from "../EditLotDialog";
 import { QuickAddPieceForm } from "./QuickAddPieceForm";
-import { EditInventoryLineDialog } from "./EditInventoryLineDialog";
-import { DeleteInventoryLineButton } from "./DeleteInventoryLineButton";
 import { LotCsvImportDialog } from "./LotCsvImportDialog";
 import { LotInvoiceAttachmentPanel } from "./LotInvoiceAttachmentPanel";
+import { LotInventoryLinesTableClient } from "./LotInventoryLinesTableClient";
 import { getLotInvoiceAttachment } from "../action";
 import { buildSupplierOptionsFromDb } from "../supplier-options";
 
@@ -43,16 +42,6 @@ function formatDate(value: string | null) {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return value;
   return d.toLocaleDateString("fr-FR");
-}
-
-function formatDateTime(value: string | null) {
-  if (!value) return "—";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return value;
-  return d.toLocaleString("fr-FR", {
-    dateStyle: "short",
-    timeStyle: "short",
-  });
 }
 
 export default async function LotDetailPage({
@@ -285,67 +274,11 @@ export default async function LotDetailPage({
 
           {/* Tableau des pièces */}
           <div className="flex-1 max-h-[720px] overflow-y-auto bg-white p-3 sm:p-4">
-            <div className="appro-table-scroll">
-            <table className="appro-table min-w-full text-sm">
-            <thead className="appro-table-header">
-                <tr>
-                    <th className="px-4 py-3 text-left font-medium">
-                    Réf. pièce
-                    </th>
-                    <th className="px-4 py-3 text-left font-medium">
-                    Quantité
-                    </th>
-                    <th className="px-4 py-3 text-left font-medium">
-                    Créé le
-                    </th>
-                    <th className="px-4 py-3 text-right font-medium">
-                    Actions
-                    </th>
-                </tr>
-            </thead>
-              <tbody>
-                {lines.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan={4}
-                      className="px-4 py-6 text-center text-sm text-muted-foreground"
-                    >
-                      Aucune pièce enregistrée pour ce lot pour le
-                      moment.
-                    </td>
-                  </tr>
-                ) : (
-                  lines.map((line) => (
-                    <tr
-                        key={line.id}
-                        className="appro-table-row transition-colors"
-                        >
-                        <td className="px-4 py-3 font-mono text-xs">
-                            {line.piece_ref || "—"}
-                        </td>
-                        <td className="px-4 py-3 tabular-nums">
-                            {line.quantity}
-                        </td>
-                        <td className="px-4 py-3">
-                            {formatDateTime(line.created_at)}
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                            <div className="inline-flex items-center gap-1.5">
-                            <EditInventoryLineDialog
-                                lotId={lot.id}
-                                lineId={line.id}
-                                initialPieceRef={line.piece_ref}
-                                initialQuantity={line.quantity}
-                            />
-                            <DeleteInventoryLineButton lotId={lot.id} lineId={line.id} />
-                            </div>
-                        </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-            </div>
+            <LotInventoryLinesTableClient
+              lotId={lot.id}
+              isDraft={lotStatus === "draft"}
+              lines={lines}
+            />
           </div>
         </Card>
       </div>
