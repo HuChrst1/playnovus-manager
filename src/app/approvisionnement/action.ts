@@ -3144,28 +3144,92 @@ export async function deleteLotInvoiceAttachment(
   };
 }
 
-export async function deleteInventoryLine(lotId: number, lineId: number) {
+type DeleteInventoryLinesResult =
+  | {
+      success: true;
+      deletedCount: number;
+      warning?: string;
+    }
+  | {
+      success: false;
+      error: string;
+      reason?:
+        | "PARAMS_INVALID"
+        | "SELECTION_INVALID"
+        | "LOT_NOT_DRAFT"
+        | "LOT0_PROVISIONAL_LOCKED"
+        | "DELETE_FAILED";
+    };
+
+function normalizeLineIdsForDelete(lineIds: number[]): number[] {
+  return Array.from(
+    new Set(
+      lineIds.filter(
+        (lineId) =>
+          Number.isFinite(lineId) &&
+          Number.isInteger(lineId) &&
+          lineId > 0
+      )
+    )
+  );
+}
+
+async function deleteInventoryLinesCore(
+  lotId: number,
+  lineIds: number[]
+): Promise<DeleteInventoryLinesResult> {
   const guard = await enforceApproMutationGuard();
   if (!guard.ok) {
-    return { success: false, error: guard.error };
+    return { success: false, error: guard.error, reason: "DELETE_FAILED" };
   }
 
-  if (!lotId || !lineId || Number.isNaN(lotId) || Number.isNaN(lineId)) {
-    return { success: false, error: "Paramètres invalides." };
-  }
+  const normalizedLotId = Number(lotId);
+  const normalizedLineIds = normalizeLineIdsForDelete(lineIds);
 
-  // Vérifie que la ligne appartient bien à ce lot
-  const { data: line, error: lineError } = await supabase
-    .from("inventory")
-    .select("id, lot_id, piece_ref, quantity")
-    .eq("id", lineId)
-    .single();
-
-  if (lineError || !line || line.lot_id !== lotId) {
-    console.error("deleteInventoryLine - line mismatch:", lineError);
+  if (
+    !Number.isFinite(normalizedLotId) ||
+    !Number.isInteger(normalizedLotId) ||
+    normalizedLotId <= 0 ||
+    normalizedLineIds.length === 0
+  ) {
     return {
       success: false,
-      error: "Ligne introuvable ou ne correspondant pas à ce lot.",
+      error: "Paramètres invalides.",
+      reason: "PARAMS_INVALID",
+    };
+  }
+
+  const plural = normalizedLineIds.length > 1;
+
+  // Vérifie que toutes les lignes appartiennent bien à ce lot (all-or-nothing)
+  const { data: lines, error: linesLookupError } = await supabase
+    .from("inventory")
+    .select("id, lot_id, piece_ref, quantity")
+    .in("id", normalizedLineIds);
+
+  if (linesLookupError) {
+    console.error("deleteInventoryLinesCore - lines lookup error:", linesLookupError);
+    return {
+      success: false,
+      error:
+        "Impossible de vérifier les lignes sélectionnées. Recharge la page puis réessaie.",
+      reason: "DELETE_FAILED",
+    };
+  }
+
+  const linesById = new Map((lines ?? []).map((line) => [line.id, line]));
+  const missingLineIds = normalizedLineIds.filter((lineId) => !linesById.has(lineId));
+  const mismatchedLotIds = normalizedLineIds.filter((lineId) => {
+    const line = linesById.get(lineId);
+    return line ? line.lot_id !== normalizedLotId : false;
+  });
+
+  if (missingLineIds.length > 0 || mismatchedLotIds.length > 0) {
+    return {
+      success: false,
+      error:
+        "Suppression annulée : la sélection contient une ou plusieurs lignes introuvables ou non liées à ce lot.",
+      reason: "SELECTION_INVALID",
     };
   }
 
@@ -3173,13 +3237,14 @@ export async function deleteInventoryLine(lotId: number, lineId: number) {
   const { data: lotRow, error: lotError } = await supabase
     .from("lots")
     .select("status, total_cost, lot_code")
-    .eq("id", lotId)
+    .eq("id", normalizedLotId)
     .single();
 
   if (lotError || !lotRow) {
     return {
       success: false,
       error: "Impossible de vérifier le statut du lot.",
+      reason: "DELETE_FAILED",
     };
   }
 
@@ -3187,6 +3252,7 @@ export async function deleteInventoryLine(lotId: number, lineId: number) {
     return {
       success: false,
       error: "Ce lot est confirmé : tu ne peux plus modifier les lignes.",
+      reason: "LOT_NOT_DRAFT",
     };
   }
 
@@ -3196,11 +3262,12 @@ export async function deleteInventoryLine(lotId: number, lineId: number) {
   );
 
   if (isLot0Provisional) {
-    const salesUsage = await getLotSalesUsage(lotId);
+    const salesUsage = await getLotSalesUsage(normalizedLotId);
     if (salesUsage.error) {
       return {
         success: false,
         error: salesUsage.error,
+        reason: "DELETE_FAILED",
       };
     }
 
@@ -3208,7 +3275,8 @@ export async function deleteInventoryLine(lotId: number, lineId: number) {
       return {
         success: false,
         error:
-          "LOT_0 provisoire deja utilise en ventes: suppression de ligne interdite tant que le lot reste en brouillon.",
+          "LOT_0 provisoire deja utilise en ventes: suppression de ligne(s) interdite tant que le lot reste en brouillon.",
+        reason: "LOT0_PROVISIONAL_LOCKED",
       };
     }
   }
@@ -3219,21 +3287,35 @@ export async function deleteInventoryLine(lotId: number, lineId: number) {
       success: false,
       error:
         "Le coût total du lot est invalide. Vérifie la valeur dans la fiche du lot.",
+      reason: "DELETE_FAILED",
     };
   }
 
-  const { error: deleteError } = await supabase
+  const { data: deletedRows, error: deleteError } = await supabase
     .from("inventory")
     .delete()
-    .eq("id", lineId);
+    .eq("lot_id", normalizedLotId)
+    .in("id", normalizedLineIds)
+    .select("id");
 
   if (deleteError) {
-    console.error("deleteInventoryLine error:", deleteError);
+    console.error("deleteInventoryLinesCore delete error:", deleteError);
     return {
       success: false,
       error:
-        "Impossible de supprimer cette ligne. Détail technique : " +
+        "Impossible de supprimer cette sélection. Détail technique : " +
         deleteError.message,
+      reason: "DELETE_FAILED",
+    };
+  }
+
+  const deletedCount = (deletedRows ?? []).length;
+  if (deletedCount !== normalizedLineIds.length) {
+    return {
+      success: false,
+      error:
+        "Suppression annulée : incohérence détectée sur la sélection. Recharge la page puis réessaie.",
+      reason: "SELECTION_INVALID",
     };
   }
 
@@ -3241,19 +3323,20 @@ export async function deleteInventoryLine(lotId: number, lineId: number) {
   const { data: allLines, error: linesError } = await supabase
     .from("inventory")
     .select("id, quantity")
-    .eq("lot_id", lotId);
+    .eq("lot_id", normalizedLotId);
 
   if (linesError) {
     console.error(
-      "deleteInventoryLine - erreur lors du recalcul des quantités du lot:",
+      "deleteInventoryLinesCore - erreur lors du recalcul des quantités du lot:",
       linesError
     );
     revalidatePath("/approvisionnement");
-    revalidatePath(`/approvisionnement/${lotId}`);
+    revalidatePath(`/approvisionnement/${normalizedLotId}`);
     return {
       success: true,
+      deletedCount,
       warning:
-        "Ligne supprimée, mais impossible de recalculer le nombre de pièces / coût unitaire du lot.",
+        `${plural ? "Lignes supprimées" : "Ligne supprimée"}, mais impossible de recalculer le nombre de pièces / coût unitaire du lot.`,
     };
   }
 
@@ -3263,18 +3346,18 @@ export async function deleteInventoryLine(lotId: number, lineId: number) {
   const { error: lotUpdateError } = await supabase
     .from("lots")
     .update({ total_pieces: totalQuantityForLot })
-    .eq("id", lotId);
+    .eq("id", normalizedLotId);
 
   if (lotUpdateError) {
     console.error(
-      "deleteInventoryLine - erreur lors de la mise à jour de total_pieces:",
+      "deleteInventoryLinesCore - erreur lors de la mise à jour de total_pieces:",
       lotUpdateError
     );
   }
 
   if (isLot0Provisional) {
     const setZeroCost = await setInventoryUnitCostForLot(
-      lotId,
+      normalizedLotId,
       LOT_0_PROVISIONAL_UNIT_COST
     );
     if (!setZeroCost.success) {
@@ -3283,24 +3366,29 @@ export async function deleteInventoryLine(lotId: number, lineId: number) {
         error:
           setZeroCost.error ??
           "Impossible de maintenir LOT_0 en mode provisoire apres suppression.",
+        reason: "DELETE_FAILED",
       };
     }
 
-    const syncResult = await syncLot0DraftProvisionalStockForLot(lotId);
+    const syncResult = await syncLot0DraftProvisionalStockForLot(normalizedLotId);
     if (!syncResult.success) {
       return {
         success: false,
         error:
           syncResult.error ??
           "Impossible de synchroniser LOT_0 provisoire apres suppression.",
+        reason: "DELETE_FAILED",
       };
     }
 
     revalidatePath("/approvisionnement");
-    revalidatePath(`/approvisionnement/${lotId}`);
+    revalidatePath(`/approvisionnement/${normalizedLotId}`);
     revalidatePath("/stock");
     revalidatePath("/historique-stock");
-    return { success: true as const };
+    return {
+      success: true as const,
+      deletedCount,
+    };
   }
 
   if (totalQuantityForLot > 0 && totalCostNumber > 0) {
@@ -3310,28 +3398,40 @@ export async function deleteInventoryLine(lotId: number, lineId: number) {
       const { error: unitUpdateError } = await supabase
         .from("inventory")
         .update({ unit_cost: unitCostForLot })
-        .eq("lot_id", lotId);
+        .eq("lot_id", normalizedLotId);
 
       if (unitUpdateError) {
         console.error(
-          "deleteInventoryLine - erreur lors de la mise à jour de unit_cost:",
+          "deleteInventoryLinesCore - erreur lors de la mise à jour de unit_cost:",
           unitUpdateError
         );
         revalidatePath("/approvisionnement");
-        revalidatePath(`/approvisionnement/${lotId}`);
+        revalidatePath(`/approvisionnement/${normalizedLotId}`);
         return {
           success: true,
+          deletedCount,
           warning:
-            "Ligne supprimée, mais impossible de mettre à jour le coût unitaire des pièces du lot.",
+            `${plural ? "Lignes supprimées" : "Ligne supprimée"}, mais impossible de mettre à jour le coût unitaire des pièces du lot.`,
         };
       }
     }
   }
 
   revalidatePath("/approvisionnement");
-  revalidatePath(`/approvisionnement/${lotId}`);
+  revalidatePath(`/approvisionnement/${normalizedLotId}`);
 
-  return { success: true as const };
+  return {
+    success: true as const,
+    deletedCount,
+  };
+}
+
+export async function deleteInventoryLine(lotId: number, lineId: number) {
+  return deleteInventoryLinesCore(lotId, [lineId]);
+}
+
+export async function deleteInventoryLinesBulk(lotId: number, lineIds: number[]) {
+  return deleteInventoryLinesCore(lotId, lineIds);
 }
 
 export async function updateInventoryLine(

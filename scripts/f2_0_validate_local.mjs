@@ -751,6 +751,7 @@ async function run() {
     "addPieceToLot",
     "updateInventoryLine",
     "deleteInventoryLine",
+    "deleteInventoryLinesBulk",
     "importLotPiecesFromCsv",
   ];
   for (const actionName of requiredActions) {
@@ -1090,6 +1091,124 @@ async function run() {
     record("S12 non-regression F2.4 renumerotation LOT_n");
   }
 
+  // S17 - suppression bulk nominale sur lot draft
+  {
+    const lot = await createDraftLotWithInventory(admin, "S17");
+    const pieceRefExtra = `F2P_S17_C_${Date.now()}_${Math.floor(Math.random() * 100000)}`;
+
+    const addThirdLine = await actions.addPieceToLot(lot.id, {
+      pieceRef: pieceRefExtra,
+      quantity: 4,
+    });
+    assert(
+      addThirdLine?.success === true,
+      `S17 precondition addPieceToLot echec: ${JSON.stringify(addThirdLine)}`
+    );
+
+    const { data: linesBeforeDelete, error: linesBeforeDeleteError } = await admin
+      .from("inventory")
+      .select("id")
+      .eq("lot_id", lot.id)
+      .order("id", { ascending: true });
+
+    if (linesBeforeDeleteError) {
+      throw new Error(
+        `S17 precondition lines lookup failed (lot=${lot.id}): ${linesBeforeDeleteError.message}`
+      );
+    }
+
+    const lineIdsToDelete = (linesBeforeDelete ?? []).map((row) => Number(row.id));
+    assert(
+      lineIdsToDelete.length >= 3,
+      `S17 precondition invalide: attendu >=3 lignes, recu ${lineIdsToDelete.length}`
+    );
+
+    const bulkDeleteResult = await actions.deleteInventoryLinesBulk(
+      lot.id,
+      lineIdsToDelete
+    );
+    assert(
+      bulkDeleteResult?.success === true,
+      `S17 echec suppression bulk nominale: ${JSON.stringify(bulkDeleteResult)}`
+    );
+    assert(
+      Number(bulkDeleteResult?.deletedCount ?? 0) === lineIdsToDelete.length,
+      `S17 echec: deletedCount attendu ${lineIdsToDelete.length}, recu ${bulkDeleteResult?.deletedCount}`
+    );
+
+    const remainingTargetRows = await countRows(admin, "inventory", [
+      ["eq", "lot_id", lot.id],
+      ["in", "id", lineIdsToDelete],
+    ]);
+    assert(
+      remainingTargetRows === 0,
+      `S17 echec: des lignes cibles subsistent apres suppression bulk (${remainingTargetRows}).`
+    );
+
+    const lotTotalsAfterDelete = await querySingle(admin, "lots", "total_pieces", [
+      ["eq", "id", lot.id],
+    ]);
+    assert(
+      Number(lotTotalsAfterDelete?.total_pieces ?? -1) === 0,
+      `S17 echec: total_pieces attendu a 0 apres suppression bulk, recu ${lotTotalsAfterDelete?.total_pieces}`
+    );
+
+    const cleanupResult = await actions.deleteLot(lot.id);
+    assert(cleanupResult?.success === true, `S17 cleanup echec: ${JSON.stringify(cleanupResult)}`);
+    record("S17 suppression bulk nominale draft");
+  }
+
+  // S18 - suppression bulk all-or-nothing: une ligne invalide annule toute suppression
+  {
+    const lot = await createDraftLotWithInventory(admin, "S18");
+
+    const { data: linesBeforeDelete, error: linesBeforeDeleteError } = await admin
+      .from("inventory")
+      .select("id")
+      .eq("lot_id", lot.id)
+      .order("id", { ascending: true });
+
+    if (linesBeforeDeleteError) {
+      throw new Error(
+        `S18 precondition lines lookup failed (lot=${lot.id}): ${linesBeforeDeleteError.message}`
+      );
+    }
+
+    const validLineIds = (linesBeforeDelete ?? []).map((row) => Number(row.id));
+    assert(
+      validLineIds.length >= 2,
+      `S18 precondition invalide: attendu >=2 lignes, recu ${validLineIds.length}`
+    );
+
+    const INVALID_LINE_ID = 999999999;
+    const bulkDeleteResult = await actions.deleteInventoryLinesBulk(lot.id, [
+      ...validLineIds,
+      INVALID_LINE_ID,
+    ]);
+
+    assert(
+      bulkDeleteResult?.success === false,
+      "S18 echec: la suppression bulk avec ligne invalide devrait etre refusee."
+    );
+    assert(
+      String(bulkDeleteResult?.error ?? "").toLowerCase().includes("annul"),
+      `S18 echec: message attendu sur annulation all-or-nothing, recu ${bulkDeleteResult?.error}`
+    );
+
+    const remainingValidRows = await countRows(admin, "inventory", [
+      ["eq", "lot_id", lot.id],
+      ["in", "id", validLineIds],
+    ]);
+    assert(
+      remainingValidRows === validLineIds.length,
+      `S18 echec: des lignes valides ont ete supprimees (${remainingValidRows}/${validLineIds.length}).`
+    );
+
+    const cleanupResult = await actions.deleteLot(lot.id);
+    assert(cleanupResult?.success === true, `S18 cleanup echec: ${JSON.stringify(cleanupResult)}`);
+    record("S18 suppression bulk all-or-nothing (ligne invalide)");
+  }
+
   // S13-S16 - F2.5 LOT_0 provisoire (draft) + restrictions post-vente + recalcul final
   {
     const lot0Context = await ensureDraftLot0ForValidation(admin);
@@ -1233,6 +1352,18 @@ async function run() {
           `S15 echec: message attendu sur suppression, recu ${deleteResult?.error}`
         );
 
+        const bulkDeleteResult = await actions.deleteInventoryLinesBulk(lot0Id, [
+          lockLine.id,
+        ]);
+        assert(
+          bulkDeleteResult?.success === false,
+          "S15 echec: suppression bulk LOT_0 apres vente devrait etre refusee."
+        );
+        assert(
+          String(bulkDeleteResult?.error ?? "").toLowerCase().includes("suppression"),
+          `S15 echec: message attendu sur suppression bulk, recu ${bulkDeleteResult?.error}`
+        );
+
         const addAfterUsage = await actions.addPieceToLot(lot0Id, {
           pieceRef: pieceLock,
           quantity: 2,
@@ -1241,7 +1372,9 @@ async function run() {
           addAfterUsage?.success === true,
           `S15 echec: ajout post-vente LOT_0 devrait rester autorise (${JSON.stringify(addAfterUsage)})`
         );
-        record("S15 LOT_0 draft apres ventes: baisse/suppression/changement ref bloques, ajout autorise");
+        record(
+          "S15 LOT_0 draft apres ventes: baisse/suppression/changement ref bloques (single+bulk), ajout autorise"
+        );
 
         await cleanupSyntheticSale(admin, syntheticLockSale.saleId);
         trackedSaleIds.pop();

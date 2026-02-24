@@ -2,6 +2,46 @@
 
 Ce fichier consigne les changements du projet, etapes par etapes.
 
+## 2026-02-24 - Appro detail lot: suppression multi-lignes + dialogs applicatifs
+
+Statut: `FAIT` / Decision operationnelle: `GO`
+
+### Changements realises
+
+- Backend suppression inventaire lot:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/approvisionnement/action.ts`
+  - ajout de `deleteInventoryLinesBulk(lotId, lineIds)`
+  - refactor avec helper partage `deleteInventoryLinesCore` (utilise par single + bulk)
+  - politique all-or-nothing: si selection invalide/non liee au lot, aucune suppression
+  - garde-fous metier conserves:
+    - lot doit etre `draft`
+    - LOT_0 provisoire deja utilise en ventes: suppression refusee
+  - post-traitements conserves:
+    - recalcul `lots.total_pieces`
+    - recalcul cout unitaire (ou `0` + sync provisoire LOT_0)
+    - `revalidatePath` existants.
+- Frontend detail lot:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/approvisionnement/[id]/LotInventoryLinesTableClient.tsx` (nouveau)
+  - tableau client avec selection multiple:
+    - checkbox par ligne
+    - checkbox "tout selectionner"
+    - bouton `Supprimer la sélection (N)`
+  - confirmations single + bulk migrees vers `AlertDialog` (Radix)
+  - messages inline succes/erreur/warning.
+- Correction du blocage "Don't Show Again":
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/approvisionnement/[id]/DeleteInventoryLineButton.tsx`
+  - suppression de `window.confirm` et `window.alert` dans ce flux
+  - remplacement par `AlertDialog`.
+- Integration page detail lot:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/approvisionnement/[id]/page.tsx`
+  - extraction du tableau vers le composant client dedie.
+- Validation script locale:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/scripts/f2_0_validate_local.mjs`
+  - ajout checks bulk:
+    - suppression nominale draft
+    - all-or-nothing avec ligne invalide
+    - blocage bulk LOT_0 provisoire post-vente.
+
 ## 2026-02-24 - Catalogue: recherche par numero de set dans le panneau filtres
 
 Statut: `FAIT` / Decision operationnelle: `GO`
