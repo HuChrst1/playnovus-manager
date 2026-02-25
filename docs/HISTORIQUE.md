@@ -2,6 +2,81 @@
 
 Ce fichier consigne les changements du projet, etapes par etapes.
 
+## 2026-02-25 - F5.x Fix blocage souris modale imbriquee "Detail des pieces"
+
+Statut: `FAIT` / Decision operationnelle: `GO`
+
+### Changements realises
+
+- Cause technique documentee:
+  - la modale parent `Dialog` (Nouvelle vente / Edition vente) desactive les interactions exterieures via `disableOutsidePointerEvents`
+  - l'ancienne sous-modale "Detail des pieces" etait custom (portal manuel), donc non reconnue comme couche interactive Radix.
+- Sous-modale migree vers `Dialog` Radix controle:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/sales/SetPiecesDialog.tsx`
+  - remplacement du rendu custom (`createPortal`, overlay manuel, `isMounted`) par:
+    - `Dialog open={open}` + `onOpenChange`
+    - `DialogContent` avec `app-modal-wide app-modal-scroll overflow-x-hidden overscroll-contain`
+  - fermeture synchronisee avec le parent via `onOpenChange(false) => onClose()`.
+- Cohérence UX conservee:
+  - contenu metier inchangé (table desktop + fallback mobile, sauvegarde overrides)
+  - rechargement `localOverrides` a l'ouverture pour eviter un etat stale entre deux ouvertures.
+- Integration parent conservee sans changement de contrat:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/sales/SetSelector.tsx`
+  - usage `open/onClose/onSave` inchangé.
+
+## 2026-02-25 - F5.x Fix UX global modales Report / ventes / detail pieces
+
+Statut: `FAIT` / Decision operationnelle: `GO`
+
+### Changements realises
+
+- Base modales Radix corrigee (plus d'ecrasement largeur):
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/ui/dialog.tsx`
+  - retrait du `max-w-xl` et du padding hardcode dans `DialogContent`
+  - ajout d'une largeur viewport-safe (`w-[calc(100%-1rem)] sm:w-[calc(100%-2rem)]`)
+  - application d'une base `app-modal-standard` pour harmoniser le rendu.
+- Tokens CSS modales renforces:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/globals.css`
+  - `app-modal-scroll` passe en `overscroll-contain`
+  - ajout de la classe utilitaire `.app-modal-cell-long` pour les cellules texte longues.
+- Modale Report rendue lisible en desktop:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/report/ReportDialog.tsx`
+  - conteneur tableau avec `max-h` + `overflow-auto` (scroll dedie)
+  - table desktop passe en `xl` (cartes conservees en dessous)
+  - colonne description/attribution avec wrap explicite pour eviter le texte ecrase.
+- Modales Nouvelle vente / Edition vente:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/sales/NewSaleDialog.tsx`
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/sales/EditSaleDialog.tsx`
+  - ajout `overscroll-contain` sur le conteneur modal.
+- Modale "Detail des pieces" sortie du contexte parent:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/sales/SetPiecesDialog.tsx`
+  - rendu via `createPortal(..., document.body)` pour supprimer le clipping
+  - conteneur large + viewport-safe
+  - tableau desktop stabilise (`table-fixed`, wrapping cellules longues)
+  - fallback mobile en cartes pour eviter le scroll horizontal subi.
+
+## 2026-02-24 - F5.x Fix definitif modale import CSV (infos non visibles)
+
+Statut: `FAIT` / Decision operationnelle: `GO`
+
+### Changements realises
+
+- Priorite UX post-import:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/approvisionnement/[id]/LotCsvImportDialog.tsx`
+  - apres import reussi, la section "Saisie CSV" se replie automatiquement
+  - le rapport d'import est affiche en priorite
+  - ajout d'un bouton explicite `Modifier la saisie` pour rouvrir la saisie sans fermer la modale.
+- Modale stabilisee pour eviter les pertes de contenu:
+  - conservation `app-modal-wide app-modal-scroll overflow-x-hidden`
+  - ajout `overscroll-contain` pour un comportement de scroll plus robuste en fin de modale.
+- Lisibilite tableaux sans debordement horizontal force:
+  - suppression des largeurs mini qui imposaient le scroll horizontal (`min-w-[680]`, `min-w-[720]`)
+  - passage en `table-fixed` + retour a la ligne sur colonnes longues
+  - cellules longues (`motif`, `reference`, `lignes CSV`) rendues avec wrap explicite.
+- Styles utilitaires:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/globals.css`
+  - ajout `.csv-import-cell-long` pour garantir la lisibilite des textes longs.
+
 ## 2026-02-24 - F5.x UX import CSV + diagnostic Turnstile dev/preview
 
 Statut: `FAIT` / Decision operationnelle: `GO`

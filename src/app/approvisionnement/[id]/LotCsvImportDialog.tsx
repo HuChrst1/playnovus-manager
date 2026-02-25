@@ -41,6 +41,7 @@ export function LotCsvImportDialog({ lotId, isDraft }: LotCsvImportDialogProps) 
   const [result, setResult] = useState<ImportLotPiecesFromCsvResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [isInputSectionOpen, setIsInputSectionOpen] = useState(true);
   const [isSummarySectionOpen, setIsSummarySectionOpen] = useState(true);
   const [isAppliedSectionOpen, setIsAppliedSectionOpen] = useState(true);
   const [isRejectedSectionOpen, setIsRejectedSectionOpen] = useState(false);
@@ -59,6 +60,7 @@ export function LotCsvImportDialog({ lotId, isDraft }: LotCsvImportDialogProps) 
     setResult(null);
     setError(null);
     setNotice(null);
+    setIsInputSectionOpen(true);
     setIsSummarySectionOpen(true);
     setIsAppliedSectionOpen(true);
     setIsRejectedSectionOpen(false);
@@ -96,6 +98,7 @@ export function LotCsvImportDialog({ lotId, isDraft }: LotCsvImportDialogProps) 
         return;
       }
 
+      setIsInputSectionOpen(false);
       if (importResult.warning) {
         setNotice(importResult.warning);
       } else {
@@ -147,6 +150,7 @@ export function LotCsvImportDialog({ lotId, isDraft }: LotCsvImportDialogProps) 
   const summary = result?.summary;
   const rejectedRows = result?.rejectedRows ?? [];
   const appliedRows = result?.success ? result.appliedRows : [];
+  const hasImportResult = result !== null;
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -161,7 +165,7 @@ export function LotCsvImportDialog({ lotId, isDraft }: LotCsvImportDialogProps) 
         </Button>
       </DialogTrigger>
 
-      <DialogContent className="app-modal-wide app-modal-scroll overflow-x-hidden">
+      <DialogContent className="app-modal-wide app-modal-scroll overflow-x-hidden overscroll-contain">
         <DialogHeader className="mb-4">
           <DialogTitle className="text-xl font-semibold tracking-tight">
             Import CSV des pièces du lot
@@ -172,217 +176,248 @@ export function LotCsvImportDialog({ lotId, isDraft }: LotCsvImportDialogProps) 
           </DialogDescription>
         </DialogHeader>
 
-        <div className="app-segmented mb-5">
-          <button
-            type="button"
-            onClick={() => setMode("file")}
-            className={
-              mode === "file"
-                ? "app-segmented-item app-segmented-item--active h-8 px-4 text-xs font-medium"
-                : "app-segmented-item app-segmented-item--inactive h-8 px-4 text-xs font-medium"
-            }
-          >
-            Fichier CSV
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode("paste")}
-            className={
-              mode === "paste"
-                ? "app-segmented-item app-segmented-item--active h-8 px-4 text-xs font-medium"
-                : "app-segmented-item app-segmented-item--inactive h-8 px-4 text-xs font-medium"
-            }
-          >
-            Coller CSV
-          </button>
-        </div>
-
-        {mode === "file" ? (
-          <form onSubmit={handleFileImport} className="space-y-3">
-            <div className="space-y-2">
-              <Label htmlFor="lot-csv-file">Fichier .csv</Label>
-              <Input
-                id="lot-csv-file"
-                type="file"
-                accept=".csv,text/csv"
-                onChange={handleFileSelect}
-                disabled={isPending}
-              />
-            </div>
-
-            {selectedFileName && (
-              <p className="text-xs text-slate-500">
-                Fichier sélectionné: {selectedFileName}
-              </p>
-            )}
-
-            <DialogFooter className="justify-end">
-              <Button
-                type="submit"
-                disabled={isPending}
-                className="h-9 rounded-full px-5 text-xs"
-              >
-                {isPending ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Import en cours...
-                  </>
-                ) : (
-                  "Importer le fichier"
-                )}
-              </Button>
-            </DialogFooter>
-          </form>
-        ) : (
-          <form onSubmit={handlePasteImport} className="space-y-3">
-            <div className="space-y-2">
-              <Label htmlFor="lot-csv-paste">Contenu CSV</Label>
-              <Textarea
-                id="lot-csv-paste"
-                value={pastedCsv}
-                onChange={(event) => setPastedCsv(event.target.value)}
-                rows={8}
-                placeholder={
-                  "Numero de piece;Quantite de piece\n300001;2\n300002;4"
-                }
-                disabled={isPending}
-              />
-            </div>
-
-            <DialogFooter className="justify-end">
-              <Button
-                type="submit"
-                disabled={isPending}
-                className="h-9 rounded-full px-5 text-xs"
-              >
-                {isPending ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Import en cours...
-                  </>
-                ) : (
-                  "Importer le collage"
-                )}
-              </Button>
-            </DialogFooter>
-          </form>
-        )}
-
         {error && <p className="mt-2 text-sm text-red-500">{error}</p>}
         {notice && <p className="mt-2 text-sm text-sky-700">{notice}</p>}
 
-        <div className="mt-4 space-y-3">
-          {summary && (
-            <details
-              className="csv-import-section"
-              open={isSummarySectionOpen}
-              onToggle={(event) =>
-                setIsSummarySectionOpen(event.currentTarget.open)
-              }
-            >
-              <summary className="csv-import-section-summary">
-                Rapport d&apos;import
-              </summary>
-              <div className="csv-import-section-body rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <div className="grid gap-2 text-xs text-slate-700 sm:grid-cols-2 lg:grid-cols-4">
-                  <p>Lignes CSV: {summary.totalRows}</p>
-                  <p>Lignes valides: {summary.validRows}</p>
-                  <p>Lignes rejetées: {summary.rejectedRows}</p>
-                  <p>Références agrégées: {summary.aggregatedRows}</p>
-                  <p>Références ajoutées: {summary.importedRows}</p>
-                  <p>Références fusionnées: {summary.mergedRows}</p>
-                  <p>Références appliquées: {summary.appliedRows}</p>
-                  <p>Quantité totale importée: {summary.totalImportedQuantity}</p>
+        {hasImportResult ? (
+          <section className="mt-4 space-y-3">
+            {summary && (
+              <details
+                className="csv-import-section"
+                open={isSummarySectionOpen}
+                onToggle={(event) =>
+                  setIsSummarySectionOpen(event.currentTarget.open)
+                }
+              >
+                <summary className="csv-import-section-summary">
+                  Rapport d&apos;import
+                </summary>
+                <div className="csv-import-section-body rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="grid gap-2 text-xs text-slate-700 sm:grid-cols-2 lg:grid-cols-4">
+                    <p>Lignes CSV: {summary.totalRows}</p>
+                    <p>Lignes valides: {summary.validRows}</p>
+                    <p>Lignes rejetées: {summary.rejectedRows}</p>
+                    <p>Références agrégées: {summary.aggregatedRows}</p>
+                    <p>Références ajoutées: {summary.importedRows}</p>
+                    <p>Références fusionnées: {summary.mergedRows}</p>
+                    <p>Références appliquées: {summary.appliedRows}</p>
+                    <p>Quantité totale importée: {summary.totalImportedQuantity}</p>
+                  </div>
                 </div>
-              </div>
-            </details>
-          )}
+              </details>
+            )}
 
-          {appliedRows.length > 0 && (
-            <details
-              className="csv-import-section"
-              open={isAppliedSectionOpen}
-              onToggle={(event) =>
-                setIsAppliedSectionOpen(event.currentTarget.open)
-              }
-            >
-              <summary className="csv-import-section-summary">
-                Lignes appliquées ({appliedRows.length})
-              </summary>
-              <div className="csv-import-section-body">
-                <div className="max-h-52 overflow-y-auto overflow-x-auto rounded-xl border border-slate-200">
-                  <table className="min-w-[680px] w-full text-xs">
-                    <thead className="bg-slate-100 text-slate-600">
-                      <tr>
-                        <th className="px-3 py-2 text-left font-medium">Référence</th>
-                        <th className="px-3 py-2 text-left font-medium">Quantité</th>
-                        <th className="px-3 py-2 text-left font-medium">Action</th>
-                        <th className="px-3 py-2 text-left font-medium">Lignes CSV</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {appliedRows.map((row) => (
-                        <tr key={row.pieceRef} className="border-t border-slate-100">
-                          <td className="px-3 py-2 font-mono">{row.pieceRef}</td>
-                          <td className="px-3 py-2 tabular-nums">{row.quantity}</td>
-                          <td className="px-3 py-2">
-                            {row.action === "merged" ? "Fusionnée" : "Ajoutée"}
-                          </td>
-                          <td className="px-3 py-2">
-                            {row.lineNumbers.map((line) => `#${line}`).join(", ")}
-                          </td>
+            {appliedRows.length > 0 && (
+              <details
+                className="csv-import-section"
+                open={isAppliedSectionOpen}
+                onToggle={(event) =>
+                  setIsAppliedSectionOpen(event.currentTarget.open)
+                }
+              >
+                <summary className="csv-import-section-summary">
+                  Lignes appliquées ({appliedRows.length})
+                </summary>
+                <div className="csv-import-section-body">
+                  <div className="max-h-52 overflow-y-auto rounded-xl border border-slate-200">
+                    <table className="w-full table-fixed text-xs">
+                      <thead className="bg-slate-100 text-slate-600">
+                        <tr>
+                          <th className="px-3 py-2 text-left font-medium">Référence</th>
+                          <th className="px-3 py-2 text-left font-medium">Quantité</th>
+                          <th className="px-3 py-2 text-left font-medium">Action</th>
+                          <th className="px-3 py-2 text-left font-medium">Lignes CSV</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {appliedRows.map((row) => (
+                          <tr key={row.pieceRef} className="border-t border-slate-100">
+                            <td className="csv-import-cell-long px-3 py-2 font-mono">
+                              {row.pieceRef}
+                            </td>
+                            <td className="px-3 py-2 tabular-nums">{row.quantity}</td>
+                            <td className="px-3 py-2">
+                              {row.action === "merged" ? "Fusionnée" : "Ajoutée"}
+                            </td>
+                            <td className="csv-import-cell-long px-3 py-2">
+                              {row.lineNumbers.map((line) => `#${line}`).join(", ")}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-              </div>
-            </details>
-          )}
+              </details>
+            )}
 
-          {rejectedRows.length > 0 && (
-            <details
-              className="csv-import-section"
-              open={isRejectedSectionOpen}
-              onToggle={(event) =>
-                setIsRejectedSectionOpen(event.currentTarget.open)
-              }
-            >
-              <summary className="csv-import-section-summary">
-                Lignes rejetées ({rejectedRows.length})
-              </summary>
-              <div className="csv-import-section-body">
-                <div className="max-h-52 overflow-y-auto overflow-x-auto rounded-xl border border-red-200">
-                  <table className="min-w-[720px] w-full text-xs">
-                    <thead className="bg-red-50 text-red-700">
-                      <tr>
-                        <th className="px-3 py-2 text-left font-medium">Ligne</th>
-                        <th className="px-3 py-2 text-left font-medium">Référence</th>
-                        <th className="px-3 py-2 text-left font-medium">Quantité</th>
-                        <th className="px-3 py-2 text-left font-medium">Motif</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rejectedRows.map((row, index) => (
-                        <tr
-                          key={`${row.lineNumber}-${row.pieceRef}-${index}`}
-                          className="border-t border-red-100"
-                        >
-                          <td className="px-3 py-2">#{row.lineNumber}</td>
-                          <td className="px-3 py-2 font-mono">
-                            {row.pieceRef || "—"}
-                          </td>
-                          <td className="px-3 py-2">{row.quantity || "—"}</td>
-                          <td className="px-3 py-2">{row.reason}</td>
+            {rejectedRows.length > 0 && (
+              <details
+                className="csv-import-section"
+                open={isRejectedSectionOpen}
+                onToggle={(event) =>
+                  setIsRejectedSectionOpen(event.currentTarget.open)
+                }
+              >
+                <summary className="csv-import-section-summary">
+                  Lignes rejetées ({rejectedRows.length})
+                </summary>
+                <div className="csv-import-section-body">
+                  <div className="max-h-52 overflow-y-auto rounded-xl border border-red-200">
+                    <table className="w-full table-fixed text-xs">
+                      <thead className="bg-red-50 text-red-700">
+                        <tr>
+                          <th className="px-3 py-2 text-left font-medium">Ligne</th>
+                          <th className="px-3 py-2 text-left font-medium">Référence</th>
+                          <th className="px-3 py-2 text-left font-medium">Quantité</th>
+                          <th className="px-3 py-2 text-left font-medium">Motif</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {rejectedRows.map((row, index) => (
+                          <tr
+                            key={`${row.lineNumber}-${row.pieceRef}-${index}`}
+                            className="border-t border-red-100"
+                          >
+                            <td className="px-3 py-2">#{row.lineNumber}</td>
+                            <td className="csv-import-cell-long px-3 py-2 font-mono">
+                              {row.pieceRef || "—"}
+                            </td>
+                            <td className="px-3 py-2">{row.quantity || "—"}</td>
+                            <td className="csv-import-cell-long px-3 py-2">{row.reason}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
+              </details>
+            )}
+          </section>
+        ) : null}
+
+        <section className={hasImportResult ? "mt-5" : "mt-2"}>
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+              Saisie CSV
+            </p>
+            {hasImportResult ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-8 rounded-full px-3 text-xs"
+                onClick={() => setIsInputSectionOpen((previous) => !previous)}
+              >
+                {isInputSectionOpen ? "Masquer la saisie" : "Modifier la saisie"}
+              </Button>
+            ) : null}
+          </div>
+
+          {isInputSectionOpen ? (
+            <>
+              <div className="app-segmented mb-5">
+                <button
+                  type="button"
+                  onClick={() => setMode("file")}
+                  className={
+                    mode === "file"
+                      ? "app-segmented-item app-segmented-item--active h-8 px-4 text-xs font-medium"
+                      : "app-segmented-item app-segmented-item--inactive h-8 px-4 text-xs font-medium"
+                  }
+                >
+                  Fichier CSV
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMode("paste")}
+                  className={
+                    mode === "paste"
+                      ? "app-segmented-item app-segmented-item--active h-8 px-4 text-xs font-medium"
+                      : "app-segmented-item app-segmented-item--inactive h-8 px-4 text-xs font-medium"
+                  }
+                >
+                  Coller CSV
+                </button>
               </div>
-            </details>
+
+              {mode === "file" ? (
+                <form onSubmit={handleFileImport} className="space-y-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="lot-csv-file">Fichier .csv</Label>
+                    <Input
+                      id="lot-csv-file"
+                      type="file"
+                      accept=".csv,text/csv"
+                      onChange={handleFileSelect}
+                      disabled={isPending}
+                    />
+                  </div>
+
+                  {selectedFileName && (
+                    <p className="text-xs text-slate-500">
+                      Fichier sélectionné: {selectedFileName}
+                    </p>
+                  )}
+
+                  <DialogFooter className="justify-end">
+                    <Button
+                      type="submit"
+                      disabled={isPending}
+                      className="h-9 rounded-full px-5 text-xs"
+                    >
+                      {isPending ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Import en cours...
+                        </>
+                      ) : (
+                        "Importer le fichier"
+                      )}
+                    </Button>
+                  </DialogFooter>
+                </form>
+              ) : (
+                <form onSubmit={handlePasteImport} className="space-y-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="lot-csv-paste">Contenu CSV</Label>
+                    <Textarea
+                      id="lot-csv-paste"
+                      value={pastedCsv}
+                      onChange={(event) => setPastedCsv(event.target.value)}
+                      rows={8}
+                      placeholder={
+                        "Numero de piece;Quantite de piece\n300001;2\n300002;4"
+                      }
+                      disabled={isPending}
+                    />
+                  </div>
+
+                  <DialogFooter className="justify-end">
+                    <Button
+                      type="submit"
+                      disabled={isPending}
+                      className="h-9 rounded-full px-5 text-xs"
+                    >
+                      {isPending ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Import en cours...
+                        </>
+                      ) : (
+                        "Importer le collage"
+                      )}
+                    </Button>
+                  </DialogFooter>
+                </form>
+              )}
+            </>
+          ) : (
+            <p className="text-xs text-slate-500">
+              La saisie est masquée pour privilégier la lecture du rapport.
+            </p>
           )}
-        </div>
+        </section>
       </DialogContent>
     </Dialog>
   );

@@ -68,7 +68,7 @@ export function EditSaleDialog({ saleId }: { saleId: number }) {
         </Button>
       </DialogTrigger>
 
-      <DialogContent className="app-modal-sales app-modal-scroll overflow-x-hidden">
+      <DialogContent className="app-modal-sales app-modal-scroll overflow-x-hidden overscroll-contain">
         <DialogHeader className="app-modal-header">
           <DialogTitle className="app-modal-title">
             Modifier la vente #{saleId}

@@ -36,10 +36,9 @@ const DialogContent = React.forwardRef<
       ref={ref}
       {...props}
       className={cn(
-        "fixed left-1/2 top-1/2 z-[9999] grid w-full max-w-xl",
+        "fixed left-1/2 top-1/2 z-[9999] grid w-[calc(100%-1rem)] sm:w-[calc(100%-2rem)]",
         "-translate-x-1/2 -translate-y-1/2 gap-4",
-        "app-dialog-surface",
-        "px-5 py-5 sm:px-7 sm:py-7",
+        "app-dialog-surface app-modal-standard",
         "data-[state=open]:animate-in data-[state=closed]:animate-out",
         "data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0",
         "data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95",

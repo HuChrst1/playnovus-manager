@@ -831,7 +831,7 @@
   }
 
   .app-modal-scroll {
-    @apply max-h-[86vh] overflow-y-auto;
+    @apply max-h-[86vh] overflow-y-auto overscroll-contain;
   }
 
   .app-modal-header {
@@ -848,6 +848,10 @@
 
   .app-modal-footer {
     @apply mt-6 flex flex-row items-center justify-end gap-3;
+  }
+
+  .app-modal-cell-long {
+    @apply whitespace-normal break-words;
   }
 
   .csv-import-section {
@@ -873,6 +877,10 @@
 
   .csv-import-section-body {
     @apply mt-3;
+  }
+
+  .csv-import-cell-long {
+    @apply whitespace-normal break-words;
   }
 
   .app-report-tabs {
