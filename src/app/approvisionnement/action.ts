@@ -1331,8 +1331,8 @@ export async function createLotFromDialog(input: CreateLotInput) {
     throw new Error("La date du lot est obligatoire.");
   }
 
-  if (!Number.isFinite(input.totalCost) || input.totalCost <= 0) {
-    throw new Error("Le coût total du lot doit être supérieur à 0.");
+  if (!Number.isFinite(input.totalCost) || input.totalCost < 0) {
+    throw new Error("Le coût total doit être un nombre positif.");
   }
 
   if (input.status === "confirmed") {
@@ -2573,8 +2573,8 @@ export async function addPieceToLot(
     return { success: true as const };
   }
 
-  // 3.b) Si on a un coût total > 0 et des pièces, on met à jour unit_cost pour toutes les lignes du lot
-  if (totalQuantityForLot > 0 && totalCostNumber > 0) {
+  // 3.b) Si on a des pièces, on met à jour unit_cost pour toutes les lignes du lot, y compris à 0.
+  if (totalQuantityForLot > 0 && totalCostNumber >= 0) {
     const unitCostForLot = totalCostNumber / totalQuantityForLot;
 
     if (Number.isFinite(unitCostForLot) && unitCostForLot >= 0) {
@@ -3391,7 +3391,7 @@ async function deleteInventoryLinesCore(
     };
   }
 
-  if (totalQuantityForLot > 0 && totalCostNumber > 0) {
+  if (totalQuantityForLot > 0 && totalCostNumber >= 0) {
     const unitCostForLot = totalCostNumber / totalQuantityForLot;
 
     if (Number.isFinite(unitCostForLot) && unitCostForLot >= 0) {
@@ -3638,8 +3638,8 @@ export async function updateInventoryLine(
     return { success: true as const };
   }
 
-  // 2.b) Recalcul du coût unitaire pour toutes les lignes du lot
-  if (totalQuantityForLot > 0 && totalCostNumber > 0) {
+  // 2.b) Recalcul du coût unitaire pour toutes les lignes du lot, y compris à 0.
+  if (totalQuantityForLot > 0 && totalCostNumber >= 0) {
     const unitCostForLot = totalCostNumber / totalQuantityForLot;
 
     if (Number.isFinite(unitCostForLot) && unitCostForLot >= 0) {

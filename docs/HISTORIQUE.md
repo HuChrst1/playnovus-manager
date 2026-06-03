@@ -4448,3 +4448,53 @@ Statut: `FAIT`
 - Aucun changement API/UI metier.
 - Aucun changement SQL/migration/seed.
 - Aucune ecriture sur DB distante.
+
+## 2026-06-03 - Correctif post-production: creation de lot gratuit
+
+Statut: `FAIT` / Decision operationnelle: `GO`
+
+### Contexte
+
+- Cas metier reel: reception d'un don de carton Playmobil.
+- Le module Approvisionnement devait accepter un nouveau lot avec `total_cost = 0`, sans transformer un champ vide en `0` et sans autoriser les couts negatifs.
+- Le bug venait du chemin server action type de la modale `Nouveau lot`: `createLotFromDialog` refusait `totalCost <= 0`, alors que les autres chemins applicatifs et la contrainte SQL acceptaient deja `0`.
+
+### Changements realises
+
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/approvisionnement/action.ts`:
+  - `createLotFromDialog` refuse maintenant uniquement les couts non finis ou negatifs (`totalCost < 0`).
+  - message serveur aligne pour ne plus indiquer que le cout doit etre strictement superieur a `0`.
+  - recalcul `inventory.unit_cost` des lots normaux execute des que le lot contient des pieces, y compris quand `total_cost = 0`.
+  - conservation des flux existants:
+    - creation en brouillon uniquement
+    - confirmation de lot vide toujours refusee
+    - LOT_0 provisoire inchange
+    - FIFO, ventes, dashboard, stock et UI non refondus.
+- Mise a jour de `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/scripts/f2_0_validate_local.mjs`:
+  - ajout du scenario `S0 lot gratuit accepte + cout unitaire FIFO 0`.
+  - verification du refus d'un cout negatif via `createLotFromDialog`.
+  - verification creation lot gratuit non-`LOT_0`, ajout de piece, `inventory.unit_cost = 0`, confirmation, puis `PURCHASE/IN.unit_cost = 0`.
+
+### Verifications executees
+
+- Pre-checks:
+  - `git branch --show-current`: `fix/lot-zero-cost`
+  - `git status --short`: propre avant implementation
+  - variables `.env.local` verifiees en presence uniquement, sans afficher de secret
+  - `npx supabase status`: stack locale active (sortie masquee dans le compte rendu sans exposer de secret)
+- Gates techniques:
+  - `npm run lint`: OK
+  - `npm run typecheck`: OK
+  - `npm run build`: OK
+  - `npm run test:f2.0`: OK
+    - nouveau `S0`: OK
+    - note scenario `S8`: log attendu de conflit `lots_lot_code_key` (cas rollback), puis scenario valide
+
+### Perimetre / limites
+
+- Aucun changement SQL/migration/seed.
+- Aucune ecriture sur DB distante.
+- Aucune modification de variables d'environnement.
+- Aucun changement visuel "Don" ajoute dans ce correctif.
+- Le champ cout vide conserve le comportement existant cote UI (`required`).
+- `docs/DECISIONS.md` non modifie: pas de decision structurante supplementaire, correction d'alignement avec la regle metier existante `total_cost >= 0`.
