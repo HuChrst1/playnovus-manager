@@ -2,6 +2,42 @@
 
 Ce fichier consigne les changements du projet, etapes par etapes.
 
+## 2026-06-03 - Catalogue: set ajoute manuellement visible apres enregistrement
+
+Statut: `FAIT` / Decision operationnelle: `GO`
+
+### Changements realises
+
+- Bug corrige:
+  - avant: le flux "Ajouter un set" tentait d'inserer un set catalogue sans renseigner l'identifiant technique obligatoire `sets_catalog.id`
+  - consequence: l'insertion pouvait echouer puis revenir au catalogue sans rendre le nouveau set visible
+  - apres: un identifiant serveur `manual_<uuid>` est genere pour chaque set ajoute manuellement.
+- Retour utilisateur post-creation ajuste:
+  - apres insertion reussie, `/catalogue` est revalide
+  - redirection vers `/catalogue?q=<display_ref>` pour afficher immediatement le set cree dans la liste catalogue, y compris sans BOM/pieces associees.
+- Fichier principal modifie:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/catalogue/actions.ts`
+- Perimetre conserve:
+  - aucune creation de BOM, inventaire, stock ou mouvement de stock dans ce flux
+  - aucune migration SQL creee.
+
+### Verifications executees
+
+- Pre-checks locaux sans affichage de secrets:
+  - branche `fix/catalogue-add-set-visible`
+  - worktree initial propre
+  - variables Supabase locales presentes
+  - `NEXT_PUBLIC_SUPABASE_URL` classee `local`.
+- Gates qualite:
+  - `npm run lint` -> `PASS`
+  - `npm run typecheck` -> `PASS`
+  - `npm run build` -> `PASS`
+- Smoke test Supabase local:
+  - insertion d'un set avec id `manual_<uuid>`
+  - verification de sa visibilite dans `set_with_completion`
+  - verification que le set reste visible sans BOM associee
+  - suppression de la donnee de test.
+
 ## 2026-02-25 - F5.x Fix blocage souris modale imbriquee "Detail des pieces"
 
 Statut: `FAIT` / Decision operationnelle: `GO`

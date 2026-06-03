@@ -1,5 +1,7 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import type { TablesInsert } from "@/types/supabase";
@@ -100,6 +102,7 @@ export async function createSet(formData: FormData) {
   }
 
   const insertPayload = {
+    id: `manual_${randomUUID()}`,
     display_ref: displayRef,
     name,
     version,
@@ -107,11 +110,11 @@ export async function createSet(formData: FormData) {
     image_url: imageUrl.value,
     year_start: yearStart,
     year_end: yearEnd,
-  } satisfies Omit<TablesInsert<"sets_catalog">, "id">;
+  } satisfies TablesInsert<"sets_catalog">;
 
   const { data, error } = await supabase
     .from("sets_catalog")
-    .insert(insertPayload as unknown as TablesInsert<"sets_catalog">)
+    .insert(insertPayload)
     .select("id")
     .single();
 
@@ -120,7 +123,8 @@ export async function createSet(formData: FormData) {
     redirect("/catalogue");
   }
 
-  redirect(`/catalogue/${encodeURIComponent(data.id)}`);
+  revalidatePath("/catalogue");
+  redirect(`/catalogue?q=${encodeURIComponent(displayRef)}`);
 }
 
 /**
