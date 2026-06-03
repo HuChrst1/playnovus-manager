@@ -55,13 +55,14 @@ type NormalizedApproQuery = {
 };
 
 type ApproStats = {
-  totalLotsConfirmed: number;
-  totalPiecesConfirmed: number;
-  totalCostConfirmed: number;
+  confirmedLotsCount: number;
+  totalPieces: number;
+  totalCost: number;
   avgCostPerPiece: number;
 };
 
 const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
+const INITIAL_LOT_CODE = "LOT_0";
 const DEFAULT_SORT: SortColumn = "purchase_date";
 const DEFAULT_DIR: "asc" | "desc" = "desc";
 const ALLOWED_SORT_COLUMNS: ReadonlySet<SortColumn> = new Set([
@@ -159,25 +160,31 @@ function normalizeApproQuery(raw: RawApproSearchParams): NormalizedApproQuery {
 }
 
 function computeApproStats(lots: LotRow[]): ApproStats {
-  const confirmedLots = lots.filter((lot) => lot.status === "confirmed");
+  let confirmedLotsCount = 0;
+  let totalPieces = 0;
+  let totalCost = 0;
 
-  let totalLotsConfirmed = 0;
-  let totalPiecesConfirmed = 0;
-  let totalCostConfirmed = 0;
+  for (const lot of lots) {
+    const isConfirmed = lot.status === "confirmed";
+    const isInitialLot = lot.lot_code === INITIAL_LOT_CODE;
 
-  for (const lot of confirmedLots) {
-    totalLotsConfirmed += 1;
-    totalPiecesConfirmed += lot.total_pieces ?? 0;
-    totalCostConfirmed += Number(lot.total_cost ?? 0);
+    if (isConfirmed) {
+      confirmedLotsCount += 1;
+    }
+
+    if (isConfirmed || isInitialLot) {
+      totalPieces += lot.total_pieces ?? 0;
+      totalCost += Number(lot.total_cost ?? 0);
+    }
   }
 
   const avgCostPerPiece =
-    totalPiecesConfirmed > 0 ? totalCostConfirmed / totalPiecesConfirmed : 0;
+    totalPieces > 0 ? totalCost / totalPieces : 0;
 
   return {
-    totalLotsConfirmed,
-    totalPiecesConfirmed,
-    totalCostConfirmed,
+    confirmedLotsCount,
+    totalPieces,
+    totalCost,
     avgCostPerPiece,
   };
 }
@@ -196,7 +203,7 @@ export default async function ApprovisionnementPage({
   const { count: lot0Count, error: lot0CheckError } = await supabase
     .from("lots")
     .select("id", { count: "exact", head: true })
-    .eq("lot_code", "LOT_0");
+    .eq("lot_code", INITIAL_LOT_CODE);
 
   if (lot0CheckError) {
     return (
@@ -215,7 +222,7 @@ export default async function ApprovisionnementPage({
     const today = new Date().toISOString().slice(0, 10);
 
     await supabase.from("lots").insert({
-      lot_code: "LOT_0",
+      lot_code: INITIAL_LOT_CODE,
       label: "Stock initial",
       supplier: null,
       purchase_date: today,
@@ -308,7 +315,7 @@ export default async function ApprovisionnementPage({
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 items-start">
         <SalesStatCard
           title="Lots confirmés"
-          mainValue={stats.totalLotsConfirmed.toLocaleString("fr-FR")}
+          mainValue={stats.confirmedLotsCount.toLocaleString("fr-FR")}
           color="indigo"
           variant="neutral"
           icon={<Package className="h-4 w-4" />}
@@ -317,7 +324,7 @@ export default async function ApprovisionnementPage({
 
         <SalesStatCard
           title="Nb pièces totales"
-          mainValue={stats.totalPiecesConfirmed.toLocaleString("fr-FR")}
+          mainValue={stats.totalPieces.toLocaleString("fr-FR")}
           color="azure"
           variant="neutral"
           icon={<Boxes className="h-4 w-4" />}
@@ -326,7 +333,7 @@ export default async function ApprovisionnementPage({
 
         <SalesStatCard
           title="Coût total"
-          mainValue={euro.format(stats.totalCostConfirmed)}
+          mainValue={euro.format(stats.totalCost)}
           color="sky"
           variant="neutral"
           icon={<Wallet className="h-4 w-4" />}
@@ -335,9 +342,7 @@ export default async function ApprovisionnementPage({
 
         <SalesStatCard
           title="Coût / pièce moyen"
-          mainValue={
-            stats.totalPiecesConfirmed > 0 ? euro.format(stats.avgCostPerPiece) : "—"
-          }
+          mainValue={stats.totalPieces > 0 ? euro.format(stats.avgCostPerPiece) : "—"}
           color="emerald"
           variant="neutral"
           icon={<Calculator className="h-4 w-4" />}
@@ -502,9 +507,9 @@ export default async function ApprovisionnementPage({
                   const totalPieces = lot.total_pieces ?? 0;
                   const costPerPiece = totalPieces > 0 ? totalCostNumber / totalPieces : 0;
 
-                  const isInitialLot = lot.lot_code === "LOT_0";
+                  const isInitialLot = lot.lot_code === INITIAL_LOT_CODE;
                   const displayCode =
-                    lot.lot_code || (isInitialLot ? "LOT_0" : `LOT_${lot.id}`);
+                    lot.lot_code || (isInitialLot ? INITIAL_LOT_CODE : `LOT_${lot.id}`);
 
                   const lotForEdit: LotForEdit = {
                     id: lot.id,

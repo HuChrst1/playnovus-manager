@@ -2,6 +2,41 @@
 
 Ce fichier consigne les changements du projet, etapes par etapes.
 
+## 2026-06-03 - Approvisionnements: stats totales incluant LOT_0
+
+Statut: `FAIT` / Decision operationnelle: `GO`
+
+### Changements realises
+
+- Bug corrige:
+  - avant: les cartes "Nb pieces totales", "Cout total" et "Cout / piece moyen" etaient calculees sur les seuls lots `confirmed`
+  - consequence: `LOT_0` en brouillon, representant le stock initial, etait exclu des totaux de la page Approvisionnements
+  - apres: ces trois cartes incluent les lots confirmes + `LOT_0`, tandis que la carte "Lots confirmes" reste strictement basee sur les lots `confirmed`.
+- Perimetre conserve:
+  - les autres lots brouillons restent exclus des stats totales
+  - aucun changement de statut ou de logique metier `LOT_0`
+  - aucun changement des flux ventes, catalogue ou stock.
+- Fichier principal modifie:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/approvisionnement/page.tsx`
+- Migration SQL:
+  - aucune migration SQL creee.
+
+### Verifications executees
+
+- Pre-checks locaux sans affichage de secrets:
+  - branche `fix/appro-stats-include-lot0`
+  - worktree initial propre
+  - variables Supabase locales presentes
+  - `NEXT_PUBLIC_SUPABASE_URL` classee `local`.
+- Gates qualite:
+  - `npm run lint` -> `PASS`
+  - `npm run typecheck` -> `PASS`
+  - `npm run build` -> `PASS`
+  - `npm run test:f2.0` -> `PASS` apres reset Supabase local pour restaurer le seed reproductible.
+- Smoke test Supabase local:
+  - scenario temporaire `LOT_0 = 219` en brouillon + lot confirme `38` + autre brouillon exclu
+  - resultat attendu verifie: `Lots confirmes = 1`, `Nb pieces totales = 257`, `Cout total = 257`, `Cout / piece moyen = 1`.
+
 ## 2026-06-03 - Catalogue: set ajoute manuellement visible apres enregistrement
 
 Statut: `FAIT` / Decision operationnelle: `GO`
