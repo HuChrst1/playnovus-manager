@@ -42,6 +42,7 @@ export default async function SetDetailPage({
     piece_ref: string;
     quantity: number;
     piece_name: string | null;
+    line_comment: string | null;
   };
 
   const bom = (bomData ?? []) as BomRow[];

@@ -318,6 +318,7 @@ export type Database = {
       sets_bom: {
         Row: {
           id: number
+          line_comment: string | null
           piece_name: string | null
           piece_ref: string
           quantity: number
@@ -325,6 +326,7 @@ export type Database = {
         }
         Insert: {
           id?: number
+          line_comment?: string | null
           piece_name?: string | null
           piece_ref: string
           quantity: number
@@ -332,6 +334,7 @@ export type Database = {
         }
         Update: {
           id?: number
+          line_comment?: string | null
           piece_name?: string | null
           piece_ref?: string
           quantity?: number
