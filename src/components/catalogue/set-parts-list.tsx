@@ -60,14 +60,27 @@ export function SetPartsList({
           Aucune pièce associée à ce set.
         </div>
       ) : (
-        <div className="appro-table-scroll">
-          <table className="appro-table min-w-full text-sm">
+        <div className="appro-table-scroll max-w-full overflow-x-hidden">
+          <table className="appro-table w-full table-fixed text-sm">
+            <colgroup>
+              {isDetailedQteView ? (
+                <>
+                  <col className="w-[104px] sm:w-[132px]" />
+                  <col className="w-[104px] sm:w-[132px]" />
+                </>
+              ) : (
+                <col className="w-[88px] sm:w-[112px]" />
+              )}
+              <col className="w-[116px] sm:w-[152px] lg:w-[172px]" />
+              <col />
+              <col className="w-[88px] sm:w-[104px]" />
+            </colgroup>
             <thead className="appro-table-header">
               <tr>
                 {isDetailedQteView ? (
                   <>
-                    <th className="px-4 py-3 text-right font-medium">
-                      <div className="inline-flex items-center justify-end gap-1.5">
+                    <th className="px-3 py-3 text-right font-medium sm:px-4">
+                      <div className="inline-flex max-w-full items-center justify-end gap-1.5">
                         <button
                           type="button"
                           onClick={toggleQteView}
@@ -77,14 +90,16 @@ export function SetPartsList({
                         >
                           <ChevronDown className="h-3.5 w-3.5" />
                         </button>
-                        <span>QTE en stock</span>
+                        <span className="min-w-0 truncate">QTE en stock</span>
                       </div>
                     </th>
-                    <th className="px-4 py-3 text-right font-medium">QTE attendus</th>
+                    <th className="px-3 py-3 text-right font-medium sm:px-4">
+                      QTE attendus
+                    </th>
                   </>
                 ) : (
-                  <th className="px-4 py-3 text-right font-medium">
-                    <div className="inline-flex items-center justify-end gap-1.5">
+                  <th className="px-3 py-3 text-right font-medium sm:px-4">
+                    <div className="inline-flex max-w-full items-center justify-end gap-1.5">
                       <button
                         type="button"
                         onClick={toggleQteView}
@@ -94,13 +109,15 @@ export function SetPartsList({
                       >
                         <ChevronRight className="h-3.5 w-3.5" />
                       </button>
-                      <span>Qté</span>
+                      <span className="min-w-0 truncate">Qté</span>
                     </div>
                   </th>
                 )}
-                <th className="px-4 py-3 text-left font-medium">Réf.</th>
-                <th className="px-4 py-3 text-left font-medium">Description</th>
-                <th className="px-4 py-3 text-right font-medium">Actions</th>
+                <th className="px-3 py-3 text-left font-medium sm:px-4">Réf.</th>
+                <th className="px-3 py-3 text-left font-medium sm:px-4">
+                  Description
+                </th>
+                <th className="px-2 py-3 text-right font-medium sm:px-4">Actions</th>
               </tr>
             </thead>
 
@@ -116,29 +133,31 @@ export function SetPartsList({
                     <tr className="appro-table-row">
                       {isDetailedQteView ? (
                         <>
-                          <td className="px-4 py-3 text-right tabular-nums font-semibold text-slate-800">
+                          <td className="px-3 py-3 text-right tabular-nums font-semibold text-slate-800 sm:px-4">
                             {part.inStock}
                           </td>
 
-                          <td className="px-4 py-3 text-right tabular-nums text-slate-700">
+                          <td className="px-3 py-3 text-right tabular-nums text-slate-700 sm:px-4">
                             {part.quantity}
                           </td>
                         </>
                       ) : (
-                        <td className="px-4 py-3 text-right tabular-nums font-semibold text-slate-800">
+                        <td className="px-3 py-3 text-right tabular-nums font-semibold text-slate-800 sm:px-4">
                           {part.inStock}/{part.quantity}
                         </td>
                       )}
 
-                      <td className="px-4 py-3 font-mono text-xs text-slate-700">
+                      <td className="min-w-0 px-3 py-3 font-mono text-xs text-slate-700 sm:px-4">
                         {lineComment ? (
-                          <span className="inline-flex items-center gap-1.5">
-                            <span className="select-all">{part.piece_ref}</span>
+                          <span className="inline-flex max-w-full min-w-0 items-center gap-1.5">
+                            <span className="min-w-0 select-all break-words">
+                              {part.piece_ref}
+                            </span>
                             <Popover>
                               <PopoverTrigger asChild>
                                 <button
                                   type="button"
-                                  className="inline-flex h-5 w-5 items-center justify-center rounded-full text-amber-600 transition-colors hover:bg-amber-50 hover:text-amber-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/35"
+                                  className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-amber-600 transition-colors hover:bg-amber-50 hover:text-amber-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/35"
                                   aria-label={`Commentaire pour ${part.piece_ref}`}
                                   title="Voir le commentaire"
                                 >
@@ -156,15 +175,17 @@ export function SetPartsList({
                             </Popover>
                           </span>
                         ) : (
-                          <span className="select-all">{part.piece_ref}</span>
+                          <span className="select-all break-words">
+                            {part.piece_ref}
+                          </span>
                         )}
                       </td>
 
-                      <td className="px-4 py-3">
+                      <td className="min-w-0 px-3 py-3 sm:px-4">
                         <Popover>
                           <PopoverTrigger asChild>
-                            <button className="w-full truncate text-left text-slate-700 transition-colors hover:text-sky-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/45">
-                              <span className="font-medium">
+                            <button className="block w-full min-w-0 max-w-full text-left text-slate-700 transition-colors hover:text-sky-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/45">
+                              <span className="line-clamp-2 whitespace-normal break-words font-medium leading-snug">
                                 {part.piece_name || "Nom inconnu"}
                               </span>
                             </button>
@@ -183,8 +204,8 @@ export function SetPartsList({
                         </Popover>
                       </td>
 
-                      <td className="px-4 py-3 text-right">
-                        <div className="flex items-center justify-end gap-2">
+                      <td className="px-2 py-3 text-right sm:px-4">
+                        <div className="flex shrink-0 items-center justify-end gap-2 whitespace-nowrap">
                           <EditPieceDialog setId={part.set_id} piece={part} />
                           <DeletePieceButton
                             id={part.id}
