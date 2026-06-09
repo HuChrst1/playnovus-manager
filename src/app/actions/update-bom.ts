@@ -16,6 +16,7 @@ const CATALOGUE_RATE_LIMIT = {
 
 const SET_ID_REGEX = /^[A-Za-z0-9_-]+$/;
 const PIECE_REF_REGEX = /^[A-Za-z0-9._-]+$/;
+const LINE_COMMENT_MAX_LENGTH = 240;
 
 async function enforceCatalogueMutationGuard(): Promise<
   { ok: true; userId: string } | { ok: false; error: string }
@@ -57,8 +58,19 @@ function normalizePieceName(value: string): string {
   return value.trim();
 }
 
+function normalizeLineComment(value: string | null | undefined): string | null {
+  const normalized = String(value ?? "").trim();
+  return normalized.length > 0 ? normalized : null;
+}
+
 // 1. AJOUTER UNE PIÈCE
-export async function addSetPiece(setId: string, pieceRef: string, pieceName: string, quantity: number) {
+export async function addSetPiece(
+  setId: string,
+  pieceRef: string,
+  pieceName: string,
+  quantity: number,
+  lineComment?: string | null
+) {
   const guard = await enforceCatalogueMutationGuard();
   if (!guard.ok) {
     return { success: false, error: guard.error };
@@ -68,6 +80,7 @@ export async function addSetPiece(setId: string, pieceRef: string, pieceName: st
   const normalizedPieceRef = normalizePieceRef(pieceRef);
   const normalizedPieceName = normalizePieceName(pieceName);
   const normalizedQuantity = Number(quantity);
+  const normalizedLineComment = normalizeLineComment(lineComment);
 
   if (!SET_ID_REGEX.test(normalizedSetId)) {
     return { success: false, error: "Set invalide." };
@@ -85,12 +98,20 @@ export async function addSetPiece(setId: string, pieceRef: string, pieceName: st
     return { success: false, error: "La quantite doit etre un entier strictement positif." };
   }
 
+  if (
+    normalizedLineComment !== null &&
+    normalizedLineComment.length > LINE_COMMENT_MAX_LENGTH
+  ) {
+    return { success: false, error: "Commentaire trop long (240 caracteres maximum)." };
+  }
+
   try {
     const { error } = await supabase.from("sets_bom").insert({
       set_id: normalizedSetId,
       piece_ref: normalizedPieceRef,
       piece_name: normalizedPieceName,
       quantity: normalizedQuantity,
+      line_comment: normalizedLineComment,
     });
 
     if (error) throw error;
@@ -103,7 +124,11 @@ export async function addSetPiece(setId: string, pieceRef: string, pieceName: st
 }
 
 // 2. MODIFIER UNE PIÈCE (Quantité ou Nom)
-export async function updateSetPiece(id: number, setId: string, updates: { quantity?: number, piece_name?: string }) {
+export async function updateSetPiece(
+  id: number,
+  setId: string,
+  updates: { quantity?: number; piece_name?: string; line_comment?: string | null }
+) {
   const guard = await enforceCatalogueMutationGuard();
   if (!guard.ok) {
     return { success: false, error: guard.error };
@@ -118,7 +143,7 @@ export async function updateSetPiece(id: number, setId: string, updates: { quant
     return { success: false, error: "Set invalide." };
   }
 
-  const payload: { quantity?: number; piece_name?: string } = {};
+  const payload: { quantity?: number; piece_name?: string; line_comment?: string | null } = {};
 
   if (updates.quantity !== undefined) {
     const quantity = Number(updates.quantity);
@@ -134,6 +159,14 @@ export async function updateSetPiece(id: number, setId: string, updates: { quant
       return { success: false, error: "Nom de piece invalide." };
     }
     payload.piece_name = pieceName;
+  }
+
+  if (updates.line_comment !== undefined) {
+    const lineComment = normalizeLineComment(updates.line_comment);
+    if (lineComment !== null && lineComment.length > LINE_COMMENT_MAX_LENGTH) {
+      return { success: false, error: "Commentaire trop long (240 caracteres maximum)." };
+    }
+    payload.line_comment = lineComment;
   }
 
   if (Object.keys(payload).length === 0) {

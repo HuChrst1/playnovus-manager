@@ -5,6 +5,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Plus, Pencil } from "lucide-react";
 import {
   DialogHeader,
@@ -21,6 +22,7 @@ interface PieceData {
   piece_ref: string;
   piece_name: string | null;
   quantity: number;
+  line_comment?: string | null;
 }
 
 interface EditPieceDialogProps {
@@ -39,6 +41,7 @@ export function EditPieceDialog({ setId, piece, triggerClassName }: EditPieceDia
     ref: piece?.piece_ref || "",
     name: piece?.piece_name || "",
     qty: piece?.quantity?.toString() || "1",
+    comment: piece?.line_comment || "",
   });
 
   const handleSave = () => {
@@ -56,13 +59,15 @@ export function EditPieceDialog({ setId, piece, triggerClassName }: EditPieceDia
           result = await updateSetPiece(piece.id, setId, {
             quantity: parseInt(formData.qty, 10),
             piece_name: formData.name,
+            line_comment: formData.comment,
           });
         } else {
           result = await addSetPiece(
             setId,
             formData.ref,
             formData.name,
-            parseInt(formData.qty, 10)
+            parseInt(formData.qty, 10),
+            formData.comment
           );
         }
 
@@ -169,6 +174,22 @@ export function EditPieceDialog({ setId, piece, triggerClassName }: EditPieceDia
                   setFormData({ ...formData, name: event.target.value })
                 }
                 className="app-control app-control--md"
+              />
+            </div>
+
+            <div className="grid gap-1.5">
+              <Label htmlFor="piece-line-comment" className="app-control-label">
+                Commentaire
+              </Label>
+              <Textarea
+                id="piece-line-comment"
+                value={formData.comment}
+                maxLength={240}
+                rows={3}
+                onChange={(event) =>
+                  setFormData({ ...formData, comment: event.target.value })
+                }
+                className="min-h-20 resize-y text-sm"
               />
             </div>
           </div>

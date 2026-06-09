@@ -2,6 +2,47 @@
 
 Ce fichier consigne les changements du projet, etapes par etapes.
 
+## 2026-06-09 - Catalogue: commentaires optionnels sur lignes de composition
+
+Statut: `FAIT` / Decision operationnelle: `GO`
+
+### Changements realises
+
+- Schema catalogue etendu:
+  - ajout de la migration locale `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/supabase/migrations/20260609110000_catalogue_bom_line_comments.sql`
+  - nouvelle colonne nullable `public.sets_bom.line_comment`
+  - contrainte `sets_bom_line_comment_length_check` limitant le commentaire a 240 caracteres
+  - aucun backfill, donc les lignes existantes restent sans commentaire et sans changement visuel.
+- Types Supabase mis a jour:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/types/supabase.ts`
+  - ajout de `line_comment` dans `sets_bom.Row`, `Insert` et `Update`.
+- Flux catalogue detail set:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/app/actions/update-bom.ts`
+  - ajout/modification de piece acceptent maintenant un commentaire optionnel
+  - normalisation serveur: `trim()`, stockage `null` si vide, refus au-dela de 240 caracteres.
+- UI catalogue:
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/catalogue/edit-piece-dialog.tsx`
+  - ajout d'un champ `Commentaire` optionnel dans la modale d'ajout/modification de piece
+  - `/Users/bastienchristlen/PLAYNOVUS_APP/playnovus-manager/src/components/catalogue/set-parts-list.tsx`
+  - affichage d'une icone discrete uniquement sur les lignes avec commentaire, avec popover de lecture au clic.
+- Perimetre conserve:
+  - aucun changement du moteur ventes/FIFO
+  - aucun changement sur les pieces globales
+  - aucune variable d'environnement modifiee
+  - aucune ecriture Supabase distante effectuee.
+
+### Verifications executees
+
+- `npm run typecheck` -> `PASS`
+- `npm run lint` -> `PASS`
+- `npm run build` -> `PASS`
+- `npx supabase db reset --local` -> `BLOCKED`
+  - cause: Docker daemon local non joignable (`/Users/bastienchristlen/.docker/run/docker.sock`)
+  - relance hors sandbox effectuee avec le meme resultat.
+- `npm run test` -> `PARTIAL`
+  - tests unitaires FIFO: `PASS` (3/3)
+  - tests integration: `BLOCKED` sur `npx supabase status -o env`, meme cause Docker daemon local non joignable.
+
 ## 2026-06-03 - Approvisionnements: stats totales incluant LOT_0
 
 Statut: `FAIT` / Decision operationnelle: `GO`

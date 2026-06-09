@@ -5,7 +5,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { EditPieceDialog } from "@/components/catalogue/edit-piece-dialog";
 import { DeletePieceButton } from "@/components/catalogue/delete-piece-button";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight, CircleAlert } from "lucide-react";
 
 interface PartWithStock {
   id: number;
@@ -13,6 +13,7 @@ interface PartWithStock {
   piece_ref: string;
   piece_name: string | null;
   quantity: number;
+  line_comment: string | null;
   inStock: number;
 }
 
@@ -108,6 +109,7 @@ export function SetPartsList({
                 const ratio = part.quantity > 0 ? part.inStock / part.quantity : 0;
                 const clampedRatio = Math.min(1, Math.max(0, ratio));
                 const percentage = Math.round(clampedRatio * 100);
+                const lineComment = part.line_comment?.trim();
 
                 return (
                   <Fragment key={part.id}>
@@ -128,8 +130,34 @@ export function SetPartsList({
                         </td>
                       )}
 
-                      <td className="px-4 py-3 font-mono text-xs text-slate-700 select-all">
-                        {part.piece_ref}
+                      <td className="px-4 py-3 font-mono text-xs text-slate-700">
+                        {lineComment ? (
+                          <span className="inline-flex items-center gap-1.5">
+                            <span className="select-all">{part.piece_ref}</span>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <button
+                                  type="button"
+                                  className="inline-flex h-5 w-5 items-center justify-center rounded-full text-amber-600 transition-colors hover:bg-amber-50 hover:text-amber-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/35"
+                                  aria-label={`Commentaire pour ${part.piece_ref}`}
+                                  title="Voir le commentaire"
+                                >
+                                  <CircleAlert className="h-3.5 w-3.5" />
+                                </button>
+                              </PopoverTrigger>
+                              <PopoverContent className="z-50 w-72 border-amber-100 bg-white/98 p-3 text-sm shadow-xl">
+                                <p className="text-xs font-semibold text-amber-700">
+                                  Commentaire
+                                </p>
+                                <p className="mt-2 whitespace-pre-wrap break-words text-slate-700">
+                                  {lineComment}
+                                </p>
+                              </PopoverContent>
+                            </Popover>
+                          </span>
+                        ) : (
+                          <span className="select-all">{part.piece_ref}</span>
+                        )}
                       </td>
 
                       <td className="px-4 py-3">
